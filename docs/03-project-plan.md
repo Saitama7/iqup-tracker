@@ -111,5 +111,6 @@ gantt
 
 1. ~~Анкета Каныкей~~ — заполнена 08.10, решения в [05-decisions.md](05-decisions.md).
 2. ~~5 уточнений~~ — закрыты 08.10. Попросить у Каныкей **файл Excel с учётом за сентябрь** (анкета Е1) — по нему сделаем тестовые данные и сверку.
-3. Создать репозиторий на GitHub, проекты Supabase (dev/prod) и Vercel.
-4. Старт R1 (13 октября).
+3. ~~Стек и UI~~ — зафиксированы 08.10: Vite SPA + Cloudflare Pages + Supabase; дизайн-прототип в Claude Design.
+4. Создать репозиторий на GitHub, проекты Supabase (dev/prod) и Cloudflare Pages; `.mcp.json` с 21st.dev Magic, shadcn, Context7, Supabase, Playwright.
+5. Старт R1 (13 октября).

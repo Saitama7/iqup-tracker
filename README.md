@@ -19,6 +19,8 @@
 
 🟡 **Фаза подготовки** — документы написаны, ждём ответов на вопросы, код ещё не начат.
 
-## Стек (план)
+## Стек
 
-Next.js 15 (App Router, TypeScript) · Tailwind + shadcn/ui · Supabase (Postgres, Auth, RLS) · Vercel Hobby · GitHub Actions (CI, бэкапы)
+Vite + React 19 (TypeScript, SPA, PWA) · TanStack Router/Query · Tailwind v4 + shadcn/ui + Motion · Supabase (Postgres, Auth, RLS, Edge Function) · Cloudflare Pages · GitHub Actions (CI, пинг, бэкапы). Всё на бесплатных тарифах, ничего не засыпает.
+
+Дизайн-прототип: Claude Design канвас «IQ UP Tracker — экраны учителя».

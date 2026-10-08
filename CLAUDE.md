@@ -12,7 +12,12 @@
 - Claude — проектирует, пишет код и тесты, документирует. Предлагает, не решает за владельца бизнес-правила.
 
 ## Стек
-Next.js 15 App Router + TypeScript (strict) · Tailwind + shadcn/ui · Supabase (Postgres, Auth, RLS) · SQL-миграции в `supabase/migrations` · Vitest · Playwright · pnpm.
+Vite + React 19 + TypeScript (strict), SPA · TanStack Router + Query · Tailwind v4 + shadcn/ui + Motion + lucide · PWA (`vite-plugin-pwa`) · Supabase (Postgres, Auth, RLS, одна Edge Function `create-user`) · SQL-миграции в `supabase/migrations` · Cloudflare Pages · Vitest · Playwright (WebKit) · pnpm.
+
+Сервера нет: вся логика доступа — RLS, расчёты — SQL-views. Никакого Node-бэкенда не добавлять.
+
+## UI
+Палитра и принципы — `docs/02-architecture.md` §3; прототип — Claude Design канвас «IQ UP Tracker — экраны учителя». Шрифты Unbounded (заголовки) + Manrope (текст) через `@fontsource`. Mobile-first 390 px, Safari: `100dvh`, safe-area, 16 px в инпутах, анимировать только `transform`/`opacity`, `prefers-reduced-motion`. 3D только в трёх местах (колода занятий, flip ученика, tilt карточки ЗП).
 
 ## Инварианты домена — нарушать нельзя
 1. `lessons.confirmed_at` ставится один раз системным временем и никогда не редактируется.
@@ -26,20 +31,24 @@ Next.js 15 App Router + TypeScript (strict) · Tailwind + shadcn/ui · Supabase 
 
 ## Правила кода
 - Логика расчёта ЗП и баланса — чистые функции в `src/features/payroll/calc.ts` и `src/features/payments/balance.ts`, покрытые тестами. Та же логика в SQL-view — при изменении менять оба места и тест, сверяющий их.
-- Мутации — через Server Actions с валидацией `zod`. Никаких прямых вызовов supabase из клиентских компонентов для записи.
+- Запись в БД — через `supabase-js` из `features/*/api.ts` с валидацией `zod` на входе; RLS — единственная защита, поэтому каждая новая таблица создаётся сразу с политиками и тестом «учитель не видит чужое».
 - Интерфейс на русском. Экраны учителя — mobile-first (360 px).
 - Миграции только вперёд; никаких правок уже применённых миграций.
 - Перед коммитом: `pnpm lint && pnpm typecheck && pnpm test`.
 
 ## Команды
 ```
-pnpm dev                 # next dev
+pnpm dev                 # vite dev
 supabase start           # локальный Postgres + Auth
 supabase db reset        # применить миграции + seed
-supabase gen types typescript --local > src/lib/supabase/types.ts
+supabase gen types typescript --local > src/lib/supabase/types.gen.ts
 pnpm test                # vitest
-pnpm e2e                 # playwright
+pnpm e2e                 # playwright (webkit, iPhone viewport)
+pnpm build && npx wrangler pages deploy dist   # ручной деплой (обычно — push в main)
 ```
+
+## MCP в этом репо (.mcp.json)
+21st.dev Magic — UI-компоненты; shadcn — компоненты/блоки; Context7 — доки; Supabase — миграции и типы; Playwright — скриншоты в WebKit.
 
 ## Чего не делать
 - Не добавлять функциональность вне `docs/03-project-plan.md` без явного решения Кайрата.

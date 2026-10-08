@@ -1,169 +1,222 @@
 # IQUP Tracker — архитектура
 
-Ограничения, из которых исходим: **ноль сом в месяц на инфраструктуру**, один учебный центр (~5–10 учителей, ~100–200 учеников, ~2 000 занятий в год), учитель работает с телефона, проект пишется агентами (Claude Code) — значит стек должен быть мейнстримным и хорошо документированным.
+Ограничения, из которых исходим: **ноль сом в месяц на инфраструктуру и ничего не засыпает**, один учебный центр (10 учителей, ~100 учеников, ~2 500 занятий в год), учитель работает с телефона (Safari, PWA), проект пишется агентами (Claude Code) — стек должен быть мейнстримным и хорошо документированным.
+
+Решение зафиксировано 08.10.2026 после проверки актуальных бесплатных тарифов (см. §2.1).
 
 ## 1. Решение в одной картинке
 
 ```mermaid
-flowchart TB
-    subgraph Client["Браузер / телефон (PWA)"]
-        UI[Next.js App Router<br/>React + Tailwind + shadcn/ui]
-    end
-    subgraph Vercel["Vercel Hobby (бесплатно)"]
-        SSR[Server Components<br/>+ Server Actions]
-    end
-    subgraph Supabase["Supabase Free (бесплатно)"]
-        Auth[Supabase Auth<br/>телефон+пароль без SMS]
-        PG[(Postgres<br/>RLS, views, triggers)]
-    end
-    subgraph GH["GitHub (бесплатно)"]
-        Repo[Репозиторий]
-        CI[Actions: lint, tests,<br/>еженедельный pg_dump]
-    end
-    UI -->|HTTPS| SSR
-    SSR -->|supabase-js, JWT пользователя| PG
-    SSR -->|service role: создание пользователей| Auth
-    UI -.->|сессия| Auth
-    Repo -->|push → deploy| Vercel
-    CI -->|backup.sql| Repo
+flowchart LR
+    T[Телефон учителя<br/>Safari · PWA] -->|статика с CDN| CF[Cloudflare Pages<br/>Vite + React SPA]
+    A[Админ / бухгалтер<br/>десктоп] -->|статика| CF
+    T -->|supabase-js · JWT · RLS| SB[(Supabase Free<br/>Postgres + Auth)]
+    A -->|supabase-js| SB
+    A -->|создать пользователя| EF[Supabase Edge Function<br/>service role]
+    EF --> SB
+    GH[GitHub Actions<br/>cron раз в день] -->|пинг + pg_dump| SB
+    GH -->|push → deploy| CF
 ```
 
-## 2. Стек и обоснование (ADR-кратко)
+**Сервера нет вообще.** Приложение — статические файлы на CDN. Вся логика доступа — в Postgres (RLS), расчёты — в SQL-views и функциях, единственный серверный код — Edge Function «создать пользователя». Нечему засыпать и не во что упираться по таймаутам.
+
+## 2. Стек и обоснование
 
 | Слой | Выбор | Почему | Отвергнуто |
 |---|---|---|---|
-| Фронт + бэк | **Next.js 15 (App Router), TypeScript** | Кайрат знает стек; один репозиторий; Server Actions убирают отдельный API-слой; Vercel деплоит из коробки | Отдельный NestJS — второй деплой, вторая авторизация, дольше |
-| UI | **Tailwind + shadcn/ui** | Готовые доступные компоненты (таблицы, формы, диалоги), агенты хорошо с ними работают | MUI/Ant — тяжелее для мобильного |
-| Мобильный | **PWA** (manifest + иконка на главный экран) | Учителю нужен один экран «сегодня» — нативное приложение избыточно, а сторы стоят денег/времени | React Native — отдельный проект |
-| БД | **Supabase Free: Postgres 500 MB** | Postgres (views, triggers, функции для расчётов), Auth и Row Level Security в одном месте, бесплатно, GUI для админа БД | Neon — только БД, auth делать самим; Firebase — плохо для реляционной отчётности |
-| Auth | **Supabase Auth, email/password** с синтетическим email `<phone>@iqup.local` | Логин по номеру телефона без SMS-провайдера (SMS платные). Пользователей создаёт только админ (server action с service role) — саморегистрации нет | Phone OTP — нужен Twilio и т.п. |
-| Авторизация | **RLS в Postgres** + проверка роли в Server Actions | Правила «учитель видит только своё» живут в БД, их нельзя обойти с клиента | Только middleware — одна забытая проверка = утечка |
-| Хостинг | **Vercel Hobby**, домен `iqup-tracker.vercel.app` | Бесплатно, HTTPS, деплой по push, превью на PR | Cloudflare Pages — запасной вариант, если Vercel посчитает использование коммерческим |
-| Схема/миграции | **SQL-миграции Supabase CLI** + генерация TS-типов (`supabase gen types`) | Расчёты (баланс, ЗП) — это SQL-views: проще проверять и объяснять бухгалтеру | Prisma — лишний слой над RLS |
-| Тесты | **Vitest** для чистых функций расчёта ЗП/баланса; **Playwright** smoke на ключевые экраны | Расчёт ЗП — единственное место, где ошибка стоит денег и доверия | — |
-| Бэкапы | **GitHub Actions cron** раз в неделю: `pg_dump` → зашифрованный артефакт | Supabase Free не делает бэкапы. Для системы расчёта зарплат это обязательно | — |
-| Репозиторий | **GitHub** (аккаунт Кайрата) | Vercel-интеграция, Actions бесплатно для приватных реп | GitLab — тоже ок, если захочется |
+| Фронт | **Vite + React 19 + TypeScript (strict)**, SPA | Внутреннее приложение за логином: SSR/SEO не нужны. Один слой, нет границы сервер/клиент — проще для агентов. Кайрат знает React | Next.js — тянет за собой Vercel Hobby (некоммерческая лицензия) или OpenNext на Cloudflare с шероховатостями |
+| Роутинг / данные | **TanStack Router + TanStack Query** | Типизированные маршруты, кэш запросов, оптимистичные обновления при отметке посещаемости | React Router — ок, но без типизации маршрутов |
+| UI | **Tailwind v4 + shadcn/ui** (radix-primitives) + **Motion** (ex-Framer Motion) + lucide-react | Готовые доступные компоненты; Motion — декларативные spring-анимации и 3D через CSS transform без three.js | MUI/Ant — тяжёлые на мобильном; three.js — избыточно |
+| Мобильный | **PWA** (`vite-plugin-pwa`: manifest, иконка, standalone) | Один экран «Сегодня» — нативное приложение избыточно, сторы стоят денег/времени | React Native — отдельный проект |
+| БД + Auth | **Supabase Free**: Postgres 500 МБ, Auth, RLS, Edge Functions (500k вызовов/мес), 2 проекта (dev/prod) | Права доступа в БД, расчёты в SQL, GUI для админа БД. Пауза только после **7 дней без запросов** — снимается ежедневным пингом | Neon — scale-to-zero через 5 мин, отключить нельзя: учитель ловил бы холодный старт по 2–3 раза в день; Cloudflare D1 — SQLite без RLS, с сентября 2026 запросы падают при превышении дневного лимита |
+| Auth | Supabase Auth email/password с синтетическим email `996XXXXXXXXX@iqup.local` | Логин по телефону без SMS-провайдера. Пользователей создаёт только админ через Edge Function (service role) — саморегистрации нет | Phone OTP — платные SMS |
+| Авторизация | **RLS в Postgres**, роль в `app_metadata` JWT | Правила «учитель видит только своё» нельзя обойти с клиента | Проверки только в коде SPA — обходятся DevTools |
+| Хостинг | **Cloudflare Pages**, домен `iqup-tracker.pages.dev` | Бесплатно, без лимитов на статику, без ограничений на коммерческое использование, HTTPS, деплой по push, превью на PR | Vercel Hobby — «только некоммерческое»; Render Free — засыпает через 15 мин; Koyeb — закрыл free tier в 2026; Fly.io — без free |
+| Схема/миграции | **SQL-миграции Supabase CLI** + `supabase gen types` | Расчёты — SQL-views: проще проверять и объяснять бухгалтеру | Prisma/Drizzle — лишний слой над RLS |
+| Тесты | **Vitest** для чистых функций расчёта; **Playwright** smoke на ключевые экраны (мобильный viewport, WebKit) | Расчёт — единственное место, где ошибка стоит денег и доверия. WebKit в Playwright ловит Safari-баги | — |
+| CI / бэкапы | **GitHub Actions**: lint + typecheck + test на PR; cron раз в день — `select 1` в Supabase (пинг) + еженедельный `pg_dump` в зашифрованный артефакт | Supabase Free не делает бэкапы; пинг не даёт проекту уснуть на каникулах | — |
+| Репозиторий | **GitHub** (аккаунт Кайрата) | Интеграция с Cloudflare Pages, Actions бесплатно для приватных реп | — |
 
-### Известные риски бесплатных тиров
+### 2.1 Что проверено по бесплатным тарифам (октябрь 2026)
 
-| Риск | Эффект | Что делаем |
+| Площадка | Засыпает? | Лимиты | Вердикт |
+|---|---|---|---|
+| Cloudflare Pages / Workers | нет | 100k запросов/день к Workers, статика без лимита | ✅ фронт |
+| Supabase Free | пауза после 7 дней без запросов | 500 МБ, 2 проекта, 500k edge-вызовов | ✅ БД, с пингом |
+| Vercel Hobby | нет (serverless) | 100k вызовов/мес, 10 с на функцию, **некоммерческое** | запасной |
+| Neon Free | scale-to-zero через 5 мин, не отключается | 1 ГБ, 100 CU-ч/мес | ❌ холодные старты |
+| Cloudflare D1 | нет | 5 ГБ, 5M чтений/день, при превышении запросы **падают** | ❌ нет RLS |
+| Render Free | через 15 мин, старт ~1 мин | — | ❌ |
+| Koyeb / Fly.io / Railway | free-тиров нет (2026) | — | ❌ |
+
+### Известные риски
+
+| Риск | Что делаем |
+|---|---|
+| Supabase уснёт на длинных каникулах | Ежедневный пинг из GitHub Actions; даже если уснёт — восстановление из дашборда за минуту, данные не теряются |
+| Нет SLA, нет поддержки | После закрытия периода бухгалтер видит замороженные цифры; еженедельный pg_dump |
+| 500 МБ БД | При текущем объёме хватит на 10+ лет; аудит-лог можно архивировать |
+| Один админ знает пароли | Логины/ключи в менеджере паролей Каныкей + Кайрата |
+
+## 3. UI и дизайн-система
+
+Прототип: Claude Design канвас «IQ UP Tracker — экраны учителя» (Вход, Сегодня, Посещаемость, Мой месяц, Расчёт ЗП для бухгалтера). Решения оттуда — источник для `tailwind.config` и компонентов.
+
+### Палитра (из Instagram @iqupkg)
+
+| Токен | Значение | Роль |
 |---|---|---|
-| Supabase Free **ставит проект на паузу после 7 дней без запросов** | Летом (каникулы) система «уснёт», первый вход займёт минуту-две | Еженедельный бэкап-джоб в GitHub Actions заодно делает запрос к БД — проект не засыпает |
-| Vercel Hobby — лицензия «некоммерческое личное использование» | Формально внутренний инструмент бизнеса — серая зона | Трафик ничтожный, но держим Cloudflare Pages как план Б (Next.js через OpenNext) |
-| Нет SLA, нет поддержки | Падение в день зарплаты | Экспорт расчёта в Excel после закрытия периода — бухгалтер хранит копию локально |
-| Один админ знает пароли | Потеря доступа | Логины/ключи в менеджере паролей Каныкей + Кайрата |
+| `brand` | `#F2C230` | главное действие, активный таб, карточка текущего занятия (текст на нём — `ink`) |
+| `ink` | `#141414` | текст, кнопка «Провести», тёмные карточки |
+| `paper` | `#FFFDF6` | фон экранов; карточки `#FFFFFF`, границы `#EDE7D3` |
+| `muted` | `#6B6B6B` | вторичный текст (контраст 4.5:1 на paper) |
+| `accent` | `#1C8C9E` | время, ссылки, **заморозка** |
+| `present` | `#1E9E5A` | «Был», проведено |
+| `burned` | `#D64545` | «Не был / сгорел», долг, не подтверждено |
+| `warn` | `#B86A00` | «пора оплачивать» |
+| Dark mode | фон `#121212`, карточки `#1C1C1C`, тот же `brand` | учителя часто в тёмной теме; делаем после пилота |
 
-## 3. Структура проекта
+Шрифты (Google Fonts, полная кириллица): **Unbounded** 500/700/800 — заголовки, суммы, время; **Manrope** 500–800 — интерфейс. Self-host через `@fontsource` — чтобы не зависеть от Google в Safari PWA.
+
+### Принципы экранов учителя
+
+- Главный сценарий — отметить 8 учеников за 20 секунд одной рукой. Один экран «Сегодня», текущее занятие — крупная карточка сверху, список учеников — строка + три кнопки-состояния («Был / Заморозка / Не был»), tap target ≥ 44 px, итог и кнопка «Провести занятие» прилипают внизу.
+- Нижняя навигация: Сегодня / Группы / Мой месяц.
+- Никаких выпадающих списков и модалок в сценарии отметки.
+- Статусы различаются и цветом, и текстом/иконкой (не только цветом).
+
+### Анимации — три 3D-акцента, остальное быстрое
+
+| Где | Что | Как |
+|---|---|---|
+| «Сегодня» | колода занятий: текущее сверху, следующие — стопкой с перспективой; свайп переворачивает | `perspective` + `rotateX` + Motion `drag` |
+| Отметка ученика | flip карточки в цвет статуса | `rotateY` 180°, spring 300 мс |
+| «Мой месяц» | tilt карточки ЗП за пальцем, count-up суммы | `rotateX/Y` по pointer, Motion `animate` числа |
+| Всё остальное | spring-переходы экранов, скелетоны, микро-отклик кнопок | только `transform` / `opacity`; `prefers-reduced-motion` отключает 3D |
+
+### Safari / iOS — закладываем сразу
+
+`100dvh` вместо `100vh`; `env(safe-area-inset-*)` для выреза и домашней полоски; 16 px в полях ввода (иначе Safari зумит); `-webkit-tap-highlight-color: transparent`; `overscroll-behavior: none` на фиксированных панелях; анимировать только `transform`/`opacity`, без `backdrop-filter` на больших областях; `apple-mobile-web-app-capable` + иконки 180/192/512; тест Playwright в WebKit и на реальном iPhone.
+
+## 4. Структура проекта
 
 ```
 iqup-tracker/
-├── CLAUDE.md                 # правила для агентов: домен, стек, команды
-├── docs/                     # эти документы
+├── CLAUDE.md                 # правила для агентов
+├── .mcp.json                 # MCP для Claude Code (см. §9)
+├── docs/
 ├── supabase/
-│   ├── migrations/           # SQL: таблицы, RLS, views, triggers
-│   ├── seed.sql              # тарифы, тестовые группы
+│   ├── migrations/           # SQL: таблицы, RLS, views, triggers, функции
+│   ├── functions/create-user/ # Edge Function (Deno), service role
+│   ├── seed.sql              # тарифы, тестовые группы по Excel Каныкей
 │   └── config.toml
 ├── src/
-│   ├── app/
-│   │   ├── (auth)/login/
-│   │   ├── (teacher)/today/            # экран «Сегодня»
-│   │   ├── (teacher)/lessons/[id]/     # посещаемость
-│   │   ├── (teacher)/my-month/
-│   │   ├── (admin)/groups/ students/ schedule/ tariffs/ users/
-│   │   ├── (accounting)/payroll/ payments/ periods/
-│   │   └── api/                        # только для экспорта файлов
-│   ├── features/             # по доменам: lessons, attendance, payroll, payments, groups
-│   │   └── payroll/calc.ts   # чистые функции расчёта — покрыты тестами
-│   ├── lib/supabase/         # клиенты (browser / server / service-role)
-│   ├── lib/auth/             # роль из сессии, guard-функции
-│   └── components/ui/        # shadcn
-├── tests/                    # vitest + playwright
-└── .github/workflows/        # ci.yml, backup.yml
+│   ├── routes/               # TanStack Router: /login, /today, /lessons/$id, /my-month, /admin/*, /payroll/*
+│   ├── features/
+│   │   ├── lessons/          # «Сегодня», колода, подтверждение
+│   │   ├── attendance/       # отметка, flip-карточки, лимит заморозки
+│   │   ├── payroll/calc.ts   # чистая функция расчёта — тесты
+│   │   ├── payments/balance.ts
+│   │   ├── groups/ students/ subscriptions/ users/
+│   ├── lib/supabase/         # client, types.gen.ts, auth helpers
+│   ├── components/ui/        # shadcn
+│   └── styles/               # tailwind, токены, шрифты
+├── tests/                    # vitest + playwright (webkit)
+├── public/                   # manifest, иконки
+└── .github/workflows/        # ci.yml, keepalive-backup.yml
 ```
 
-## 4. Аутентификация и роли
+## 5. Аутентификация и роли
 
 ```mermaid
 sequenceDiagram
     actor Admin
-    participant SA as Server Action (service role)
+    participant SPA
+    participant EF as Edge Function create-user
     participant Auth as Supabase Auth
     participant DB as profiles
-    Admin->>SA: Создать пользователя (телефон, имя, роль, пароль)
-    SA->>Auth: createUser(email = "996552775771@iqup.local", password)
-    Auth-->>SA: user.id
-    SA->>DB: insert profiles(id, phone, full_name, role)
-    SA->>Auth: set app_metadata.role = "teacher"
-    Note over Auth: роль попадает в JWT → RLS читает auth.jwt()->'app_metadata'->>'role'
+    Admin->>SPA: Создать пользователя (телефон, имя, роль, пароль)
+    SPA->>EF: POST (JWT админа)
+    EF->>EF: проверить role = admin
+    EF->>Auth: admin.createUser(email = "996552775771@iqup.local", password, app_metadata.role)
+    Auth-->>EF: user.id
+    EF->>DB: insert profiles(id, phone, full_name, role)
+    Note over Auth: роль в JWT → RLS читает auth.jwt()->'app_metadata'->>'role'
 ```
 
-- Телефон нормализуется в `996XXXXXXXXX`; пользователь вводит как привык (`0552 775 771`).
-- Пароль выдаёт админ, пользователь может сменить в профиле. Сброс — через админа (без SMS/почты).
-- Роль хранится в `app_metadata` (пользователь сам её менять не может) и дублируется в `profiles` для джойнов.
+- Телефон нормализуется в `996XXXXXXXXX`; вводится как привык (`0552 775 771`).
+- Пароль выдаёт админ, пользователь может сменить; сброс — через админа.
+- Роль — в `app_metadata` (пользователь не может менять) и дублируется в `profiles`.
 
-### Матрица доступа (реализуется RLS-политиками)
+### Матрица доступа (RLS-политики)
 
 | Таблица | Учитель | Админ | Бухгалтер |
 |---|---|---|---|
 | `profiles` | свой | CRUD | read |
-| `students` | read (только из своих групп) | CRUD | read |
+| `students` | read (из своих групп) | CRUD | read |
 | `groups`, `schedule_rules` | read (свои) | CRUD | read |
 | `enrollments` | read (свои группы) | CRUD | read |
-| `lessons` | read (свои); update `status → held`, `confirmed_at`, `comment` — до закрытия периода (`is_locked = false`); не в день занятия → `confirmed_late`; create доп. урока для своей группы | CRUD (если не locked) | read |
-| `attendance` | insert/update по своим занятиям в день занятия | CRUD (если не locked) | read |
+| `lessons` | read (свои); update `status → held`, `confirmed_at`, `comment` до закрытия периода; не в день занятия → `confirmed_late`; create доп. урока своей группы | CRUD (если не locked) | read |
+| `attendance` | insert/update по своим занятиям до закрытия периода | CRUD (если не locked) | read |
 | `tariffs`, `teacher_rates`, `holidays` | read свой процент | CRUD | read |
 | `subscriptions`, `payments` | read по своим ученикам (остаток и долг с суммами) | CRUD | read |
 | `payroll_periods` | read | read | open/close |
 | `payroll_adjustments` | read свои | CRUD (авансы) | CRUD |
 | `audit_log` | — | read | read |
 
-Запись в `audit_log` делается триггером `AFTER INSERT OR UPDATE OR DELETE` на ключевых таблицах — приложение не может «забыть» залогировать.
+Запись в `audit_log` — триггером `AFTER INSERT OR UPDATE OR DELETE`.
 
-## 5. Ключевые вычисления — где живут
+## 6. Ключевые вычисления — где живут
 
 | Что | Где | Почему |
 |---|---|---|
-| Генерация занятий из расписания | SQL-функция `generate_lessons(group_id, until_date)` | Идемпотентна (unique на `group_id + lesson_date + planned_start`), учитывает таблицу `holidays` |
-| Статус `unconfirmed` | Вычисляемый: `status = 'planned' AND lesson_date < current_date` в view `lessons_view` | Не нужен cron (на Vercel Hobby только 1 cron/день) |
-| Баланс ученика | View `enrollment_balances`: Σ purchased − Σ consumed | Всегда из первичных данных, нельзя подправить руками |
-| Списание `consumes_credit` | Триггер на `attendance` по правилу из §5 доменной модели + `tariff.free_excused_misses` | Правило одно, применяется одинаково для всех |
-| Расчёт ЗП | View `payroll_preview(month)` + чистая TS-функция `calcStudentLessonPay()` с тестами (та же логика, проверка один-в-один) | SQL — для отчётов; TS — для юнит-тестов и показа учителю |
-| Старая схема (сверка в пилоте) | View `payroll_legacy(month)`: Σ оплат месяца по группам учителя × процент | Объяснить расхождение в пилотный месяц |
-| Закрытие периода | SQL-функция `close_period(month)`: снапшот `payroll_lines`, `is_locked = true` на занятиях месяца | Атомарно, одной транзакцией |
-| Экспорт Excel | Не в MVP (Каныкей: «достаточно экрана»). Позже — route handler + `exceljs` | — |
+| Генерация занятий из расписания | SQL-функция `generate_lessons(group_id, until_date)` | Идемпотентна (unique `group_id + lesson_date + planned_start`), пропускает `holidays` |
+| Статус «Не подтверждено» | Вычисляемый в view: `status = 'planned' AND lesson_date < current_date` | Без cron |
+| Баланс ученика (уроки и деньги) | View `subscription_balances` | Из первичных данных |
+| Списание / заморозка | Триггер на `attendance`: `consumes_credit`, проверка `freeze_limit` | Правило одно для всех |
+| Расчёт ЗП | View `payroll_preview(month)` + TS `calcStudentLessonPay()` с тестами, сверяющими SQL и TS | SQL — отчёты; TS — экран учителя и юнит-тесты |
+| Старая схема (сверка в пилоте) | View `payroll_legacy(month)`: Σ оплат месяца по группам учителя × процент | Объяснить расхождение |
+| Закрытие периода | SQL-функция `close_period(month)`: снапшот `payroll_lines`, `is_locked = true` | Атомарно |
 
-## 6. Экран «Сегодня» учителя — логика выбора занятия
+## 7. Экран «Сегодня» — выбор текущего занятия
 
 ```
-now = текущее время (Asia/Bishkek)
-lessons_today = занятия учителя на сегодня, отсортированы по planned_start
-current = первое занятие, где planned_start − 15 мин ≤ now ≤ planned_end + 30 мин
-если current есть → показать его карточкой сверху с кнопкой «Открыть»
-иначе → показать ближайшее следующее, остальные списком
-занятия со статусом held — зелёные, planned в прошлом — красные «Не подтверждено»
+now = Asia/Bishkek
+lessons_today = занятия учителя на сегодня по planned_start
+current = первое, где planned_start − 15 мин ≤ now ≤ planned_end + 30 мин
+current есть → верх колоды; иначе — ближайшее следующее
+held — зелёные; planned в прошлом — красные «Не подтверждено»
 ```
 
-Все даты/время в БД — `timestamptz`, отображение — в `Asia/Bishkek` (UTC+6, без перехода на летнее время).
+Все даты — `timestamptz`, отображение в `Asia/Bishkek` (UTC+6, без летнего времени).
 
-## 7. Нефункциональные требования
+## 8. Окружения и деплой
 
-- **Мобильный first**: экраны учителя — на ширину 360 px, крупные кнопки «Присутствует/Отсутствует», отметка одним тапом.
-- **Офлайн**: не поддерживаем в MVP (в центре есть Wi-Fi). Если отметка не ушла — показываем ошибку, не теряем состояние формы.
-- **Язык интерфейса**: русский. Кыргызский — позже, если потребуется.
-- **Производительность**: объём данных мал; индексы на `lessons(teacher_id, lesson_date)`, `attendance(lesson_id)`, `payments(enrollment_id)`.
-- **Безопасность**: service-role ключ только в server-side env; RLS включён на всех таблицах; никаких публичных anon-запросов кроме логина.
+| Окружение | Где |
+|---|---|
+| local | `supabase start` (Docker) + `vite dev` |
+| preview | Cloudflare Pages preview на PR + Supabase dev-проект |
+| production | Cloudflare Pages `main` + Supabase prod-проект |
 
-## 8. Деплой и окружения
+## 9. Инструменты агентной разработки (Claude Code)
 
-| Окружение | Где | Зачем |
-|---|---|---|
-| local | `supabase start` (Docker) + `next dev` | Разработка, миграции |
-| preview | Vercel preview на PR + отдельный Supabase branch или тот же dev-проект | Показать Каныкей фичу до релиза |
-| production | Vercel production + Supabase prod-проект | Бесплатный тир Supabase даёт 2 проекта — dev и prod |
+`.mcp.json` проекта:
 
-## 9. Закрытые и открытые архитектурные вопросы
+| MCP | Зачем |
+|---|---|
+| **21st.dev Magic** (`@21st-dev/magic`) | Генерация UI-компонентов по описанию в стиле проекта; есть free tier |
+| **shadcn** (`shadcn@latest mcp`) | Добавление компонентов и блоков shadcn/ui |
+| **Context7** | Актуальные доки Supabase, TanStack, Motion, Tailwind v4 |
+| **Supabase MCP** | Миграции, типы, SQL прямо из агента |
+| **Playwright MCP** | Скриншоты и проверка экранов в WebKit |
 
-1. ~~Фактическое время (`actual_start/end`)~~ — **не делаем**: споры не про длительность (анкета А4).
-2. ~~Родительский доступ~~ — **не нужен** (анкета Д5).
-3. Уведомления (Telegram-бот «вы не подтвердили занятие») — бесплатно реализуемо, после MVP.
-4. Импорт учеников из Excel Каныкей — после того как увидим её файл (анкета Е1).
+Скиллы: `frontend-design` (Anthropic) для вёрстки, собственный `CLAUDE.md` с инвариантами домена.
+
+## 10. Закрытые и открытые вопросы
+
+1. ~~Фактическое время занятия~~ — не делаем (анкета А4).
+2. ~~Родительский доступ~~ — не нужен (Д5).
+3. ~~Next.js vs SPA~~ — SPA на Cloudflare Pages (08.10).
+4. Dark mode — после пилота.
+5. Telegram-бот «вы не подтвердили занятие» — после MVP.
+6. Импорт учеников из Excel Каныкей — после того как увидим файл (Е1).
