@@ -109,12 +109,12 @@ sequenceDiagram
 | `students` | read (только из своих групп) | CRUD | read |
 | `groups`, `schedule_rules` | read (свои) | CRUD | read |
 | `enrollments` | read (свои группы) | CRUD | read |
-| `lessons` | read (свои); update `status → held`, `confirmed_at`, `comment` — только в день занятия и если `is_locked = false` | CRUD (если не locked) | read |
+| `lessons` | read (свои); update `status → held`, `confirmed_at`, `comment` — до закрытия периода (`is_locked = false`); не в день занятия → `confirmed_late`; create доп. урока для своей группы | CRUD (если не locked) | read |
 | `attendance` | insert/update по своим занятиям в день занятия | CRUD (если не locked) | read |
-| `tariffs`, `pay_rates` | read своих ставок | CRUD | read |
-| `payments` | — | CRUD | CRUD |
+| `tariffs`, `teacher_rates`, `holidays` | read свой процент | CRUD | read |
+| `subscriptions`, `payments` | read по своим ученикам (остаток и долг с суммами) | CRUD | read |
 | `payroll_periods` | read | read | open/close |
-| `payroll_adjustments` | read свои | CRUD | CRUD |
+| `payroll_adjustments` | read свои | CRUD (авансы) | CRUD |
 | `audit_log` | — | read | read |
 
 Запись в `audit_log` делается триггером `AFTER INSERT OR UPDATE OR DELETE` на ключевых таблицах — приложение не может «забыть» залогировать.
@@ -127,9 +127,10 @@ sequenceDiagram
 | Статус `unconfirmed` | Вычисляемый: `status = 'planned' AND lesson_date < current_date` в view `lessons_view` | Не нужен cron (на Vercel Hobby только 1 cron/день) |
 | Баланс ученика | View `enrollment_balances`: Σ purchased − Σ consumed | Всегда из первичных данных, нельзя подправить руками |
 | Списание `consumes_credit` | Триггер на `attendance` по правилу из §5 доменной модели + `tariff.free_excused_misses` | Правило одно, применяется одинаково для всех |
-| Расчёт ЗП | View `payroll_preview(month)` + чистая TS-функция `calcLessonPay()` с тестами (та же логика, проверка один-в-один) | SQL — для отчётов; TS — для юнит-тестов и показа учителю |
+| Расчёт ЗП | View `payroll_preview(month)` + чистая TS-функция `calcStudentLessonPay()` с тестами (та же логика, проверка один-в-один) | SQL — для отчётов; TS — для юнит-тестов и показа учителю |
+| Старая схема (сверка в пилоте) | View `payroll_legacy(month)`: Σ оплат месяца по группам учителя × процент | Объяснить расхождение в пилотный месяц |
 | Закрытие периода | SQL-функция `close_period(month)`: снапшот `payroll_lines`, `is_locked = true` на занятиях месяца | Атомарно, одной транзакцией |
-| Экспорт Excel | Route handler + `exceljs` | Бухгалтер хранит копию |
+| Экспорт Excel | Не в MVP (Каныкей: «достаточно экрана»). Позже — route handler + `exceljs` | — |
 
 ## 6. Экран «Сегодня» учителя — логика выбора занятия
 
@@ -160,8 +161,9 @@ current = первое занятие, где planned_start − 15 мин ≤ no
 | preview | Vercel preview на PR + отдельный Supabase branch или тот же dev-проект | Показать Каныкей фичу до релиза |
 | production | Vercel production + Supabase prod-проект | Бесплатный тир Supabase даёт 2 проекта — dev и prod |
 
-## 9. Открытые архитектурные вопросы
+## 9. Закрытые и открытые архитектурные вопросы
 
-1. Фактическое время (`actual_start/end`) — делать ли кнопки «Начать/Закончить» в MVP (зависит от ответа Каныкей про природу споров).
-2. Нужен ли родительский доступ (посмотреть баланс ребёнка) — если да, это четвёртая роль и read-only экран; в MVP нет.
-3. Уведомления (Telegram-бот «вы не подтвердили занятие») — бесплатно реализуемо, но после MVP.
+1. ~~Фактическое время (`actual_start/end`)~~ — **не делаем**: споры не про длительность (анкета А4).
+2. ~~Родительский доступ~~ — **не нужен** (анкета Д5).
+3. Уведомления (Telegram-бот «вы не подтвердили занятие») — бесплатно реализуемо, после MVP.
+4. Импорт учеников из Excel Каныкей — после того как увидим её файл (анкета Е1).
