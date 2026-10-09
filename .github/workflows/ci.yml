@@ -1,0 +1,41 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: has
+        run: echo "pkg=$([ -f package.json ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
+      - if: steps.has.outputs.pkg == '1'
+        uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - if: steps.has.outputs.pkg == '1'
+        uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - if: steps.has.outputs.pkg == '1'
+        run: pnpm install --frozen-lockfile
+      - if: steps.has.outputs.pkg == '1'
+        run: pnpm lint
+      - if: steps.has.outputs.pkg == '1'
+        run: pnpm typecheck
+      - if: steps.has.outputs.pkg == '1'
+        run: pnpm test -- --run
+      - if: steps.has.outputs.pkg == '1'
+        run: pnpm build
+  db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: has
+        run: echo "sb=$([ -f supabase/config.toml ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
+      - if: steps.has.outputs.sb == '1'
+        uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - if: steps.has.outputs.sb == '1'
+        run: supabase db start
+      - if: steps.has.outputs.sb == '1'
+        run: supabase test db

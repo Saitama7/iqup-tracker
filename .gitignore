@@ -1,9 +1,11 @@
 node_modules/
-.next/
+dist/
 .env*
 !.env.example
-.vercel/
+.wrangler/
 supabase/.temp/
+supabase/.branches/
+.claude/settings.local.json
 .DS_Store
 coverage/
 playwright-report/

@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(npx vitest*)",
+      "Bash(npx playwright*)",
+      "Bash(supabase *)",
+      "Bash(git status*)", "Bash(git diff*)", "Bash(git log*)", "Bash(git add *)", "Bash(git commit *)",
+      "Bash(git checkout -b *)", "Bash(git switch *)", "Bash(git push -u origin *)", "Bash(git fetch*)", "Bash(git pull*)",
+      "Bash(gh issue view*)", "Bash(gh issue comment*)", "Bash(gh pr create*)", "Bash(gh pr view*)", "Bash(gh pr diff*)", "Bash(gh pr comment*)", "Bash(gh pr checks*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)", "Bash(git push origin main*)", "Bash(gh pr merge*)", "Bash(rm -rf *)",
+      "Read(.env*)", "Read(**/.env*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "jq -r '.tool_input.command' | grep -Eq '^git push( -u)? origin main' && echo 'push в main запрещён — открой PR' >&2 && exit 2 || exit 0" }]
+      }
+    ]
+  }
+}
