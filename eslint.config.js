@@ -30,6 +30,11 @@ export default tseslint.config(
     },
     rules: {
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
+      // shadcn CLI falls back to the unrelated npm package `cn` when it can't resolve `@/`
+      'no-restricted-imports': [
+        'error',
+        { paths: [{ name: 'cn', message: "Use cn from '@/lib/utils'." }] },
+      ],
     },
   },
   {

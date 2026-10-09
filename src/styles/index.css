@@ -18,8 +18,10 @@
   --primary-foreground: var(--ink);
   --secondary: var(--line);
   --secondary-foreground: var(--ink);
-  --muted-foreground: var(--muted);
-  --accent-foreground: #ffffff;
+  --muted: #f5f2e8;
+  --muted-foreground: var(--ink-muted);
+  --accent: #fff8e1;
+  --accent-foreground: var(--ink);
   --destructive: var(--burned);
   --border: var(--line);
   --input: var(--line);
@@ -30,8 +32,8 @@
   --color-brand: var(--brand);
   --color-ink: var(--ink);
   --color-paper: var(--paper);
-  --color-muted: var(--muted);
-  --color-accent: var(--accent);
+  --color-ink-muted: var(--ink-muted);
+  --color-teal: var(--teal);
   --color-present: var(--present);
   --color-burned: var(--burned);
   --color-warn: var(--warn);
@@ -48,7 +50,9 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);

@@ -1,10 +1,12 @@
-/* Brand tokens — docs/02-architecture.md §3. Components use utilities (bg-brand, text-ink …), never raw hex. */
+/* Brand tokens — docs/02-architecture.md §3. Components use utilities (bg-brand, text-ink …), never raw hex.
+   Names avoid shadcn semantics: `muted`/`accent` are shadcn surfaces (see index.css),
+   brand secondary text is `ink-muted`, brand teal (time, links, freeze) is `teal`. */
 :root {
   --brand: #f2c230;
   --ink: #141414;
   --paper: #fffdf6;
-  --muted: #6b6b6b;
-  --accent: #1c8c9e;
+  --ink-muted: #6b6b6b;
+  --teal: #1c8c9e;
   --present: #1e9e5a;
   --burned: #d64545;
   --warn: #b86a00;
