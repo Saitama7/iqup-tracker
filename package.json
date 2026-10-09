@@ -16,7 +16,7 @@
     "typecheck": "tsc -b --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",
-    "gen:types": "supabase gen types typescript --local > src/lib/supabase/types.gen.ts"
+    "gen:types": "supabase gen types typescript --local > src/lib/supabase/types.gen.ts && prettier --write src/lib/supabase/types.gen.ts"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",

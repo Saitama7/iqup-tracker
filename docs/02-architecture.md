@@ -139,15 +139,16 @@ sequenceDiagram
     Admin->>SPA: Создать пользователя (телефон, имя, роль, пароль)
     SPA->>EF: POST (JWT админа)
     EF->>EF: проверить role = admin
-    EF->>Auth: admin.createUser(email = "996552775771@iqup.local", password, app_metadata.role)
+    EF->>Auth: admin.createUser(email = "996552775771@iqup.local", password, app_metadata.roles)
     Auth-->>EF: user.id
-    EF->>DB: insert profiles(id, phone, full_name, role)
-    Note over Auth: роль в JWT → RLS читает auth.jwt()->'app_metadata'->>'role'
+    EF->>DB: insert profiles(id, phone, full_name, roles), teachers.user_id по телефону
+    Note over Auth: роли в JWT → RLS читает auth.jwt()->'app_metadata'->'roles' (массив)
 ```
 
 - Телефон нормализуется в `996XXXXXXXXX`; вводится как привык (`0552 775 771`).
 - Пароль выдаёт админ, пользователь может сменить; сброс — через админа.
-- Роль — в `app_metadata` (пользователь не может менять) и дублируется в `profiles`.
+- Роли — массив в `app_metadata.roles` (`["admin","teacher"]` — Каныкей, З1; пользователь не может менять), дублируются в `profiles.roles`. RLS-хелперы: `current_roles()`, `is_admin()`, `is_accountant()`, `teaches_group(id)` (миграция `0001_core.sql`).
+- Учитель (`teachers`) существует до создания логина: `full_name`, `phone`, `user_id` — nullable, связывается при создании пользователя (сид — `scripts/seed-users.ts`).
 
 ### Матрица доступа (RLS-политики)
 
