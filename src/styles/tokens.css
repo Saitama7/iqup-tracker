@@ -1,0 +1,15 @@
+/* Brand tokens — docs/02-architecture.md §3. Components use utilities (bg-brand, text-ink …), never raw hex. */
+:root {
+  --brand: #f2c230;
+  --ink: #141414;
+  --paper: #fffdf6;
+  --muted: #6b6b6b;
+  --accent: #1c8c9e;
+  --present: #1e9e5a;
+  --burned: #d64545;
+  --warn: #b86a00;
+  --trial: #7b4dff;
+
+  --card: #ffffff;
+  --line: #ede7d3;
+}
