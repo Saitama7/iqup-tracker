@@ -11,8 +11,7 @@ jobs:
       - id: has
         run: echo "pkg=$([ -f package.json ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
       - if: steps.has.outputs.pkg == '1'
-        uses: pnpm/action-setup@v4
-        with: { version: 10 }
+        uses: pnpm/action-setup@v4 # version from package.json packageManager
       - if: steps.has.outputs.pkg == '1'
         uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
