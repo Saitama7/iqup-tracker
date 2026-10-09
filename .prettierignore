@@ -1,0 +1,15 @@
+pnpm-lock.yaml
+dist
+dev-dist
+coverage
+playwright-report
+test-results
+src/routeTree.gen.ts
+src/lib/supabase/types.gen.ts
+docs
+*.docx
+Claude outputs
+*.md
+.github
+.claude
+.mcp.json

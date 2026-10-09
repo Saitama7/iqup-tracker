@@ -24,3 +24,24 @@
 Vite + React 19 (TypeScript, SPA, PWA) · TanStack Router/Query · Tailwind v4 + shadcn/ui + Motion · Supabase (Postgres, Auth, RLS, Edge Function) · Cloudflare Pages · GitHub Actions (CI, пинг, бэкапы). Всё на бесплатных тарифах, ничего не засыпает.
 
 Дизайн-прототип: Claude Design канвас «IQ UP Tracker — экраны учителя».
+
+## Запуск локально
+
+Нужны Node 22+, pnpm 10 (`corepack enable`), для БД — Supabase CLI и Docker.
+
+```bash
+pnpm install
+cp .env.example .env.local      # VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
+pnpm dev                        # http://localhost:5173
+```
+
+| Команда | Что делает |
+|---|---|
+| `pnpm lint` | ESLint + Prettier check |
+| `pnpm typecheck` | `tsc -b` (strict) |
+| `pnpm test` | Vitest (jsdom) |
+| `pnpm e2e` | Playwright, WebKit 390×844 (iPhone 13); первый раз — `pnpm exec playwright install webkit` |
+| `pnpm build` / `pnpm preview` | прод-сборка в `dist/` + PWA (manifest, service worker) |
+| `pnpm gen:types` | типы БД из локального Supabase → `src/lib/supabase/types.gen.ts` |
+
+Маршруты — файлы в `src/routes/` (TanStack Router генерирует `src/routeTree.gen.ts` при `dev`/`build`, файл коммитится). Токены цветов — `src/styles/tokens.css`. Деплой — Cloudflare Pages (`wrangler.jsonc`, SPA-fallback `public/_redirects`) по push в `main`.
