@@ -10,7 +10,9 @@ import { localSupabase } from '../../../scripts/local-supabase'
 // parallel with specs that add, hold or remove lessons for a while. Those take the lock for writing,
 // the counting specs for reading.
 // Lock files live next to the local stack's URL (worktrees share one stack) and carry the owner's
-// pid, so a crashed worker never leaves the lock behind.
+// pid, so a crashed worker never leaves the lock behind. If the OS hands a dead worker's pid to another
+// live process before anyone polls (or a worker dies before writing its pid), the lock looks held
+// forever — then remove the directory by hand.
 
 const dir = join(
   tmpdir(),
@@ -32,13 +34,16 @@ function alive(pid: number) {
 
 /** Is `file` held by a live process? A file of a dead one is removed. */
 async function held(file: string) {
-  let pid: number
+  let text: string
   try {
-    pid = Number(await readFile(file, 'utf8'))
+    text = await readFile(file, 'utf8')
   } catch {
     return false
   }
-  if (pid && alive(pid)) return true
+  const pid = Number(text)
+  // writeFile is not atomic: the owner may have created the file and not written its pid yet
+  if (!text || !Number.isInteger(pid) || pid <= 0) return true
+  if (alive(pid)) return true
   await rm(file, { force: true })
   return false
 }
@@ -89,9 +94,12 @@ export function lockSeed(mode: 'read' | 'write') {
   // eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
   test.beforeEach(async ({}, testInfo) => {
     await mkdir(dir, { recursive: true })
+    // the hook shares the test's timeout: lift it while waiting, then give the test its own back
+    const original = testInfo.timeout
+    testInfo.setTimeout(0)
     const started = Date.now()
     release = await (mode === 'write' ? acquireWrite() : acquireRead())
-    testInfo.setTimeout(testInfo.timeout + (Date.now() - started))
+    testInfo.setTimeout(original + (Date.now() - started))
   })
   test.afterEach(async () => {
     await release?.()
