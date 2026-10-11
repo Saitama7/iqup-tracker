@@ -765,6 +765,19 @@ export type Database = {
         Returns: Database['public']['Enums']['role'][]
       }
       current_teacher_id: { Args: Record<PropertyKey, never>; Returns: string }
+      enroll_student: {
+        Args: {
+          p_discount_pct?: number
+          p_discount_reason?: Database['public']['Enums']['discount_reason']
+          p_group_id: string
+          p_start_date: string
+          p_student_id: string
+        }
+        Returns: {
+          enrollment_id: string
+          subscription_id: string
+        }[]
+      }
       is_accountant: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean }

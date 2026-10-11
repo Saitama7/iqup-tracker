@@ -50,6 +50,8 @@
   --color-teal-soft: var(--teal-soft);
   --color-teal-strong: var(--teal-strong);
   --color-stone: var(--stone);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-strong: var(--warn-strong);
 
   /* Artboard shadows, tinted with brand tokens */
   --shadow-float: 0 16px 32px color-mix(in srgb, var(--ink) 18%, transparent);

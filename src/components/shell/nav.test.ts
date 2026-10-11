@@ -1,4 +1,4 @@
-import { MORE, NAV, TABS, resolveView, viewCaption, viewsFor } from './nav'
+import { isPushedScreen, MORE, NAV, TABS, resolveView, viewCaption, viewsFor } from './nav'
 
 describe('viewsFor', () => {
   it('orders views by priority', () => {
@@ -61,6 +61,11 @@ describe('NAV / TABS', () => {
     ])
   })
 
+  it('admin «Ученики» tab and sidebar item open А5', () => {
+    expect(TABS.admin.find((i) => i.label === 'Ученики')?.to).toBe('/admin/students')
+    expect(NAV.admin.find((i) => i.label === 'Ученики')?.to).toBe('/admin/students')
+  })
+
   it('accountant has no tab bar (БМ1)', () => {
     expect(TABS.accountant).toEqual([])
   })
@@ -76,5 +81,14 @@ describe('viewCaption', () => {
     expect(viewCaption('teacher', null)).toBe('учитель')
     expect(viewCaption('admin', 45)).toBe('администратор')
     expect(viewCaption('accountant', null)).toBe('бухгалтер · просмотр')
+  })
+})
+
+describe('isPushedScreen', () => {
+  it('profile and a student card hide the tab bar, the list keeps it', () => {
+    expect(isPushedScreen('/profile')).toBe(true)
+    expect(isPushedScreen('/admin/students/1f0c')).toBe(true)
+    expect(isPushedScreen('/admin/students')).toBe(false)
+    expect(isPushedScreen('/admin')).toBe(false)
   })
 })
