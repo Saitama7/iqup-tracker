@@ -18,13 +18,13 @@ jobs:
       - if: steps.has.outputs.pkg == '1'
         run: pnpm install --frozen-lockfile
       - if: steps.has.outputs.pkg == '1'
+        run: cp .env.example .env
+      - if: steps.has.outputs.pkg == '1'
         run: pnpm lint
       - if: steps.has.outputs.pkg == '1'
         run: pnpm typecheck
       - if: steps.has.outputs.pkg == '1'
         run: pnpm test -- --run
-      - if: steps.has.outputs.pkg == '1'
-        run: cp .env.example .env
       - if: steps.has.outputs.pkg == '1'
         run: pnpm build
   e2e:
