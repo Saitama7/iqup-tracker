@@ -2,24 +2,15 @@ import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
+import { KANYKEI, login } from './support/auth'
+import { lockSeed } from './support/seed-lock'
 
 // Needs the local stack + `pnpm seed:users` (seed: 8 groups with schedule_rules and lessons).
-const KANYKEI = { phone: '552 775 771', password: 'iqup-demo' } // admin + teacher
+
+// The new group's lessons change the months other specs count for a while (#27).
+lockSeed('write')
 
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900
-
-async function login(page: Page, user: { phone: string; password: string }) {
-  await page.goto('/login')
-  await page.getByLabel('Номер телефона').fill(user.phone)
-  await page.getByLabel('Пароль', { exact: true }).fill(user.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
-  await expect(page).toHaveURL(/\/admin$/)
-  await expect(
-    page.getByRole('heading', {
-      name: /^(Центр сегодня|(Доброе утро|Добрый день|Добрый вечер), Каныкей)$/,
-    }),
-  ).toBeVisible()
-}
 
 // One group per project (different teachers), so the two viewports never touch the same rows.
 const testGroup = (testInfo: TestInfo) =>

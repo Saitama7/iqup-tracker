@@ -3,18 +3,21 @@ import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
+import { GULZAT, login } from './support/auth'
+import { lockSeed } from './support/seed-lock'
 
 // Needs the local stack + `pnpm seed:users`. Seed: Гульзат teaches 8 класс А and 8 класс Б (8 students
 // each, ВТ/ЧТ/СБ, from 1 Sep). Each test works on its own extra lesson at 19:00 on a September day and
 // a group of its own per project (projects run in parallel), so nothing touches the October days
 // other specs count. September is in the past for the database clock, so the lesson may be held
 // (lessons_guard: not before the start, Б1). The seed's September is held (#13): tests never change
-// its marks, and payroll.spec (which sums September) runs after this spec (playwright.config.ts).
-const GULZAT = { phone: '555 123 456', password: 'iqup-demo' }
+// its marks; the extra lessons change September's sums while a test runs, so the tests hold the seed
+// lock and payroll.spec waits for them (#27).
 const GROUP_8A = '00000000-0000-4000-b000-000000000001'
 const GROUP_8B = '00000000-0000-4000-b000-000000000003'
 
 test.use({ serviceWorkers: 'block' })
+lockSeed('write')
 
 const shot = (testInfo: TestInfo, name: string) => testInfo.outputPath(`${name}.png`)
 const noTabBar = 'nav { visibility: hidden !important; }'
@@ -33,16 +36,6 @@ async function pinClock(page: Page, iso: string) {
   await page.route('**/rest/v1/rpc/server_now', (route) =>
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(iso) }),
   )
-}
-
-async function login(page: Page) {
-  await page.goto('/login')
-  await page.getByLabel('Номер телефона').fill(GULZAT.phone)
-  await page.getByLabel('Пароль', { exact: true }).fill(GULZAT.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
-  await expect(page).toHaveURL(/\/today$/)
-  // Settle the post-login redirect before page.goto (#27).
-  await expect(page.getByRole('heading', { name: /^Сегодня/ })).toBeVisible()
 }
 
 /** A fresh 19:00 extra lesson of `group` on `day`; removed with its marks afterwards. */
@@ -135,7 +128,7 @@ test('Гульзат проводит занятие: 8 отметок → «П�
 
   try {
     await pinClock(page, `${day}T19:10:00+06:00`)
-    await login(page)
+    await login(page, GULZAT)
     const row = page
       .getByRole('list', { name: 'Расписание на сегодня' })
       .getByRole('listitem')
@@ -258,7 +251,7 @@ test('третья заморозка на абонементе — кнопка
 
   try {
     await pinClock(page, `${day}T19:10:00+06:00`)
-    await login(page)
+    await login(page, GULZAT)
     await page.goto(`/lessons/${lessonId}`)
     const card = page.getByRole('listitem', { name })
     const freeze = card.getByRole('button', { name: 'Заморозка' })
@@ -285,7 +278,7 @@ test('третья заморозка на абонементе — кнопка
 test('мои группы и группа (У4 / У5 / УД3)', async ({ page }, testInfo) => {
   const desktop = testInfo.project.name === 'webkit-desktop'
   await pinClock(page, '2026-10-08T14:24:00+06:00')
-  await login(page)
+  await login(page, GULZAT)
   await page.goto('/groups')
 
   if (desktop) {

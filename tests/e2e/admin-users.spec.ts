@@ -1,18 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
+import { KANYKEI, login, submitLogin } from './support/auth'
 
 // Needs the local stack + seed users + `supabase functions serve` (create-user).
-const KANYKEI = { phone: '552 775 771', password: 'iqup-demo' } // admin + teacher
 
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900
-
-async function login(page: Page, user: { phone: string; password: string }) {
-  await page.goto('/login')
-  await page.getByLabel('Номер телефона').fill(user.phone)
-  await page.getByLabel('Пароль', { exact: true }).fill(user.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
-}
 
 async function box(locator: Locator) {
   const b = await locator.boundingBox()
@@ -227,7 +220,7 @@ test('deactivated user cannot sign in; admin role cannot be removed from self', 
   await expect(page.getByRole('dialog')).toBeHidden()
 
   await signOutLocally(page)
-  await login(page, { phone: national, password })
+  await submitLogin(page, { phone: national, password })
   await expect(page.getByRole('alert')).toBeVisible()
   await expect(page).toHaveURL(/\/login$/)
 })

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
+import { GULZAT, KANYKEI, login } from './support/auth'
 
 // Needs the local stack + `pnpm seed:users`. Seed: Гульзат teaches 8 класс А 09:00, 6 класс 11:00,
 // 8 класс Б 14:00 on ВТ/ЧТ/СБ and 5 класс 15:00 on ПН/СР/ПТ (lessons from 1 Sep, ensure_lessons).
@@ -10,8 +11,6 @@ import type { Database } from '../../src/lib/supabase/types.gen'
 // the date of the artboards — and server_now() answers the same instant (otherwise the server offset
 // would pull the app back to the real time, docs/02-architecture.md §7.1).
 // Nothing in the seed is confirmed, so on 8 October 1–7 October hold 12 unconfirmed lessons.
-const GULZAT = { phone: '555 123 456', password: 'iqup-demo' }
-const KANYKEI = { phone: '552 775 771', password: 'iqup-demo' } // admin + teacher, no groups
 const GROUP_8B = '00000000-0000-4000-b000-000000000003'
 
 // The PWA service worker would fetch server_now() itself, out of page.route's reach.
@@ -31,13 +30,6 @@ async function pinClock(page: Page, iso: string) {
   await page.route('**/rest/v1/rpc/server_now', (route) =>
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(iso) }),
   )
-}
-
-async function login(page: Page, user: { phone: string; password: string }) {
-  await page.goto('/login')
-  await page.getByLabel('Номер телефона').fill(user.phone)
-  await page.getByLabel('Пароль', { exact: true }).fill(user.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
 }
 
 async function swipeLeft(page: Page, box: { x: number; y: number; width: number; height: number }) {
@@ -164,8 +156,9 @@ test('only yesterday is unconfirmed → «Вчера не подтвержден
 test('realtime: admin cancels a lesson → its card leaves the deck without reload', async ({
   page,
 }, testInfo) => {
-  // Own Saturday per project, so the two viewports never touch the same rows.
-  const day = testInfo.project.name === 'webkit-desktop' ? '2026-10-03' : '2026-10-10'
+  // Own Saturday per project, so the two viewports never touch the same rows; after 8 October, so the
+  // specs pinned to that day (payroll, А1) never count the extra lesson (#27).
+  const day = testInfo.project.name === 'webkit-desktop' ? '2026-10-17' : '2026-10-10'
   const db = service()
   const cleanup = () =>
     db

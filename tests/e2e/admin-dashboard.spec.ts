@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
+import { KANYKEI, login } from './support/auth'
+import { lockSeed } from './support/seed-lock'
 
 // А1 / АМ1 / А2. Needs the local stack + `pnpm seed:users`. The browser clock is pinned to the
 // artboards' moment — Thursday 8 October, 14:24 — and server_now() answers the same instant
@@ -10,11 +12,12 @@ import type { Database } from '../../src/lib/supabase/types.gen'
 // 1–7 October hold 25 planned lessons of 5 teachers, and today Продлёнка 08:00 (3 h), 8 класс А 09:00
 // and 6 класс 11:00 are over too → 28 «не подтверждено»; 8 класс Б 14:00 is on, Химия 16:00 and
 // Индивидуально 17:00 are ahead.
-const KANYKEI = { phone: '552 775 771', password: 'iqup-demo' } // admin + teacher
 const GULZAT_ID = '00000000-0000-4000-a000-000000000001'
 const CHEMISTRY = '00000000-0000-4000-b000-000000000008' // Эльмира, not on anyone's «Сегодня» test
 
 test.use({ serviceWorkers: 'block' })
+// «Не подтверждено» counts every teacher: wait for specs that add or remove lessons (#27).
+lockSeed('read')
 
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900
 
@@ -32,16 +35,6 @@ async function pinClock(page: Page, iso: string) {
   )
 }
 
-async function login(page: Page) {
-  await page.goto('/login')
-  await page.getByLabel('Номер телефона').fill(KANYKEI.phone)
-  await page.getByLabel('Пароль', { exact: true }).fill(KANYKEI.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
-  await expect(page).toHaveURL(/\/admin$/)
-  // Sign-in navigates home and re-runs the guards (a second navigation): let both settle before goto.
-  await expect(page.getByTestId('kpi-unconfirmed')).toHaveText(/^\d+$/)
-}
-
 const shot = (testInfo: TestInfo, name: string) => testInfo.outputPath(`${name}.png`)
 // The fixed tab bar would cover the middle of a full-page shot.
 const noTabBar = 'nav { visibility: hidden !important; }'
@@ -50,7 +43,7 @@ test('dashboard: KPI, today of all teachers, «Не подтверждено» 3
   page,
 }, testInfo) => {
   await pinClock(page, '2026-10-08T14:24:00+06:00')
-  await login(page)
+  await login(page, KANYKEI)
   await expect(page.getByText('Четверг, 8 октября')).toBeVisible()
   const kpi = page.getByTestId('kpi-unconfirmed')
   await expect(kpi).toHaveText('28')
@@ -124,7 +117,7 @@ test('schedule: week grid / day list, teacher filter, week navigation (А2)', as
   page,
 }, testInfo) => {
   await pinClock(page, '2026-10-08T14:24:00+06:00')
-  await login(page)
+  await login(page, KANYKEI)
   await page.goto('/admin/schedule')
 
   if (isDesktop(page)) {
@@ -220,7 +213,7 @@ test('realtime: a lesson gets confirmed → «Не подтверждено» dr
 
   try {
     await pinClock(page, `${today}T12:00:00+06:00`)
-    await login(page)
+    await login(page, KANYKEI)
     const kpi = page.getByTestId('kpi-unconfirmed')
     await expect(kpi).toHaveText(/^\d+$/)
     const before = Number(await kpi.textContent())

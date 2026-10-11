@@ -15,7 +15,6 @@ function supabaseEnv(): Record<string, string> {
   }
 }
 
-const PAYROLL = /payroll\.spec\.ts$/
 const PHONE = { ...devices['iPhone 13'], viewport: { width: 390, height: 844 } }
 const DESKTOP = { ...devices['Desktop Safari'], viewport: { width: 1280, height: 800 } }
 
@@ -29,32 +28,11 @@ export default defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: 'retain-on-failure',
   },
+  // payroll.spec and the specs that change the seed's months share a lock, not an order (#27):
+  // tests/e2e/support/seed-lock.ts.
   projects: [
-    {
-      name: 'webkit',
-      testIgnore: PAYROLL,
-      // Device descriptor reports 390×664 (minus Safari UI); issue asks for full 390×844 screen.
-      use: PHONE,
-    },
-    {
-      name: 'webkit-desktop',
-      testIgnore: PAYROLL,
-      use: DESKTOP,
-    },
-    // payroll.spec sums the seed's held September, and teacher-attendance.spec holds (and then
-    // removes) an extra September lesson while it runs — so the payroll checks go after the rest.
-    {
-      name: 'webkit-payroll',
-      testMatch: PAYROLL,
-      dependencies: ['webkit', 'webkit-desktop'],
-      use: PHONE,
-    },
-    {
-      name: 'webkit-desktop-payroll',
-      testMatch: PAYROLL,
-      dependencies: ['webkit', 'webkit-desktop'],
-      use: DESKTOP,
-    },
+    { name: 'webkit', use: PHONE },
+    { name: 'webkit-desktop', use: DESKTOP },
   ],
   webServer: {
     command: `pnpm build && pnpm preview --port ${PORT} --strictPort`,
