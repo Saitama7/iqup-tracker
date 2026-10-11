@@ -52,6 +52,10 @@
   --color-stone: var(--stone);
   --color-warn-soft: var(--warn-soft);
   --color-warn-strong: var(--warn-strong);
+  --color-burned-soft: var(--burned-soft);
+  --color-burned-deep: var(--burned-deep);
+  --color-deck-back: var(--deck-back);
+  --color-deck-dot: var(--deck-dot);
 
   /* Artboard shadows, tinted with brand tokens */
   --shadow-float: 0 16px 32px color-mix(in srgb, var(--ink) 18%, transparent);

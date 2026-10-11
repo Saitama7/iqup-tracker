@@ -21,6 +21,7 @@ import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
+import { Route as AppLessonsLessonIdRouteImport } from './routes/_app/lessons/$lessonId'
 import { Route as AppAdminGroupsIndexRouteImport } from './routes/_app/admin/groups/index'
 import { Route as AppAdminGroupsGroupIdRouteImport } from './routes/_app/admin/groups/$groupId'
 import { Route as AppAdminStudentsIndexRouteImport } from './routes/_app/admin/students/index'
@@ -85,6 +86,11 @@ const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AppAdminRouteRoute,
 } as any)
+const AppLessonsLessonIdRoute = AppLessonsLessonIdRouteImport.update({
+  id: '/lessons/$lessonId',
+  path: '/lessons/$lessonId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminGroupsIndexRoute = AppAdminGroupsIndexRouteImport.update({
   id: '/groups/',
   path: '/groups/',
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/today': typeof AppTodayRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/lessons/$lessonId': typeof AppLessonsLessonIdRoute
   '/admin/': typeof AppAdminIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
@@ -134,6 +141,7 @@ export interface FileRoutesByTo {
   '/today': typeof AppTodayRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/lessons/$lessonId': typeof AppLessonsLessonIdRoute
   '/admin': typeof AppAdminIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
@@ -153,6 +161,7 @@ export interface FileRoutesById {
   '/_app/today': typeof AppTodayRoute
   '/_app/admin/settings': typeof AppAdminSettingsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
+  '/_app/lessons/$lessonId': typeof AppLessonsLessonIdRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/_app/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
@@ -172,6 +181,7 @@ export interface FileRouteTypes {
     | '/today'
     | '/admin/settings'
     | '/admin/users'
+    | '/lessons/$lessonId'
     | '/admin/'
     | '/admin/groups/$groupId'
     | '/admin/students/$studentId'
@@ -188,6 +198,7 @@ export interface FileRouteTypes {
     | '/today'
     | '/admin/settings'
     | '/admin/users'
+    | '/lessons/$lessonId'
     | '/admin'
     | '/admin/groups/$groupId'
     | '/admin/students/$studentId'
@@ -206,6 +217,7 @@ export interface FileRouteTypes {
     | '/_app/today'
     | '/_app/admin/settings'
     | '/_app/admin/users'
+    | '/_app/lessons/$lessonId'
     | '/_app/admin/'
     | '/_app/admin/groups/$groupId'
     | '/_app/admin/students/$studentId'
@@ -305,6 +317,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminUsersRouteImport
       parentRoute: typeof AppAdminRouteRoute
     }
+    '/_app/lessons/$lessonId': {
+      id: '/_app/lessons/$lessonId'
+      path: '/lessons/$lessonId'
+      fullPath: '/lessons/$lessonId'
+      preLoaderRoute: typeof AppLessonsLessonIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/groups/': {
       id: '/_app/admin/groups/'
       path: '/groups'
@@ -367,6 +386,7 @@ interface AppRouteChildren {
   AppPayrollRoute: typeof AppPayrollRoute
   AppProfileRoute: typeof AppProfileRoute
   AppTodayRoute: typeof AppTodayRoute
+  AppLessonsLessonIdRoute: typeof AppLessonsLessonIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -376,6 +396,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppPayrollRoute: AppPayrollRoute,
   AppProfileRoute: AppProfileRoute,
   AppTodayRoute: AppTodayRoute,
+  AppLessonsLessonIdRoute: AppLessonsLessonIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

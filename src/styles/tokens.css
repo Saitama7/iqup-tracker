@@ -32,4 +32,9 @@
   /* А5 / А6: «пора оплачивать»-family chip, tinted row */
   --warn-soft: #fff3d6;
   --warn-strong: #8a5200;
+  /* У2 / УД1: «не подтверждено» banner, deck back card and pager dots */
+  --burned-soft: #fbecec;
+  --burned-deep: #8e2626;
+  --deck-back: #efe8d0;
+  --deck-dot: #d9d2bc;
 }

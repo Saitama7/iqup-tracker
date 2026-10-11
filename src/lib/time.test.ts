@@ -2,8 +2,11 @@ import {
   bishkekDate,
   bishkekDaysBetween,
   formatDateRu,
+  formatDayMonth,
   formatDayLong,
+  formatMonthNom,
   formatMonthYearGen,
+  formatWeekdayLower,
   parseDateRu,
 } from './time'
 
@@ -57,5 +60,19 @@ describe('bishkekDaysBetween', () => {
     expect(
       bishkekDaysBetween(Date.parse('2026-10-11T01:00:00Z'), Date.parse('2026-10-11T17:00:00Z')),
     ).toBe(0)
+  })
+})
+
+describe('formatMonthNom / formatWeekdayLower', () => {
+  it('Bishkek month and weekday', () => {
+    expect(formatMonthNom(Date.parse('2026-10-31T18:00:00Z'))).toBe('Ноябрь')
+    expect(formatWeekdayLower(Date.parse('2026-10-09T05:00:00Z'))).toBe('пятница')
+  })
+})
+
+describe('formatDayMonth', () => {
+  it('day and genitive month', () => {
+    expect(formatDayMonth('2026-10-05')).toBe('5 октября')
+    expect(formatDayMonth('2026-12-31')).toBe('31 декабря')
   })
 })

@@ -39,7 +39,7 @@ jobs:
       # Auth e2e signs in seed users against the local stack (playwright.config reads `supabase status`)
       - uses: supabase/setup-cli@v1
         with: { version: latest }
-      - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,realtime,supavisor
+      - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,supavisor
       - run: pnpm seed:users
       # admin-users e2e creates users through the Edge Function
       - name: Serve Edge Functions
@@ -64,7 +64,7 @@ jobs:
       - uses: supabase/setup-cli@v1
         with: { version: latest }
       # Auth + PostgREST + Kong are needed for seed:users and the Edge Function tests
-      - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,realtime,supavisor
+      - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,supavisor
       - run: supabase test db
       - uses: pnpm/action-setup@v4 # version from package.json packageManager
       - uses: actions/setup-node@v4
