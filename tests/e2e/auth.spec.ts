@@ -1,15 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-
-// Seed users (`pnpm seed:users`): password iqup-demo for everyone.
-const GULZAT = { phone: '555 123 456', password: 'iqup-demo' } // teacher
-const KANYKEI = { phone: '552 775 771', password: 'iqup-demo' } // admin + teacher
-
-async function login(page: Page, user: { phone: string; password: string }) {
-  await page.goto('/login')
-  await page.getByLabel('Номер телефона').fill(user.phone)
-  await page.getByLabel('Пароль', { exact: true }).fill(user.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
-}
+import { GULZAT, KANYKEI, login, submitLogin } from './support/auth'
 
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900
 
@@ -36,7 +26,7 @@ test('empty form shows an error instead of submitting', async ({ page }) => {
 })
 
 test('wrong password shows an error', async ({ page }) => {
-  await login(page, { ...GULZAT, password: 'wrong-password' })
+  await submitLogin(page, { ...GULZAT, password: 'wrong-password' })
   await expect(page.getByRole('alert')).toHaveText('Неверный телефон или пароль')
   await expect(page).toHaveURL(/\/login$/)
 })

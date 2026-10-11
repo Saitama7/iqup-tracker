@@ -2,19 +2,11 @@ import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
+import { GULZAT, KANYKEI, login } from './support/auth'
 
 // Needs the local stack + `pnpm seed:users` (seed: 8 класс А as on А4 / А5).
-const KANYKEI = { phone: '552 775 771', password: 'iqup-demo' } // admin + teacher
-const GULZAT = { phone: '555 123 456', password: 'iqup-demo' } // teacher
 
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900
-
-async function login(page: Page, user: { phone: string; password: string }) {
-  await page.goto('/login')
-  await page.getByLabel('Номер телефона').fill(user.phone)
-  await page.getByLabel('Пароль', { exact: true }).fill(user.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
-}
 
 // One student per project, so the two viewports never touch the same rows.
 const testName = (testInfo: TestInfo) =>
