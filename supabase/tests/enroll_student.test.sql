@@ -178,7 +178,7 @@ select is(
 set local request.jwt.claims = '{"sub":"a8000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"roles":["teacher"]}}';
 
 select results_eq(
-  $$ select id from public.students where id::text like 'e8%' order by id $$,
+  $$ select id from public.students where id::text like 'e8000000-%' order by id $$,
   $$ values ('e8000000-0000-4000-8000-000000000001'::uuid), ('e8000000-0000-4000-8000-000000000002'::uuid) $$,
   'teacher A sees the students enrolled in own group only'
 );
@@ -204,7 +204,7 @@ select is_empty(
 -- ─── Teacher B ──────────────────────────────────────────────────────────────
 set local request.jwt.claims = '{"sub":"a8000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"roles":["teacher"]}}';
 select results_eq(
-  $$ select id from public.students where id::text like 'e8%' $$,
+  $$ select id from public.students where id::text like 'e8000000-%' $$,
   $$ values ('e8000000-0000-4000-8000-000000000001'::uuid) $$,
   'teacher B sees only the student enrolled into own group'
 );
@@ -212,7 +212,7 @@ select results_eq(
 -- ─── Accountant reads everything, writes nothing ────────────────────────────
 set local request.jwt.claims = '{"sub":"a8000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"roles":["accountant"]}}';
 select is(
-  (select count(*) from public.students where id::text like 'e8%'),
+  (select count(*) from public.students where id::text like 'e8000000-%'),
   4::bigint,
   'accountant reads all students'
 );
