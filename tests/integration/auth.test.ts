@@ -100,3 +100,152 @@ describe('Edge Function create-user', () => {
     expect(res.status).toBe(409)
   })
 })
+
+describe('Edge Function create-user: roles, rate, access (#6)', () => {
+  const service = createClient<Database>(env.apiUrl, env.serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const phone = `996598${String(Date.now()).slice(-6)}`
+  let userId = ''
+
+  const call = async (body: unknown) => {
+    const { token } = await signIn('0552 775 771')
+    return fetch(`${env.functionsUrl}/create-user`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  beforeAll(async () => {
+    const res = await call({
+      phone,
+      full_name: 'Roles Test',
+      roles: ['accountant'],
+      password: 'secret-123',
+    })
+    expect(res.status).toBe(201)
+    userId = ((await res.json()) as { user_id: string }).user_id
+  })
+
+  afterAll(async () => {
+    await service.from('teachers').delete().eq('phone', phone)
+    if (userId) await service.auth.admin.deleteUser(userId)
+  })
+
+  it('update_roles adds teacher: JWT roles + linked teachers row', async () => {
+    const res = await call({
+      action: 'update_roles',
+      user_id: userId,
+      roles: ['accountant', 'teacher'],
+    })
+    expect(res.status).toBe(200)
+
+    const { data } = await client().auth.signInWithPassword({
+      email: phoneToEmail(phone),
+      password: 'secret-123',
+    })
+    expect(data.user?.app_metadata.roles).toEqual(['accountant', 'teacher'])
+    const { data: teacher } = await service
+      .from('teachers')
+      .select('id, user_id')
+      .eq('phone', phone)
+      .single()
+    expect(teacher?.user_id).toBe(userId)
+  })
+
+  it('update_rate: new appends rows, fix corrects one in place', async () => {
+    const { data: teacher } = await service
+      .from('teachers')
+      .select('id')
+      .eq('phone', phone)
+      .single()
+    const teacherId = teacher?.id
+    expect(
+      (
+        await call({
+          action: 'update_rate',
+          mode: 'new',
+          teacher_id: teacherId,
+          percent: 45,
+          valid_from: '2026-09-01',
+        })
+      ).status,
+    ).toBe(201)
+    expect(
+      (
+        await call({
+          action: 'update_rate',
+          mode: 'new',
+          teacher_id: teacherId,
+          percent: 50,
+          valid_from: '2026-11-01',
+        })
+      ).status,
+    ).toBe(201)
+    expect(
+      (
+        await call({
+          action: 'update_rate',
+          mode: 'new',
+          teacher_id: teacherId,
+          percent: 99,
+          valid_from: '2026-09-01',
+        })
+      ).status,
+    ).toBe(409)
+    expect(
+      (
+        await call({
+          action: 'update_rate',
+          mode: 'fix',
+          teacher_id: teacherId,
+          percent: 47,
+          valid_from: '2026-09-01',
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (
+        await call({
+          action: 'update_rate',
+          mode: 'fix',
+          teacher_id: teacherId,
+          percent: 47,
+          valid_from: '2026-10-01',
+        })
+      ).status,
+    ).toBe(404)
+    const { data: rates } = await service
+      .from('teacher_rates')
+      .select('percent, valid_from')
+      .eq('teacher_id', teacherId ?? '')
+      .order('valid_from')
+    expect(rates).toEqual([
+      { percent: 47, valid_from: '2026-09-01' },
+      { percent: 50, valid_from: '2026-11-01' },
+    ])
+  })
+
+  it('set_active false blocks sign-in, true restores it', async () => {
+    expect((await call({ action: 'set_active', user_id: userId, active: false })).status).toBe(200)
+    const blocked = await client().auth.signInWithPassword({
+      email: phoneToEmail(phone),
+      password: 'secret-123',
+    })
+    expect(blocked.error).not.toBeNull()
+    const { data: profile } = await service
+      .from('profiles')
+      .select('is_active')
+      .eq('id', userId)
+      .single()
+    expect(profile?.is_active).toBe(false)
+
+    expect((await call({ action: 'set_active', user_id: userId, active: true })).status).toBe(200)
+    const restored = await client().auth.signInWithPassword({
+      email: phoneToEmail(phone),
+      password: 'secret-123',
+    })
+    expect(restored.error).toBeNull()
+  })
+})

@@ -1,7 +1,15 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
+import { ChevronRight } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import { TABS } from './nav'
+import { MORE, TABS, type NavItem, type TabItem } from './nav'
 import { useView } from './use-view'
 
 // Phone layout: no app bar — each screen draws its own header (У2, У4, У7);
@@ -44,9 +52,17 @@ export function MobileShell({ children }: { children: ReactNode }) {
               )
               return (
                 <li key={tab.label}>
-                  {tab.to ? (
+                  {tab.more ? (
+                    <MoreSheet
+                      tab={tab}
+                      items={view ? MORE[view] : []}
+                      pathname={pathname}
+                      dense={dense}
+                    />
+                  ) : tab.to ? (
                     <Link
                       to={tab.to}
+                      activeOptions={{ exact: tab.exact ?? false }}
                       className={cn(
                         itemClass(dense),
                         'group text-ink-muted data-[status=active]:font-extrabold data-[status=active]:text-ink',
@@ -79,6 +95,77 @@ export function MobileShell({ children }: { children: ReactNode }) {
         </nav>
       )}
     </div>
+  )
+}
+
+// «Ещё»: bottom sheet with the remaining sections; not built yet — muted with «скоро».
+function MoreSheet({
+  tab,
+  items,
+  pathname,
+  dense,
+}: {
+  tab: TabItem
+  items: NavItem[]
+  pathname: string
+  dense: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const active = items.some((i) => i.to === pathname)
+  const close = () => {
+    setOpen(false)
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger
+        className={cn(
+          itemClass(dense),
+          'group text-ink-muted',
+          active && 'font-extrabold text-ink',
+        )}
+      >
+        <span className={cn(pillClass(dense), 'rounded-full', active && 'bg-brand')}>
+          <tab.icon className={dense ? 'size-[18px]' : 'size-5'} strokeWidth={2.4} aria-hidden />
+        </span>
+        {tab.label}
+      </SheetTrigger>
+      <SheetContent
+        side="bottom"
+        showCloseButton={false}
+        className="gap-0 rounded-t-[24px] border-line bg-card px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"
+      >
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-line-strong" aria-hidden />
+        <SheetTitle className="px-2 pb-1 font-display text-lg font-bold">Ещё</SheetTitle>
+        <SheetDescription className="sr-only">Остальные разделы</SheetDescription>
+        <nav aria-label="Ещё">
+          <ul className="flex flex-col">
+            {items.map((item) => (
+              <li key={item.label} className="border-b border-line last:border-b-0">
+                {item.to ? (
+                  <Link
+                    to={item.to}
+                    onClick={close}
+                    className="flex min-h-12 items-center justify-between gap-3 px-2 text-[15px] font-bold text-ink data-[status=active]:font-extrabold"
+                  >
+                    {item.label}
+                    <ChevronRight className="size-4 text-ink-muted" aria-hidden />
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="flex min-h-12 items-center justify-between gap-3 px-2 text-[15px] font-bold text-ink-muted/50"
+                  >
+                    {item.label}
+                    <span className="text-xs font-extrabold whitespace-nowrap">скоро</span>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </SheetContent>
+    </Sheet>
   )
 }
 

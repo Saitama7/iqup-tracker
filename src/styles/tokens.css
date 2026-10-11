@@ -22,4 +22,11 @@
   --placeholder: #a8a08a;
   --sand: #b5ae98;
   --burned-strong: #b83232;
+
+  /* Status chips (А8): soft background + strong text */
+  --present-soft: #e3f5ea;
+  --present-strong: #15733f;
+  --teal-soft: #e0f2f4;
+  --teal-strong: #146f7e;
+  --stone: #f1eee4;
 }

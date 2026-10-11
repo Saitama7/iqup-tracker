@@ -33,6 +33,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
               <Link
                 key={item.label}
                 to={item.to}
+                activeOptions={{ exact: item.exact ?? false }}
                 className={cn(
                   itemClass,
                   'font-bold text-sand hover:text-paper',

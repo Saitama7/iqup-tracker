@@ -5,16 +5,21 @@ import type { Role } from '@/lib/roles'
 // The shell shows one role's menu at a time — the "view".
 export type View = Role
 
-export type AppPath = '/today' | '/groups' | '/my-month' | '/admin' | '/payroll' | '/profile'
+export type AppPath =
+  '/today' | '/groups' | '/my-month' | '/admin' | '/admin/users' | '/payroll' | '/profile'
 
 export interface NavItem {
   label: string
   /** `null` — screen is not built yet; shown disabled. */
   to: AppPath | null
+  /** Active only on this exact path — section roots like /admin that have child screens. */
+  exact?: boolean
 }
 
 export interface TabItem extends NavItem {
   icon: LucideIcon
+  /** Opens the «Ещё» bottom sheet with MORE[view] instead of navigating. */
+  more?: true
 }
 
 // Desktop sidebar, texts and order as on artboards УД1–УД4, А1–А11, Б1–Б3.
@@ -25,14 +30,14 @@ export const NAV: Record<View, NavItem[]> = {
     { label: 'Мой месяц', to: '/my-month' },
   ],
   admin: [
-    { label: 'Дашборд', to: '/admin' },
+    { label: 'Дашборд', to: '/admin', exact: true },
     { label: 'Расписание', to: null },
     { label: 'Группы', to: null },
     { label: 'Ученики', to: null },
     { label: 'Пробные занятия', to: null },
     { label: 'Оплаты', to: null },
     { label: 'Расчёт ЗП', to: null },
-    { label: 'Учителя и доступ', to: null },
+    { label: 'Учителя и доступ', to: '/admin/users' },
     { label: 'Тарифы и праздники', to: null },
     { label: 'Журнал изменений', to: null },
   ],
@@ -55,11 +60,26 @@ export const TABS: Record<View, TabItem[]> = {
     { label: 'Мой месяц', icon: CreditCard, to: '/my-month' },
   ],
   admin: [
-    { label: 'Сегодня', icon: Calendar, to: '/admin' },
+    { label: 'Сегодня', icon: Calendar, to: '/admin', exact: true },
     { label: 'Ученики', icon: User, to: null },
     { label: 'Оплата', icon: CreditCard, to: null },
     { label: 'Группы', icon: Users, to: null },
-    { label: 'Ещё', icon: Menu, to: null },
+    { label: 'Ещё', icon: Menu, to: null, more: true },
+  ],
+  accountant: [],
+}
+
+// Phone «Ещё» sheet: the sections that do not fit the tab bar.
+export const MORE: Record<View, NavItem[]> = {
+  teacher: [],
+  admin: [
+    { label: 'Расписание', to: null },
+    { label: 'Группы', to: null },
+    { label: 'Пробные', to: null },
+    { label: 'Учителя и доступ', to: '/admin/users' },
+    { label: 'Тарифы и праздники', to: null },
+    { label: 'Журнал изменений', to: null },
+    { label: 'Профиль', to: '/profile' },
   ],
   accountant: [],
 }

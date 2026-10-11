@@ -1,4 +1,4 @@
-import { NAV, TABS, resolveView, viewCaption, viewsFor } from './nav'
+import { MORE, NAV, TABS, resolveView, viewCaption, viewsFor } from './nav'
 
 describe('viewsFor', () => {
   it('orders views by priority', () => {
@@ -41,6 +41,20 @@ describe('NAV / TABS', () => {
       'Группы',
       'Ещё',
     ])
+  })
+
+  it('admin «Ещё» sheet lists the remaining sections, built ones as links', () => {
+    expect(TABS.admin.at(-1)?.more).toBe(true)
+    expect(MORE.admin.map((i) => i.label)).toEqual([
+      'Расписание',
+      'Группы',
+      'Пробные',
+      'Учителя и доступ',
+      'Тарифы и праздники',
+      'Журнал изменений',
+      'Профиль',
+    ])
+    expect(MORE.admin.filter((i) => i.to).map((i) => i.to)).toEqual(['/admin/users', '/profile'])
   })
 
   it('accountant has no tab bar (БМ1)', () => {

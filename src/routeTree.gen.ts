@@ -12,12 +12,14 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as AppAdminRouteImport } from './routes/_app/admin'
+import { Route as AppAdminRouteRouteImport } from './routes/_app/admin/route'
 import { Route as AppGroupsRouteImport } from './routes/_app/groups'
 import { Route as AppMyMonthRouteImport } from './routes/_app/my-month'
 import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
+import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
+import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -33,7 +35,7 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppAdminRoute = AppAdminRouteImport.update({
+const AppAdminRouteRoute = AppAdminRouteRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => AppRoute,
@@ -63,38 +65,53 @@ const AppTodayRoute = AppTodayRouteImport.update({
   path: '/today',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAdminRouteRoute,
+} as any)
+const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AppAdminRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/admin': typeof AppAdminRoute
+  '/admin': typeof AppAdminRouteRouteWithChildren
   '/groups': typeof AppGroupsRoute
   '/my-month': typeof AppMyMonthRoute
   '/payroll': typeof AppPayrollRoute
   '/profile': typeof AppProfileRoute
   '/today': typeof AppTodayRoute
+  '/admin/users': typeof AppAdminUsersRoute
+  '/admin/': typeof AppAdminIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/admin': typeof AppAdminRoute
   '/groups': typeof AppGroupsRoute
   '/my-month': typeof AppMyMonthRoute
   '/payroll': typeof AppPayrollRoute
   '/profile': typeof AppProfileRoute
   '/today': typeof AppTodayRoute
+  '/admin/users': typeof AppAdminUsersRoute
+  '/admin': typeof AppAdminIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
-  '/_app/admin': typeof AppAdminRoute
+  '/_app/admin': typeof AppAdminRouteRouteWithChildren
   '/_app/groups': typeof AppGroupsRoute
   '/_app/my-month': typeof AppMyMonthRoute
   '/_app/payroll': typeof AppPayrollRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/today': typeof AppTodayRoute
+  '/_app/admin/users': typeof AppAdminUsersRoute
+  '/_app/admin/': typeof AppAdminIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,16 +124,19 @@ export interface FileRouteTypes {
     | '/payroll'
     | '/profile'
     | '/today'
+    | '/admin/users'
+    | '/admin/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
-    | '/admin'
     | '/groups'
     | '/my-month'
     | '/payroll'
     | '/profile'
     | '/today'
+    | '/admin/users'
+    | '/admin'
   id:
     | '__root__'
     | '/'
@@ -128,6 +148,8 @@ export interface FileRouteTypes {
     | '/_app/payroll'
     | '/_app/profile'
     | '/_app/today'
+    | '/_app/admin/users'
+    | '/_app/admin/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -163,7 +185,7 @@ declare module '@tanstack/react-router' {
       id: '/_app/admin'
       path: '/admin'
       fullPath: '/admin'
-      preLoaderRoute: typeof AppAdminRouteImport
+      preLoaderRoute: typeof AppAdminRouteRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/groups': {
@@ -201,11 +223,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTodayRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin/': {
+      id: '/_app/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AppAdminIndexRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
+    '/_app/admin/users': {
+      id: '/_app/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AppAdminUsersRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
   }
 }
 
+interface AppAdminRouteRouteChildren {
+  AppAdminUsersRoute: typeof AppAdminUsersRoute
+  AppAdminIndexRoute: typeof AppAdminIndexRoute
+}
+
+const AppAdminRouteRouteChildren: AppAdminRouteRouteChildren = {
+  AppAdminUsersRoute: AppAdminUsersRoute,
+  AppAdminIndexRoute: AppAdminIndexRoute,
+}
+
+const AppAdminRouteRouteWithChildren = AppAdminRouteRoute._addFileChildren(
+  AppAdminRouteRouteChildren,
+)
+
 interface AppRouteChildren {
-  AppAdminRoute: typeof AppAdminRoute
+  AppAdminRouteRoute: typeof AppAdminRouteRouteWithChildren
   AppGroupsRoute: typeof AppGroupsRoute
   AppMyMonthRoute: typeof AppMyMonthRoute
   AppPayrollRoute: typeof AppPayrollRoute
@@ -214,7 +264,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppAdminRoute: AppAdminRoute,
+  AppAdminRouteRoute: AppAdminRouteRouteWithChildren,
   AppGroupsRoute: AppGroupsRoute,
   AppMyMonthRoute: AppMyMonthRoute,
   AppPayrollRoute: AppPayrollRoute,
