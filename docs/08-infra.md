@@ -91,7 +91,7 @@ cp .env.example .env.local               # и заменить на URL/anon dev
 
 Домен `*.pages.dev` бесплатный; свой (`tracker.iqup.kg`) — позже, Custom domains, тоже бесплатно.
 
-`wrangler.jsonc` в репо нужен только для ручного `wrangler pages deploy` — при Git-деплое Cloudflare его читает, но ничего дополнительного не требует.
+`wrangler.jsonc` в репо **не держим**: если Cloudflare находит wrangler-конфиг, он берёт настройки из него и игнорирует переменные из дашборда («Build environment variables: (none found)») — сборка без `VITE_SUPABASE_*` даёт белый экран. Переменные живут только в Settings → Variables and secrets.
 
 ## 3. GitHub → Settings → Secrets and variables → Actions
 
