@@ -11,6 +11,7 @@ export type AppPath =
   | '/my-month'
   | '/admin'
   | '/admin/users'
+  | '/admin/students'
   | '/admin/settings'
   | '/payroll'
   | '/profile'
@@ -40,7 +41,7 @@ export const NAV: Record<View, NavItem[]> = {
     { label: 'Дашборд', to: '/admin', exact: true },
     { label: 'Расписание', to: null },
     { label: 'Группы', to: null },
-    { label: 'Ученики', to: null },
+    { label: 'Ученики', to: '/admin/students' },
     { label: 'Пробные занятия', to: null },
     { label: 'Оплаты', to: null },
     { label: 'Расчёт ЗП', to: null },
@@ -68,7 +69,7 @@ export const TABS: Record<View, TabItem[]> = {
   ],
   admin: [
     { label: 'Сегодня', icon: Calendar, to: '/admin', exact: true },
-    { label: 'Ученики', icon: User, to: null },
+    { label: 'Ученики', icon: User, to: '/admin/students' },
     { label: 'Оплата', icon: CreditCard, to: null },
     { label: 'Группы', icon: Users, to: null },
     { label: 'Ещё', icon: Menu, to: null, more: true },
@@ -113,6 +114,14 @@ export const VIEW_HOME: Record<View, AppPath> = {
 /** Views available to the user, primary first (same priority as homePath). */
 export function viewsFor(roles: readonly Role[]): View[] {
   return (['admin', 'accountant', 'teacher'] as const).filter((r) => roles.includes(r))
+}
+
+/**
+ * Pushed screens with their own back button and bottom actions: no tab bar
+ * (У7 Профиль, АМ2 Ученик).
+ */
+export function isPushedScreen(pathname: string): boolean {
+  return pathname === '/profile' || /^\/admin\/students\/[^/]+\/?$/.test(pathname)
 }
 
 function viewOfPath(pathname: string): View | null {

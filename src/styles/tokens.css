@@ -29,4 +29,7 @@
   --teal-soft: #e0f2f4;
   --teal-strong: #146f7e;
   --stone: #f1eee4;
+  /* А5 / А6: «пора оплачивать»-family chip, tinted row */
+  --warn-soft: #fff3d6;
+  --warn-strong: #8a5200;
 }

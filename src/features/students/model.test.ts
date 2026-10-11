@@ -1,0 +1,237 @@
+import { describe, expect, it } from 'vitest'
+import {
+  currentSubscription,
+  filterRows,
+  formatDayMonth,
+  formatLessonWhen,
+  formatMarkedAt,
+  initials,
+  listCaption,
+  matchesQuery,
+  priceCaption,
+  discountCaption,
+  scheduleCaption,
+  shortName,
+  studentListRows,
+  type GroupBrief,
+  type StudentRow,
+  type StudentsSource,
+  type SubscriptionRow,
+} from './model'
+
+const G8A: GroupBrief = {
+  id: 'g8a',
+  name: '8 класс А',
+  subject: 'Математика',
+  group_type: 'group',
+  status: 'active',
+  start_date: '2026-09-01',
+  end_date: null,
+  teacher: { full_name: 'Гульзат Асанова' },
+  schedule_rules: [2, 4, 6].map((weekday) => ({
+    weekday,
+    start_time: '09:00:00',
+    valid_from: '2026-09-01',
+    valid_to: null,
+  })),
+}
+const CHEM: GroupBrief = { ...G8A, id: 'chem', name: '9 класс', subject: 'Химия' }
+
+const sub = (id: string, over: Partial<SubscriptionRow> = {}): SubscriptionRow => ({
+  id,
+  lessons_total: 12,
+  price_full: 3200,
+  price_final: 3200,
+  discount_percent: 0,
+  discount_reason: 'none',
+  started_at: '2026-09-01',
+  status: 'active',
+  created_at: '2026-09-01T10:00:00Z',
+  ...over,
+})
+
+const student = (over: Partial<StudentRow>): StudentRow => ({
+  id: 's',
+  full_name: 'Ученик',
+  grade: 8,
+  parent_name: null,
+  parent_phone: null,
+  is_returning: false,
+  referred_by_student_id: null,
+  notes: null,
+  created_at: '2026-09-01T10:00:00Z',
+  enrollments: [],
+  ...over,
+})
+
+const source: StudentsSource = {
+  groups: [G8A, CHEM],
+  balances: [
+    { subscription_id: 'k1', lessons_used: 6, lessons_left: 6, freezes_used: 1, freeze_limit: 2 },
+    { subscription_id: 'k2', lessons_used: 10, lessons_left: 2, freezes_used: 0, freeze_limit: 2 },
+    { subscription_id: 'n1', lessons_used: 0, lessons_left: 12, freezes_used: 0, freeze_limit: 2 },
+    { subscription_id: 'e1', lessons_used: 12, lessons_left: 0, freezes_used: 0, freeze_limit: 2 },
+  ],
+  students: [
+    student({
+      id: 'kamila',
+      full_name: 'Камила Орозова',
+      parent_phone: '996770555666',
+      enrollments: [
+        {
+          id: 'ek1',
+          group_id: 'g8a',
+          start_date: '2026-09-01',
+          end_date: null,
+          status: 'active',
+          subscriptions: [sub('k1')],
+        },
+        {
+          id: 'ek2',
+          group_id: 'chem',
+          start_date: '2026-09-01',
+          end_date: null,
+          status: 'active',
+          subscriptions: [sub('k2')],
+        },
+      ],
+    }),
+    student({
+      id: 'nurlan',
+      full_name: 'Нурлан Асанов',
+      parent_phone: '996555999000',
+      enrollments: [
+        {
+          id: 'en1',
+          group_id: 'g8a',
+          start_date: '2026-10-01',
+          end_date: null,
+          status: 'active',
+          subscriptions: [sub('n1')],
+        },
+      ],
+    }),
+    student({
+      id: 'elina',
+      full_name: 'Элина Сыдыкова',
+      enrollments: [
+        {
+          id: 'ee1',
+          group_id: 'g8a',
+          start_date: '2026-09-01',
+          end_date: null,
+          status: 'active',
+          subscriptions: [sub('e1')],
+        },
+      ],
+    }),
+    student({ id: 'new', full_name: 'Ёлка Новая', grade: null }),
+  ],
+}
+
+describe('studentListRows (А5)', () => {
+  const rows = studentListRows(source)
+  const by = (id: string) => rows.find((r) => r.id === id)
+
+  it('used / total of the current subscription per active group', () => {
+    expect(by('kamila')).toMatchObject({
+      groups: 'Математика · 8 класс А · Химия · 9 класс',
+      usage: '6 / 12 · 10 / 12',
+      status: 'active',
+      groupIds: ['g8a', 'chem'],
+    })
+    expect(by('nurlan')?.usage).toBe('0 / 12')
+  })
+
+  it('status: not enrolled, lessons over', () => {
+    expect(by('new')).toMatchObject({ status: 'not_enrolled', groups: '', usage: '' })
+    expect(by('elina')?.status).toBe('exhausted')
+  })
+
+  it('sorted by name', () => {
+    expect(rows.map((r) => r.fullName)).toEqual([
+      'Ёлка Новая',
+      'Камила Орозова',
+      'Нурлан Асанов',
+      'Элина Сыдыкова',
+    ])
+  })
+
+  it('caption counts active and idle students', () => {
+    expect(listCaption(rows)).toBe('3 активных · 1 без группы')
+    expect(listCaption(rows.slice(1, 2))).toBe('1 активный')
+  })
+})
+
+describe('search and group filter', () => {
+  const rows = studentListRows(source)
+
+  it('by name, case- and ё-insensitive', () => {
+    expect(matchesQuery({ fullName: 'Нурлан Асанов', parentPhone: null }, 'асан')).toBe(true)
+    expect(matchesQuery({ fullName: 'Ёлка Новая', parentPhone: null }, 'елка')).toBe(true)
+    expect(matchesQuery({ fullName: 'Нурлан Асанов', parentPhone: null }, 'тимур')).toBe(false)
+  })
+
+  it('by parent phone in any common form', () => {
+    const row = { fullName: 'Нурлан Асанов', parentPhone: '996555999000' }
+    for (const q of ['0555 999 000', '555999', '+996 555 999 000', '999 000']) {
+      expect(matchesQuery(row, q)).toBe(true)
+    }
+    expect(matchesQuery(row, '0700')).toBe(false)
+    expect(matchesQuery({ ...row, parentPhone: null }, '555')).toBe(false)
+  })
+
+  it('group filter keeps students with an active enrollment in it', () => {
+    expect(filterRows(rows, { group: 'chem' }).map((r) => r.id)).toEqual(['kamila'])
+    expect(filterRows(rows, { group: 'g8a', q: 'нур' }).map((r) => r.id)).toEqual(['nurlan'])
+    expect(filterRows(rows, {})).toHaveLength(4)
+  })
+})
+
+describe('formatting', () => {
+  it('dates and schedule as on А6', () => {
+    expect(formatDayMonth('2026-10-01')).toBe('1 октября')
+    expect(formatLessonWhen('2026-10-08', '09:00:00')).toBe('8 окт, чт 09:00')
+    expect(scheduleCaption(G8A.schedule_rules, '2026-10-11')).toBe('ВТ ЧТ СБ 09:00')
+    expect(scheduleCaption(G8A.schedule_rules, '2026-08-01')).toBe('')
+  })
+
+  it('names', () => {
+    expect(initials('Нурлан Асанов')).toBe('НА')
+    expect(initials('Айгуль')).toBe('А')
+    expect(shortName('Тимур Мамбетов')).toBe('Тимур М.')
+  })
+
+  it('price and discount captions', () => {
+    expect(priceCaption({ price_final: 3200, discount_percent: 0 })).toBe(
+      '3\u00a0200 сом · без скидки',
+    )
+    expect(priceCaption({ price_final: 2720, discount_percent: 15 })).toBe(
+      '2\u00a0720 сом · скидка 15 %',
+    )
+    expect(discountCaption({ discount_percent: 15 })).toBe('скидка 15 % · бывший ученик')
+    expect(discountCaption({ discount_percent: 0 })).toBeNull()
+  })
+})
+
+describe('currentSubscription', () => {
+  it('the newest by start date, refunded ignored', () => {
+    expect(
+      currentSubscription({
+        subscriptions: [
+          sub('old', { started_at: '2026-09-01' }),
+          sub('new', { started_at: '2026-10-05' }),
+          sub('ref', { started_at: '2026-10-10', status: 'refunded' }),
+        ],
+      })?.id,
+    ).toBe('new')
+    expect(currentSubscription({ subscriptions: [] })).toBeNull()
+  })
+})
+
+describe('formatMarkedAt', () => {
+  it('time only on the lesson day, Bishkek time', () => {
+    expect(formatMarkedAt('2026-10-08T04:02:00Z', '2026-10-08')).toBe('10:02')
+    expect(formatMarkedAt('2026-10-07T02:40:00Z', '2026-10-06')).toBe('7 окт 08:40')
+  })
+})

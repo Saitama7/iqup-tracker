@@ -9,7 +9,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import { MORE, TABS, type NavItem, type TabItem } from './nav'
+import { isPushedScreen, MORE, TABS, type NavItem, type TabItem } from './nav'
 import { useView } from './use-view'
 
 // Phone layout: no app bar — each screen draws its own header (У2, У4, У7);
@@ -17,8 +17,8 @@ import { useView } from './use-view'
 export function MobileShell({ children }: { children: ReactNode }) {
   const { view } = useView()
   const pathname = useLocation({ select: (l) => l.pathname })
-  // У7 Профиль is a pushed screen with a back button, no tab bar.
-  const tabs = view && pathname !== '/profile' ? TABS[view] : []
+  // У7 Профиль, АМ2 Ученик are pushed screens with a back button, no tab bar.
+  const tabs = view && !isPushedScreen(pathname) ? TABS[view] : []
   const showTabs = tabs.length > 1
   // АМ1 packs five tabs: narrower items, 10 px labels, 44×30 pill.
   const dense = tabs.length > 3

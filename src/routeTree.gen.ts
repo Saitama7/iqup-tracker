@@ -21,6 +21,8 @@ import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
+import { Route as AppAdminStudentsIndexRouteImport } from './routes/_app/admin/students/index'
+import { Route as AppAdminStudentsStudentIdRouteImport } from './routes/_app/admin/students/$studentId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -81,6 +83,17 @@ const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AppAdminRouteRoute,
 } as any)
+const AppAdminStudentsIndexRoute = AppAdminStudentsIndexRouteImport.update({
+  id: '/students/',
+  path: '/students/',
+  getParentRoute: () => AppAdminRouteRoute,
+} as any)
+const AppAdminStudentsStudentIdRoute =
+  AppAdminStudentsStudentIdRouteImport.update({
+    id: '/students/$studentId',
+    path: '/students/$studentId',
+    getParentRoute: () => AppAdminRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -94,6 +107,8 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/admin/': typeof AppAdminIndexRoute
+  '/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
+  '/admin/students/': typeof AppAdminStudentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -106,6 +121,8 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/admin': typeof AppAdminIndexRoute
+  '/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
+  '/admin/students': typeof AppAdminStudentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -121,6 +138,8 @@ export interface FileRoutesById {
   '/_app/admin/settings': typeof AppAdminSettingsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/admin/': typeof AppAdminIndexRoute
+  '/_app/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
+  '/_app/admin/students/': typeof AppAdminStudentsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -136,6 +155,8 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/admin/'
+    | '/admin/students/$studentId'
+    | '/admin/students/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -148,6 +169,8 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/admin'
+    | '/admin/students/$studentId'
+    | '/admin/students'
   id:
     | '__root__'
     | '/'
@@ -162,6 +185,8 @@ export interface FileRouteTypes {
     | '/_app/admin/settings'
     | '/_app/admin/users'
     | '/_app/admin/'
+    | '/_app/admin/students/$studentId'
+    | '/_app/admin/students/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -256,6 +281,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminUsersRouteImport
       parentRoute: typeof AppAdminRouteRoute
     }
+    '/_app/admin/students/': {
+      id: '/_app/admin/students/'
+      path: '/students'
+      fullPath: '/admin/students/'
+      preLoaderRoute: typeof AppAdminStudentsIndexRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
+    '/_app/admin/students/$studentId': {
+      id: '/_app/admin/students/$studentId'
+      path: '/students/$studentId'
+      fullPath: '/admin/students/$studentId'
+      preLoaderRoute: typeof AppAdminStudentsStudentIdRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
   }
 }
 
@@ -263,12 +302,16 @@ interface AppAdminRouteRouteChildren {
   AppAdminSettingsRoute: typeof AppAdminSettingsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
+  AppAdminStudentsStudentIdRoute: typeof AppAdminStudentsStudentIdRoute
+  AppAdminStudentsIndexRoute: typeof AppAdminStudentsIndexRoute
 }
 
 const AppAdminRouteRouteChildren: AppAdminRouteRouteChildren = {
   AppAdminSettingsRoute: AppAdminSettingsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
+  AppAdminStudentsStudentIdRoute: AppAdminStudentsStudentIdRoute,
+  AppAdminStudentsIndexRoute: AppAdminStudentsIndexRoute,
 }
 
 const AppAdminRouteRouteWithChildren = AppAdminRouteRoute._addFileChildren(
