@@ -61,7 +61,7 @@ test('А5: list with balances, search by name and phone, group filter in the URL
 
   const kamila = studentRow(page, 'Камила Орозова')
   await expect(kamila).toContainText('Математика · 8 класс А · Химия · 9 класс')
-  await expect(kamila).toContainText('0 / 12 · 0 / 12')
+  await expect(kamila).toContainText('12 / 12 · 12 / 12')
   await expect(kamila).toContainText('0770 555 666')
   await expect(kamila).toContainText('Занимается')
   await page.screenshot({ path: testInfo.outputPath('students.png'), fullPage: true })
@@ -90,7 +90,7 @@ test('А5: list with balances, search by name and phone, group filter in the URL
   await expect(studentRow(page, 'Айжан Бекова')).toHaveCount(0)
 })
 
-test('create a student → enroll into «8 класс А» with 15 % → in the group list with «0 / 12»', async ({
+test('create a student → enroll into «8 класс А» with 15 % → in the group list with «12 / 12»', async ({
   page,
 }, testInfo) => {
   const name = testName(testInfo)
@@ -162,7 +162,7 @@ test('create a student → enroll into «8 класс А» with 15 % → in the 
 
   await page.goto('/admin/students?group=00000000-0000-4000-b000-000000000001')
   const row = studentRow(page, name)
-  await expect(row).toContainText('0 / 12')
+  await expect(row).toContainText('12 / 12')
   await expect(row).toContainText('Математика · 8 класс А')
   await removeStudent(name)
 })
@@ -212,6 +212,8 @@ test('А6: student card with referrer, notes and empty attendance', async ({ pag
 test('teacher opening /admin/students sees 403', async ({ page }) => {
   await login(page, GULZAT)
   await expect(page).toHaveURL(/\/today$/)
+  // Wait for the post-login redirect to settle, otherwise it can interrupt goto.
+  await expect(page.getByRole('heading', { name: 'Сегодня, Гульзат' })).toBeVisible()
   await page.goto('/admin/students')
   await expect(page.getByText('403')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Нет доступа' })).toBeVisible()

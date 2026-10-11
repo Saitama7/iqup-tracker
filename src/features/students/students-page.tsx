@@ -215,7 +215,7 @@ function StudentsTable({ rows }: { rows: StudentListRow[] }) {
             <th className={thClass}>Класс</th>
             <th className={thClass}>Группы</th>
             <th className={thClass}>Родитель</th>
-            <th className={cn(thClass, 'text-right')}>Использовано</th>
+            <th className={cn(thClass, 'text-right')}>Осталось уроков</th>
             <th className={thClass}>Статус</th>
             <th className={thClass}>
               <span className="sr-only">Действия</span>
@@ -249,7 +249,7 @@ function StudentsTable({ rows }: { rows: StudentListRow[] }) {
                   r.status === 'exhausted' && 'font-extrabold text-warn',
                 )}
               >
-                {r.usage || <span className="text-ink-muted">—</span>}
+                {r.remaining || <span className="text-ink-muted">—</span>}
               </td>
               <td className={tdClass}>
                 <StatusChip status={r.status} />
@@ -299,14 +299,14 @@ function StudentCards({ rows }: { rows: StudentListRow[] }) {
               <span className="whitespace-nowrap text-ink-muted">
                 {displayPhone(r.parentPhone) ?? 'нет телефона'}
               </span>
-              {r.usage && (
+              {r.remaining && (
                 <span
                   className={cn(
                     'whitespace-nowrap tabular-nums',
                     r.status === 'exhausted' && 'font-extrabold text-warn',
                   )}
                 >
-                  {r.usage}
+                  осталось {r.remaining}
                 </span>
               )}
             </div>

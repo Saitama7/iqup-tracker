@@ -256,8 +256,8 @@ export interface StudentListRow {
   /** «Математика · 8 класс А · Химия · 9 класс» — active enrollments. */
   groups: string
   groupIds: string[]
-  /** «0 / 12 · 10 / 12» — used / total per active enrollment. */
-  usage: string
+  /** «12 / 12 · 2 / 12» — lessons left / total per active enrollment (А5 «Осталось уроков»). */
+  remaining: string
   status: StudentStatus
 }
 
@@ -267,11 +267,11 @@ export function studentListRow(
   balances: ReadonlyMap<string, Balance>,
 ): StudentListRow {
   const active = enrollmentViews(s, groups, balances).filter((e) => e.active)
-  const usage = active
+  const remaining = active
     .map((e) => {
       if (!e.subscription) return '—'
-      const used = e.balance?.lessons_used ?? 0
-      return `${used} / ${e.subscription.lessons_total}`
+      const left = e.balance?.lessons_left ?? e.subscription.lessons_total
+      return `${left} / ${e.subscription.lessons_total}`
     })
     .join(' · ')
   const exhausted =
@@ -283,7 +283,7 @@ export function studentListRow(
     parentPhone: s.parent_phone,
     groups: active.map((e) => e.groupLabel).join(' · '),
     groupIds: active.flatMap((e) => (e.group ? [e.group.id] : [])),
-    usage,
+    remaining,
     status: active.length === 0 ? 'not_enrolled' : exhausted ? 'exhausted' : 'active',
   }
 }

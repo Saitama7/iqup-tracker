@@ -133,18 +133,19 @@ describe('studentListRows (А5)', () => {
   const rows = studentListRows(source)
   const by = (id: string) => rows.find((r) => r.id === id)
 
-  it('used / total of the current subscription per active group', () => {
+  it('left / total of the current subscription per active group', () => {
     expect(by('kamila')).toMatchObject({
       groups: 'Математика · 8 класс А · Химия · 9 класс',
-      usage: '6 / 12 · 10 / 12',
+      remaining: '6 / 12 · 2 / 12',
       status: 'active',
       groupIds: ['g8a', 'chem'],
     })
-    expect(by('nurlan')?.usage).toBe('0 / 12')
+    expect(by('nurlan')?.remaining).toBe('12 / 12')
+    expect(by('elina')?.remaining).toBe('0 / 12')
   })
 
   it('status: not enrolled, lessons over', () => {
-    expect(by('new')).toMatchObject({ status: 'not_enrolled', groups: '', usage: '' })
+    expect(by('new')).toMatchObject({ status: 'not_enrolled', groups: '', remaining: '' })
     expect(by('elina')?.status).toBe('exhausted')
   })
 
