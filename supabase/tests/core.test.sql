@@ -1,6 +1,6 @@
--- Core invariants and RLS for R1 (issue #2). Self-contained fixtures, rolled back at the end.
+-- Core invariants and RLS for R1 (issues #2, #17). Self-contained fixtures, rolled back at the end.
 begin;
-select plan(31);
+select plan(35);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 -- users: a…1 teacher A, a…2 teacher B, a…3 admin, a…4 accountant
@@ -29,11 +29,13 @@ insert into public.groups (id, name, subject, grade, group_type, teacher_id, sta
 
 insert into public.students (id, full_name) values
   ('e0000000-0000-4000-8000-000000000001', 'Student A'),
-  ('e0000000-0000-4000-8000-000000000002', 'Student B');
+  ('e0000000-0000-4000-8000-000000000002', 'Student B'),
+  ('e0000000-0000-4000-8000-000000000003', 'Student A2'); -- group A, never marked
 
 insert into public.enrollments (id, student_id, group_id, start_date) values
   ('f0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000001', '2000-01-01'),
-  ('f0000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', '2000-01-01');
+  ('f0000000-0000-4000-8000-000000000002', 'e0000000-0000-4000-8000-000000000002', 'd0000000-0000-4000-8000-000000000002', '2000-01-01'),
+  ('f0000000-0000-4000-8000-000000000003', 'e0000000-0000-4000-8000-000000000003', 'd0000000-0000-4000-8000-000000000001', '2000-01-01');
 
 insert into public.subscriptions (id, enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at) values
   ('10000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001', 'c0000000-0000-4000-8000-000000000001', 12, 3200, 3200, '2000-01-01'),
@@ -54,8 +56,8 @@ set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-000000000001","r
 select results_eq('select id from public.groups', array['d0000000-0000-4000-8000-000000000001'::uuid], 'teacher sees only own groups');
 select is((select count(*) from public.lessons where group_id <> 'd0000000-0000-4000-8000-000000000001'), 0::bigint, 'teacher sees no foreign lessons');
 select is((select count(*) from public.lessons), 4::bigint, 'teacher sees all own lessons');
-select results_eq('select id from public.students', array['e0000000-0000-4000-8000-000000000001'::uuid], 'teacher sees only students of own groups');
-select results_eq('select id from public.enrollments', array['f0000000-0000-4000-8000-000000000001'::uuid], 'teacher sees only own enrollments');
+select results_eq('select id from public.students order by id', array['e0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000003']::uuid[], 'teacher sees only students of own groups');
+select results_eq('select id from public.enrollments order by id', array['f0000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000003']::uuid[], 'teacher sees only own enrollments');
 select results_eq('select id from public.subscriptions', array['10000000-0000-4000-8000-000000000001'::uuid], 'teacher sees only own students'' subscriptions');
 select results_eq('select id from public.profiles', array['a0000000-0000-4000-8000-000000000001'::uuid], 'teacher sees only own profile');
 select is_empty('select 1 from public.audit_log', 'teacher cannot read audit_log');
@@ -70,7 +72,7 @@ select throws_ok(
 select lives_ok(
   $$ insert into public.attendance (id, lesson_id, student_id, subscription_id, status) values
      ('30000000-0000-4000-8000-000000000001', '20000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'present') $$,
-  'teacher marks attendance on own lesson'
+  'teacher marks attendance on own planned lesson'
 );
 select throws_ok(
   $$ insert into public.attendance (lesson_id, student_id, subscription_id, status) values
@@ -78,7 +80,7 @@ select throws_ok(
   '42501', null, 'teacher cannot mark attendance on a foreign lesson'
 );
 
--- confirmation
+-- confirmation (R1-8 order: marks while planned, then status → held in the same transaction)
 select lives_ok(
   $$ update public.lessons set status = 'held' where id = '20000000-0000-4000-8000-000000000001' $$,
   'teacher holds own past lesson'
@@ -87,6 +89,15 @@ select ok(
   (select confirmed_at is not null and confirmed_late and confirmed_by = 'a0000000-0000-4000-8000-000000000001'
    from public.lessons where id = '20000000-0000-4000-8000-000000000001'),
   'confirmed_at/by set by DB, late flag for a past day'
+);
+select throws_ok(
+  $$ update public.attendance set status = 'absent_burned' where id = '30000000-0000-4000-8000-000000000001' $$,
+  '42501', null, 'teacher cannot change attendance after the lesson is held'
+);
+select throws_ok(
+  $$ insert into public.attendance (lesson_id, student_id, status) values
+     ('20000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000003', 'present') $$,
+  '42501', null, 'teacher cannot add attendance to a held lesson'
 );
 select throws_ok(
   $$ update public.lessons set confirmed_at = now() - interval '1 day' where id = '20000000-0000-4000-8000-000000000001' $$,
@@ -119,7 +130,8 @@ select lives_ok(
   'two freezes on one subscription are allowed'
 );
 select throws_ok(
-  $$ update public.attendance set status = 'absent_frozen' where id = '30000000-0000-4000-8000-000000000001' $$,
+  $$ insert into public.attendance (lesson_id, student_id, subscription_id, status) values
+     ('20000000-0000-4000-8000-000000000005', 'e0000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000001', 'absent_frozen') $$,
   '23514', null, 'third freeze on one subscription fails'
 );
 select results_eq(
@@ -134,6 +146,18 @@ select results_eq(
      order by lesson_date $$,
   $$ values ('held'), ('unconfirmed'), ('planned') $$,
   'v_lesson_status marks past planned lessons as unconfirmed'
+);
+
+-- ─── Admin edits a held lesson's attendance ─────────────────────────────────
+set local request.jwt.claims = '{"sub":"a0000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"roles":["admin"]}}';
+select lives_ok(
+  $$ update public.attendance set status = 'absent_burned' where id = '30000000-0000-4000-8000-000000000001' $$,
+  'admin changes attendance after the lesson is held'
+);
+select lives_ok(
+  $$ insert into public.attendance (lesson_id, student_id, status) values
+     ('20000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000003', 'present') $$,
+  'admin adds attendance to a held lesson'
 );
 
 -- ─── Closed period ──────────────────────────────────────────────────────────
