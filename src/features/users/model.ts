@@ -100,7 +100,7 @@ export function statusText(status: UserStatus): string {
     case 'idle':
       return `Не входил(а) ${status.days} дн.`
     case 'never':
-      return 'Ещё не входил(а)'
+      return 'Не входил(а)'
     case 'inactive':
       return 'Отключён'
     case 'no_login':

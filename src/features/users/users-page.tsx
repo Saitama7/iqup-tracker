@@ -47,11 +47,12 @@ import {
 /** Teachers shown before «ещё N учителей». */
 const TEACHERS_PREVIEW = 5
 const ROLES: Role[] = ['teacher', 'admin', 'accountant']
+const STAFF_ROLE_ORDER: Role[] = ['admin', 'accountant', 'teacher']
 
 const cardClass = 'rounded-[20px] border border-line bg-card'
 const thClass =
-  'px-2.5 py-2.5 text-left text-[11px] font-extrabold tracking-[0.06em] whitespace-nowrap text-ink-muted uppercase'
-const tdClass = 'border-b border-line px-2.5 py-2.5 align-middle text-[13px]'
+  'px-2 py-2.5 text-left text-[11px] font-extrabold tracking-[0.06em] whitespace-nowrap text-ink-muted uppercase'
+const tdClass = 'border-b border-line px-2 py-2.5 align-middle text-[13px]'
 const labelClass = 'text-[11px] font-extrabold tracking-[0.06em] text-ink-muted uppercase'
 const inputClass =
   'min-h-11 w-full min-w-0 rounded-xl border-[1.5px] border-line-strong bg-card px-3.5 text-base font-bold text-ink outline-none placeholder:font-semibold placeholder:text-placeholder focus:border-ink'
@@ -77,7 +78,13 @@ export function UsersPage() {
   const data = query.data
   const view = useMemo(() => (data ? buildUsersView(data, now) : undefined), [data, now])
   const [editing, setEditing] = useState<EditTarget | null>(null)
+  // Kept after closing so the dialog does not go blank during its exit animation.
   const [issued, setIssued] = useState<IssuedPassword | null>(null)
+  const [issuedOpen, setIssuedOpen] = useState(false)
+  const showPassword = (p: IssuedPassword) => {
+    setIssued(p)
+    setIssuedOpen(true)
+  }
 
   const lists = (
     <Lists
@@ -88,7 +95,7 @@ export function UsersPage() {
       cards={!isDesktop}
     />
   )
-  const form = <NewUserForm onCreated={setIssued} />
+  const form = <NewUserForm onCreated={showPassword} />
 
   return (
     <div className="flex flex-col gap-5">
@@ -112,13 +119,14 @@ export function UsersPage() {
           onClose={() => {
             setEditing(null)
           }}
-          onPassword={setIssued}
+          onPassword={showPassword}
         />
       )}
       <PasswordDialog
         issued={issued}
+        open={issuedOpen}
         onClose={() => {
-          setIssued(null)
+          setIssuedOpen(false)
         }}
       />
     </div>
@@ -348,7 +356,12 @@ const chipClass =
 
 function PercentBadge({ percent }: { percent: number | null }) {
   return (
-    <span className={cn(chipClass, percent !== DEFAULT_PERCENT ? 'bg-brand' : 'bg-muted')}>
+    <span
+      className={cn(
+        chipClass,
+        percent != null && percent !== DEFAULT_PERCENT ? 'bg-brand' : 'bg-muted',
+      )}
+    >
       {percent != null ? `${percent} %` : '—'}
     </span>
   )
@@ -393,7 +406,7 @@ function StatusBadge({ status }: { status: UserStatus }) {
 function RoleBadges({ roles }: { roles: readonly Role[] }) {
   return (
     <span className="flex flex-wrap gap-1">
-      {ROLES.filter((r) => roles.includes(r)).map((r) => (
+      {STAFF_ROLE_ORDER.filter((r) => roles.includes(r)).map((r) => (
         <span
           key={r}
           className={cn(
@@ -657,9 +670,11 @@ function NewUserForm({ onCreated }: { onCreated: (p: IssuedPassword) => void }) 
 
 function PasswordDialog({
   issued,
+  open,
   onClose,
 }: {
   issued: IssuedPassword | null
+  open: boolean
   onClose: () => void
 }) {
   async function copy() {
@@ -674,7 +689,7 @@ function PasswordDialog({
 
   return (
     <Dialog
-      open={issued !== null}
+      open={open && issued !== null}
       onOpenChange={(open) => {
         if (!open) onClose()
       }}
