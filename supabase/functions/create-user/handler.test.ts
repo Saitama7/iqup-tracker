@@ -170,7 +170,7 @@ describe('handleCreateUser', () => {
     )
     expect(res).toEqual({ status: 200, body: { user_id: 'u-42' } })
     expect(deps.findUserIdByPhone).toHaveBeenCalledWith('996555123456')
-    expect(deps.updatePassword).toHaveBeenCalledWith('u-42', 'newpass')
+    expect(deps.updatePassword).toHaveBeenCalledWith('u-42', 'newpass-1')
   })
 
   it('404 when resetting an unknown phone', async () => {
