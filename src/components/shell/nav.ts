@@ -6,7 +6,14 @@ import type { Role } from '@/lib/roles'
 export type View = Role
 
 export type AppPath =
-  '/today' | '/groups' | '/my-month' | '/admin' | '/admin/users' | '/payroll' | '/profile'
+  | '/today'
+  | '/groups'
+  | '/my-month'
+  | '/admin'
+  | '/admin/users'
+  | '/admin/settings'
+  | '/payroll'
+  | '/profile'
 
 export interface NavItem {
   label: string
@@ -38,7 +45,7 @@ export const NAV: Record<View, NavItem[]> = {
     { label: 'Оплаты', to: null },
     { label: 'Расчёт ЗП', to: null },
     { label: 'Учителя и доступ', to: '/admin/users' },
-    { label: 'Тарифы и праздники', to: null },
+    { label: 'Тарифы и праздники', to: '/admin/settings' },
     { label: 'Журнал изменений', to: null },
   ],
   accountant: [
@@ -77,7 +84,7 @@ export const MORE: Record<View, NavItem[]> = {
     { label: 'Группы', to: null },
     { label: 'Пробные', to: null },
     { label: 'Учителя и доступ', to: '/admin/users' },
-    { label: 'Тарифы и праздники', to: null },
+    { label: 'Тарифы и праздники', to: '/admin/settings' },
     { label: 'Журнал изменений', to: null },
     { label: 'Профиль', to: '/profile' },
   ],

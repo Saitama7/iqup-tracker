@@ -19,6 +19,7 @@ import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
+import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 
 const IndexRoute = IndexRouteImport.update({
@@ -70,6 +71,11 @@ const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppAdminRouteRoute,
 } as any)
+const AppAdminSettingsRoute = AppAdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppAdminRouteRoute,
+} as any)
 const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/payroll': typeof AppPayrollRoute
   '/profile': typeof AppProfileRoute
   '/today': typeof AppTodayRoute
+  '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/admin/': typeof AppAdminIndexRoute
 }
@@ -96,6 +103,7 @@ export interface FileRoutesByTo {
   '/payroll': typeof AppPayrollRoute
   '/profile': typeof AppProfileRoute
   '/today': typeof AppTodayRoute
+  '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/admin': typeof AppAdminIndexRoute
 }
@@ -110,6 +118,7 @@ export interface FileRoutesById {
   '/_app/payroll': typeof AppPayrollRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/today': typeof AppTodayRoute
+  '/_app/admin/settings': typeof AppAdminSettingsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/admin/': typeof AppAdminIndexRoute
 }
@@ -124,6 +133,7 @@ export interface FileRouteTypes {
     | '/payroll'
     | '/profile'
     | '/today'
+    | '/admin/settings'
     | '/admin/users'
     | '/admin/'
   fileRoutesByTo: FileRoutesByTo
@@ -135,6 +145,7 @@ export interface FileRouteTypes {
     | '/payroll'
     | '/profile'
     | '/today'
+    | '/admin/settings'
     | '/admin/users'
     | '/admin'
   id:
@@ -148,6 +159,7 @@ export interface FileRouteTypes {
     | '/_app/payroll'
     | '/_app/profile'
     | '/_app/today'
+    | '/_app/admin/settings'
     | '/_app/admin/users'
     | '/_app/admin/'
   fileRoutesById: FileRoutesById
@@ -230,6 +242,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminIndexRouteImport
       parentRoute: typeof AppAdminRouteRoute
     }
+    '/_app/admin/settings': {
+      id: '/_app/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AppAdminSettingsRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
     '/_app/admin/users': {
       id: '/_app/admin/users'
       path: '/users'
@@ -241,11 +260,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppAdminRouteRouteChildren {
+  AppAdminSettingsRoute: typeof AppAdminSettingsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
 }
 
 const AppAdminRouteRouteChildren: AppAdminRouteRouteChildren = {
+  AppAdminSettingsRoute: AppAdminSettingsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
 }
