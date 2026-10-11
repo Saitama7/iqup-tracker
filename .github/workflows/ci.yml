@@ -36,6 +36,11 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: cp .env.example .env
+      # Auth e2e signs in seed users against the local stack (playwright.config reads `supabase status`)
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,realtime,supavisor,edge-runtime
+      - run: pnpm seed:users
       - run: pnpm exec playwright install --with-deps webkit
       - run: pnpm e2e
       - if: always()

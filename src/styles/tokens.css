@@ -14,4 +14,12 @@
 
   --card: #ffffff;
   --line: #ede7d3;
+
+  /* From the artboards (docs/design): login circles, strong borders, sidebar text */
+  --brand-soft: #f7d45c;
+  --brand-deep: #ebb81c;
+  --line-strong: #e3dcc6;
+  --placeholder: #a8a08a;
+  --sand: #b5ae98;
+  --burned-strong: #b83232;
 }

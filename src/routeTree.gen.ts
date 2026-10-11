@@ -10,33 +10,130 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppRouteImport } from './routes/_app'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as AppAdminRouteImport } from './routes/_app/admin'
+import { Route as AppGroupsRouteImport } from './routes/_app/groups'
+import { Route as AppMyMonthRouteImport } from './routes/_app/my-month'
+import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
+import { Route as AppProfileRouteImport } from './routes/_app/profile'
+import { Route as AppTodayRouteImport } from './routes/_app/today'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRoute = AppRouteImport.update({
+  id: '/_app',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGroupsRoute = AppGroupsRouteImport.update({
+  id: '/groups',
+  path: '/groups',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMyMonthRoute = AppMyMonthRouteImport.update({
+  id: '/my-month',
+  path: '/my-month',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPayrollRoute = AppPayrollRouteImport.update({
+  id: '/payroll',
+  path: '/payroll',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppProfileRoute = AppProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTodayRoute = AppTodayRouteImport.update({
+  id: '/today',
+  path: '/today',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/admin': typeof AppAdminRoute
+  '/groups': typeof AppGroupsRoute
+  '/my-month': typeof AppMyMonthRoute
+  '/payroll': typeof AppPayrollRoute
+  '/profile': typeof AppProfileRoute
+  '/today': typeof AppTodayRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/login': typeof LoginRoute
+  '/admin': typeof AppAdminRoute
+  '/groups': typeof AppGroupsRoute
+  '/my-month': typeof AppMyMonthRoute
+  '/payroll': typeof AppPayrollRoute
+  '/profile': typeof AppProfileRoute
+  '/today': typeof AppTodayRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_app': typeof AppRouteWithChildren
+  '/login': typeof LoginRoute
+  '/_app/admin': typeof AppAdminRoute
+  '/_app/groups': typeof AppGroupsRoute
+  '/_app/my-month': typeof AppMyMonthRoute
+  '/_app/payroll': typeof AppPayrollRoute
+  '/_app/profile': typeof AppProfileRoute
+  '/_app/today': typeof AppTodayRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/groups'
+    | '/my-month'
+    | '/payroll'
+    | '/profile'
+    | '/today'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/login'
+    | '/admin'
+    | '/groups'
+    | '/my-month'
+    | '/payroll'
+    | '/profile'
+    | '/today'
+  id:
+    | '__root__'
+    | '/'
+    | '/_app'
+    | '/login'
+    | '/_app/admin'
+    | '/_app/groups'
+    | '/_app/my-month'
+    | '/_app/payroll'
+    | '/_app/profile'
+    | '/_app/today'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  LoginRoute: typeof LoginRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +145,89 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app': {
+      id: '/_app'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_app/admin': {
+      id: '/_app/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/groups': {
+      id: '/_app/groups'
+      path: '/groups'
+      fullPath: '/groups'
+      preLoaderRoute: typeof AppGroupsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my-month': {
+      id: '/_app/my-month'
+      path: '/my-month'
+      fullPath: '/my-month'
+      preLoaderRoute: typeof AppMyMonthRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/payroll': {
+      id: '/_app/payroll'
+      path: '/payroll'
+      fullPath: '/payroll'
+      preLoaderRoute: typeof AppPayrollRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/profile': {
+      id: '/_app/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof AppProfileRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/today': {
+      id: '/_app/today'
+      path: '/today'
+      fullPath: '/today'
+      preLoaderRoute: typeof AppTodayRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppAdminRoute: typeof AppAdminRoute
+  AppGroupsRoute: typeof AppGroupsRoute
+  AppMyMonthRoute: typeof AppMyMonthRoute
+  AppPayrollRoute: typeof AppPayrollRoute
+  AppProfileRoute: typeof AppProfileRoute
+  AppTodayRoute: typeof AppTodayRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppAdminRoute: AppAdminRoute,
+  AppGroupsRoute: AppGroupsRoute,
+  AppMyMonthRoute: AppMyMonthRoute,
+  AppPayrollRoute: AppPayrollRoute,
+  AppProfileRoute: AppProfileRoute,
+  AppTodayRoute: AppTodayRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
