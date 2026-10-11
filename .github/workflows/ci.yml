@@ -39,10 +39,18 @@ jobs:
       # Auth e2e signs in seed users against the local stack (playwright.config reads `supabase status`)
       - uses: supabase/setup-cli@v1
         with: { version: latest }
-      - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,realtime,supavisor,edge-runtime
+      - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,realtime,supavisor
       - run: pnpm seed:users
+      # admin-users e2e creates users through the Edge Function
+      - name: Serve Edge Functions
+        run: |
+          supabase functions serve > functions.log 2>&1 &
+          for i in $(seq 1 60); do grep -q "Serving functions" functions.log && exit 0; sleep 3; done
+          cat functions.log; exit 1
       - run: pnpm exec playwright install --with-deps webkit
       - run: pnpm e2e
+      - if: failure()
+        run: cat functions.log || true
       - if: always()
         uses: actions/upload-artifact@v4
         with:
