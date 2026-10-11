@@ -10,15 +10,16 @@ insert into auth.users (id, email) values
   ('a0000000-0000-4000-8000-000000000003', 'admin@test.local'),
   ('a0000000-0000-4000-8000-000000000004', 'accountant@test.local');
 
+-- teachers exist before their logins; profiles link them by phone (trigger link_teacher_profile)
+insert into public.teachers (id, full_name, phone) values
+  ('b0000000-0000-4000-8000-000000000001', 'Teacher A', '996000000001'),
+  ('b0000000-0000-4000-8000-000000000002', 'Teacher B', '996000000002');
+
 insert into public.profiles (id, phone, full_name, roles) values
   ('a0000000-0000-4000-8000-000000000001', '996000000001', 'Teacher A', '{teacher}'),
   ('a0000000-0000-4000-8000-000000000002', '996000000002', 'Teacher B', '{teacher}'),
   ('a0000000-0000-4000-8000-000000000003', '996000000003', 'Admin', '{admin}'),
   ('a0000000-0000-4000-8000-000000000004', '996000000004', 'Accountant', '{accountant}');
-
-insert into public.teachers (id, user_id, full_name) values
-  ('b0000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'Teacher A'),
-  ('b0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', 'Teacher B');
 
 insert into public.tariffs (id, group_type, lessons_in_package, package_price, max_students, lesson_duration_min, freeze_limit, valid_from)
 values ('c0000000-0000-4000-8000-000000000001', 'group', 12, 3200, 10, 60, 2, '2000-01-01');

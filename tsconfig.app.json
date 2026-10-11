@@ -26,5 +26,10 @@
     "baseUrl": ".",
     "paths": { "@/*": ["./src/*"] }
   },
-  "include": ["src"]
+  "include": [
+    "src",
+    "supabase/functions/_shared",
+    "supabase/functions/create-user/handler.ts",
+    "supabase/functions/create-user/handler.test.ts"
+  ]
 }

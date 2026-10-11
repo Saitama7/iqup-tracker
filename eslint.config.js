@@ -14,6 +14,8 @@ export default tseslint.config(
       'test-results',
       'src/routeTree.gen.ts',
       'src/lib/supabase/types.gen.ts',
+      // Deno entrypoints (npm: specifiers, Deno globals) — checked by the Edge Runtime
+      'supabase/functions/*/index.ts',
     ],
   },
   {
