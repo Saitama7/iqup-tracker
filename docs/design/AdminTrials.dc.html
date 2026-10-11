@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Пробные занятия — записи и конверсия</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFDF6}
+/* плотные таблицы: имена не переносятся */
+/* бейджи и числа никогда не переносятся */
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"],span[style*="border-radius: 8px"],span[style*="border-radius: 6px"],td.num,td>a,.nw{white-space:nowrap}
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"]{display:inline-block;line-height:1.3}
+a{color:#1C8C9E;text-decoration:none}a:hover{color:#146f7e}
+button,input,select{font-family:inherit}
+button{cursor:pointer}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid #EDE7D3;font-size:13px;vertical-align:middle}
+th{font-size:11px;font-weight:800;color:#6B6B6B;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+.inp{width:100%;box-sizing:border-box;min-height:44px;border:1.5px solid #E3DCC6;border-radius:12px;padding:0 14px;font-size:14px;font-weight:700;color:#141414;background:#FFFFFF}
+.lbl{font-size:11px;font-weight:800;color:#6B6B6B;letter-spacing:.06em;text-transform:uppercase}
+th,td{padding:10px 10px;font-size:13px}td:first-child{white-space:nowrap}
+</style>
+</helmet>
+<div style="min-height: 900px; box-sizing: border-box; background: #FFFDF6; font-family: Manrope, system-ui, sans-serif; color: #141414; display: flex; flex-wrap: wrap">
+
+  <nav style="flex: 0 1 232px; min-width: 200px; background: #141414; color: #FFFDF6; padding: 28px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 22px 8px"><div style="width: 36px; height: 36px; border-radius: 18px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 10px; font-weight: 800; color: #141414">IQ UP</div><div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700">Tracker</div></div>
+    <a href="AdminDashboard.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Дашборд</a>
+    <a href="AdminSchedule.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Расписание</a>
+    <a href="AdminGroups.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Группы</a>
+    <a href="AdminStudents.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Ученики</a>
+    <a href="AdminTrials.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; background: #F2C230; color: #141414; font-size: 14px; font-weight: 800">Пробные занятия</a>
+    <a href="AdminPayments.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Оплаты</a>
+    <a href="Payroll.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Расчёт ЗП</a>
+    <a href="AdminUsers.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Учителя и доступ</a>
+    <a href="AdminSettings.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Тарифы и праздники</a>
+    <a href="AuditLog.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Журнал изменений</a>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(255,253,246,0.06)"><div style="width: 34px; height: 34px; border-radius: 17px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 800; color: #141414">К</div><div style="display: flex; flex-direction: column"><div style="font-size: 13px; font-weight: 800">Каныкей</div><div style="font-size: 11px; font-weight: 700; color: #B5AE98">администратор · учитель</div></div></div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 32px 36px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+    <header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 12px; font-weight: 800; color: #6B6B6B; letter-spacing: 0.06em; text-transform: uppercase">Записались на пробное, ещё не оплатили</div>
+        <h1 style="margin: 0; font-family: Unbounded, sans-serif; font-size: 30px; font-weight: 700; line-height: 1.1">Пробные занятия</h1>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+        <div style="display: flex; background: #FFFFFF; border: 1.5px solid #E3DCC6; border-radius: 12px; padding: 3px"><span style="padding: 7px 12px; border-radius: 9px; background: #141414; color: #F2C230; font-size: 13px; font-weight: 800">Предстоящие · 7</span><span style="padding: 7px 12px; font-size: 13px; font-weight: 700; color: #6B6B6B">Прошли, ждут решения · 3</span><span style="padding: 7px 12px; font-size: 13px; font-weight: 700; color: #6B6B6B">История</span></div>
+      </div>
+    </header>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+      <div style="background: #FFFFFF; border: 1.5px dashed #7B4DFF; border-radius: 16px; padding: 14px 16px"><div style="font-size: 11px; font-weight: 800; color: #5B34D6; text-transform: uppercase; letter-spacing: 0.06em">На этой неделе</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 700">7 пробных</div><div style="font-size: 12px; font-weight: 700; color: #6B6B6B">в 5 группах · 1 группа целиком</div></div>
+      <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 14px 16px"><div style="font-size: 11px; font-weight: 800; color: #6B6B6B; text-transform: uppercase; letter-spacing: 0.06em">Ждут решения</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 700">3</div><div style="font-size: 12px; font-weight: 700; color: #B86A00">были на пробном, оплаты нет</div></div>
+      <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 14px 16px"><div style="font-size: 11px; font-weight: 800; color: #6B6B6B; text-transform: uppercase; letter-spacing: 0.06em">Сентябрь · пришли → оплатили</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 700">22 → 15</div><div style="font-size: 12px; font-weight: 700; color: #15733F">68 % конверсия</div></div>
+      <div style="background: #F5F2E8; border-radius: 16px; padding: 14px 16px"><div style="font-size: 11px; font-weight: 800; color: #6B6B6B; text-transform: uppercase; letter-spacing: 0.06em">Правило</div><div style="font-size: 13px; font-weight: 700; line-height: 1.4">Пробный урок полностью бесплатный: не списывается, учителю не начисляется, в заполненность не входит. Можно в любую группу — и в набираемую, и в активную</div></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 16px">
+        <section style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; overflow-x: auto">
+          <div style="padding: 14px 18px; border-bottom: 1px solid #EDE7D3; font-size: 15px; font-weight: 800">Предстоящие</div>
+          <table style="min-width: 560px">
+            <thead><tr><th>Когда</th><th>Кто</th><th>Группа · учитель</th><th>Родитель</th><th>Записал</th><th></th></tr></thead>
+            <tbody>
+              <tr><td style="font-weight: 800">Сегодня 14:00</td><td><span style="display: inline-flex; align-items: center; gap: 6px; border: 1.5px dashed #7B4DFF; color: #5B34D6; border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 800">пробный</span> <b>Розаина Б.</b></td><td>Матем · 8 кл Б · Гульзат</td><td style="color: #6B6B6B; white-space: nowrap">0995 857 758</td><td style="color: #6B6B6B; white-space: nowrap">Каныкей · 28 сен</td><td><a href="AdminTrials.dc.html" style="font-size: 12px; font-weight: 800">Перенести</a></td></tr>
+              <tr><td style="font-weight: 800">Завтра 09:00</td><td><span style="display: inline-flex; align-items: center; gap: 6px; border: 1.5px dashed #7B4DFF; color: #5B34D6; border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 800">пробный</span> <b>Адема К.</b></td><td>Матем · 8 кл А · Гульзат</td><td style="color: #6B6B6B; white-space: nowrap">0707 998 406</td><td style="color: #6B6B6B; white-space: nowrap">Алишка · 30 сен</td><td><a href="AdminTrials.dc.html" style="font-size: 12px; font-weight: 800">Перенести</a></td></tr>
+              <tr><td style="font-weight: 800">Завтра 15:00</td><td><span style="display: inline-flex; align-items: center; gap: 6px; border: 1.5px dashed #7B4DFF; color: #5B34D6; border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 800">пробный</span> <b>Амина С.</b></td><td>Химия · 9 кл · Айпери</td><td style="color: #6B6B6B; white-space: nowrap">0504 210 313</td><td style="color: #6B6B6B; white-space: nowrap">Каныкей · 6 окт</td><td><a href="AdminTrials.dc.html" style="font-size: 12px; font-weight: 800">Перенести</a></td></tr>
+              <tr style="background: #F7F3FF"><td style="font-weight: 800">Пн 12 окт 19:00</td><td><div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap"><span style="display: inline-flex; align-items: center; gap: 6px; border: 1.5px dashed #7B4DFF; color: #5B34D6; border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 800">вся группа</span><b>4 ученика</b><a href="AdminTrials.dc.html" style="font-size: 12px; font-weight: 800">свернуть ▴</a></div></td><td>Химия · 11 кл · Айпери · набор</td><td style="color: #6B6B6B">4 номера</td><td style="color: #6B6B6B; white-space: nowrap">Каныкей · 7 окт</td><td><a href="AdminGroup.dc.html" style="font-size: 12px; font-weight: 800">Группа →</a></td></tr>
+              <tr style="background: #F7F3FF"><td colspan="6" style="padding: 6px 14px 14px 14px; border-top: 0"><div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center"><span style="font-size: 11px; font-weight: 800; color: #5B34D6; letter-spacing: 0.06em; text-transform: uppercase; margin-right: 4px">Записаны</span><span style="background: #FFFFFF; border: 1px solid #D9CCFF; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700">Эламан Тойчуев · 0555 300 001</span><span style="background: #FFFFFF; border: 1px solid #D9CCFF; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700">Аделия Кадырова · 0555 300 002</span><span style="background: #FFFFFF; border: 1px solid #D9CCFF; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700">Айдана Сабырова · 0555 300 003</span><span style="background: #FFFFFF; border: 1px solid #D9CCFF; border-radius: 999px; padding: 5px 10px; font-size: 12px; font-weight: 700">Бектур Жолдошев · 0555 300 004</span><span style="font-size: 11px; font-weight: 700; color: #6B6B6B">свёрнуто показывается только «4 ученика» — список любой длины не ломает таблицу</span></div></td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; overflow-x: auto">
+          <div style="padding: 14px 18px; border-bottom: 1px solid #EDE7D3; display: flex; justify-content: space-between; align-items: center"><div style="font-size: 15px; font-weight: 800">Прошли пробное — ждут решения</div><div style="font-size: 12px; font-weight: 700; color: #6B6B6B">учитель отметил «был», оплаты пока нет</div></div>
+          <table style="min-width: 560px">
+            <thead><tr><th>Было</th><th>Кто</th><th>Группа</th><th>Отметка учителя</th><th>Родитель</th><th>Решение</th></tr></thead>
+            <tbody>
+              <tr><td>6 окт 09:00</td><td style="font-weight: 800">Бермет Т.</td><td>Матем · 8 кл А</td><td><span style="color: #15733F; font-weight: 800">Была</span></td><td style="color: #6B6B6B; white-space: nowrap">0555 404 404</td><td><div style="display: flex; gap: 6px"><a href="AdminPayments.dc.html" style="padding: 6px 10px; border-radius: 9px; background: #141414; color: #F2C230; font-size: 12px; font-weight: 800">Оплатил → зачислить</a><a href="AdminTrials.dc.html" style="padding: 6px 10px; border-radius: 9px; border: 1.5px solid #E3DCC6; color: #6B6B6B; font-size: 12px; font-weight: 800">Отказ</a></div></td></tr>
+              <tr><td>5 окт 15:00</td><td style="font-weight: 800">Нурай Ж.</td><td>Матем · 5 кл</td><td><span style="color: #15733F; font-weight: 800">Была</span></td><td style="color: #6B6B6B; white-space: nowrap">0700 101 202</td><td><div style="display: flex; gap: 6px"><a href="AdminPayments.dc.html" style="padding: 6px 10px; border-radius: 9px; background: #141414; color: #F2C230; font-size: 12px; font-weight: 800">Оплатил → зачислить</a><a href="AdminTrials.dc.html" style="padding: 6px 10px; border-radius: 9px; border: 1.5px solid #E3DCC6; color: #6B6B6B; font-size: 12px; font-weight: 800">Отказ</a></div></td></tr>
+              <tr style="background: #FFF4F4"><td>3 окт 18:00</td><td style="font-weight: 800">Бакай О.</td><td>ОРТ · математика</td><td><span style="color: #B83232; font-weight: 800">Не пришёл</span><div style="font-size: 12px; color: #B83232; font-weight: 700">позвонить — ждать ли на следующий?</div></td><td><a href="tel:0555303303" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 800; color: #141414"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/></svg>0555 303 303</a></td><td><div style="display: flex; gap: 6px"><a href="AdminTrials.dc.html" style="padding: 6px 10px; border-radius: 9px; border: 1.5px solid #141414; color: #141414; font-size: 12px; font-weight: 800">Записать заново</a><a href="AdminTrials.dc.html" style="padding: 6px 10px; border-radius: 9px; border: 1.5px solid #E3DCC6; color: #6B6B6B; font-size: 12px; font-weight: 800">Закрыть</a></div></td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+
+      <aside style="background: #FFFFFF; border: 1.5px dashed #7B4DFF; border-radius: 20px; padding: 22px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 24px">
+        <div style="font-family: Unbounded, sans-serif; font-size: 16px; font-weight: 700">Записать на пробное</div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="t-name">Имя ученика</label><input id="t-name" class="inp" placeholder="Розаина Бекова"></div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+          <div style="display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="t-grade">Класс</label><select id="t-grade" class="inp"><option>8</option></select></div>
+          <div style="display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="t-phone">Телефон родителя</label><input id="t-phone" class="inp" placeholder="0995 857 758"></div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="t-group">Группа</label><select id="t-group" class="inp"><option>Матем · 8 кл Б · Гульзат · ВТ ЧТ СБ 14:00 · 8/10</option><option>Матем · 8 кл А · Гульзат · ВТ ЧТ СБ 09:00 · 8/10</option><option>Химия · 11 кл · Айпери · набор</option></select></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="t-lesson">Занятие</label><select id="t-lesson" class="inp"><option>Чт 8 окт · 14:00 · сегодня</option><option>Сб 10 окт · 14:00</option><option>Вт 13 окт · 14:00</option></select></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="t-source">Откуда узнали</label><select id="t-source" class="inp"><option>Instagram</option><option>Привёл друг</option><option>2ГИС</option><option>Другое</option></select></div>
+        <div style="display: flex; flex-direction: column; gap: 6px"><label class="lbl" for="t-note">Комментарий</label><input id="t-note" class="inp" placeholder="например: подруга Айжан Б."></div>
+        <div style="background: #F7F3FF; border-radius: 12px; padding: 10px 12px; font-size: 12px; font-weight: 700; color: #5B34D6; line-height: 1.5">Гульзат увидит пробного в списке на это занятие с пометкой «пробный» и отметит был / не был. Урок не списывается и в ЗП не входит. После оплаты — «Оплатил → зачислить».</div>
+        <button style="min-height: 48px; border-radius: 14px; border: 0; background: #141414; color: #F2C230; font-size: 14px; font-weight: 800">Записать на пробное</button>
+      </aside>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Сегодня — учитель, десктоп</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFDF6}
+/* бейджи и числа никогда не переносятся */
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"],span[style*="border-radius: 8px"],span[style*="border-radius: 6px"],td.num,td>a,.nw{white-space:nowrap}
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"]{display:inline-block;line-height:1.3}
+a{color:#1C8C9E;text-decoration:none}a:hover{color:#146f7e}
+button{font-family:inherit;cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 900px; box-sizing: border-box; background: #FFFDF6; font-family: Manrope, system-ui, sans-serif; color: #141414; display: flex; flex-wrap: wrap">
+
+  <nav style="flex: 0 1 232px; min-width: 200px; background: #141414; color: #FFFDF6; padding: 28px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 22px 8px">
+      <div style="width: 36px; height: 36px; border-radius: 18px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 10px; font-weight: 800; color: #141414">IQ UP</div>
+      <div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700">Tracker</div>
+    </div>
+    <a href="TeacherToday.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #F2C230; color: #141414; font-size: 14px; font-weight: 800">Сегодня</a>
+    <a href="TeacherGroupsDesk.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Группы и ученики</a>
+    <a href="TeacherMonthDesk.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Мой месяц</a>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(255,253,246,0.06)">
+      <div style="width: 34px; height: 34px; border-radius: 17px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 800; color: #141414">Г</div>
+      <div style="display: flex; flex-direction: column"><div style="font-size: 13px; font-weight: 800">Гульзат</div><div style="font-size: 11px; font-weight: 700; color: #B5AE98">учитель · 45 %</div></div>
+    </div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 32px 36px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+    <header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 12px; font-weight: 800; color: #6B6B6B; letter-spacing: 0.06em; text-transform: uppercase">Четверг, 8 октября</div>
+        <h1 style="margin: 0; font-family: Unbounded, sans-serif; font-size: 30px; font-weight: 700; line-height: 1.1">Сегодня, Гульзат</h1>
+      </div>
+      <div style="display: flex; gap: 10px; align-items: center">
+        <div style="display: flex; align-items: center; gap: 8px; background: #FBECEC; color: #8E2626; border-radius: 999px; padding: 10px 14px; font-size: 13px; font-weight: 800">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B83232" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+          1 не подтверждено за вчера
+        </div>
+      </div>
+    </header>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+      <a href="TeacherAttendance.dc.html" style="border-radius: 24px; background: #F2C230; box-shadow: 0 18px 40px rgba(242, 194, 48, 0.3); padding: 26px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; gap: 24px; color: #141414; min-height: 260px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <div style="display: flex; align-items: center; gap: 8px; background: #141414; color: #F2C230; border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 800">
+            <span style="width: 8px; height: 8px; border-radius: 4px; background: #F2C230; display: inline-block"></span>
+            Сейчас · 14:00–15:00
+          </div>
+          <div style="font-size: 13px; font-weight: 800; opacity: 0.7">ещё 36 мин</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <div style="font-family: Unbounded, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1">Математика · 8 класс Б</div>
+          <div style="font-size: 15px; font-weight: 700; opacity: 0.75">Групповая · 8 учеников · каб. 2</div>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; background: #141414; color: #FFFDF6; border-radius: 16px; padding: 16px 20px; font-size: 16px; font-weight: 800">
+          <span>Отметить посещаемость</span>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#F2C230" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+      </a>
+
+      <div style="border-radius: 24px; background: #141414; color: #FFFDF6; padding: 26px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; gap: 18px; min-height: 260px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <div style="font-size: 12px; font-weight: 800; color: #F2C230; letter-spacing: 0.06em; text-transform: uppercase">Октябрь · предварительно</div>
+          <a href="TeacherMonthDesk.dc.html" style="font-size: 13px; font-weight: 800; color: #F2C230">Подробнее →</a>
+        </div>
+        <div style="font-family: Unbounded, sans-serif; font-size: 40px; font-weight: 800; line-height: 1; color: #F2C230">11 040 <span style="font-size: 18px; font-weight: 500; color: #FFFDF6">сом</span></div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+          <div style="background: rgba(255,253,246,0.08); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px"><div style="font-family: Unbounded, sans-serif; font-size: 20px; font-weight: 700">14</div><div style="font-size: 11px; font-weight: 700; opacity: 0.65">занятий</div></div>
+          <div style="background: rgba(255,253,246,0.08); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px"><div style="font-family: Unbounded, sans-serif; font-size: 20px; font-weight: 700">92</div><div style="font-size: 11px; font-weight: 700; opacity: 0.65">ученико-уроков</div></div>
+          <div style="background: rgba(255,253,246,0.08); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 2px"><div style="font-family: Unbounded, sans-serif; font-size: 20px; font-weight: 700">− 3 000</div><div style="font-size: 11px; font-weight: 700; opacity: 0.65">аванс</div></div>
+        </div>
+      </div>
+    </div>
+
+    <section style="display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <h2 style="margin: 0; font-size: 16px; font-weight: 800">Расписание на сегодня</h2>
+        <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">3 занятия · 2 проведено</div>
+      </div>
+      <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; display: flex; flex-direction: column">
+        <div style="display: flex; align-items: center; gap: 18px; padding: 16px 20px; border-bottom: 1px solid #EDE7D3">
+          <div style="font-family: Unbounded, sans-serif; font-size: 16px; font-weight: 700; min-width: 64px">09:00</div>
+          <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0"><div style="font-size: 15px; font-weight: 800">Математика · 8 класс А</div><div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Был 7 · Заморозка 1 · подтверждено в 10:02</div></div>
+          <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">7 ученико-уроков · 840 сом</div>
+          <div style="display: flex; align-items: center; gap: 6px; background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 800">Проведено</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 18px; padding: 16px 20px; border-bottom: 1px solid #EDE7D3">
+          <div style="font-family: Unbounded, sans-serif; font-size: 16px; font-weight: 700; min-width: 64px">11:00</div>
+          <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0"><div style="font-size: 15px; font-weight: 800">Математика · 6 класс</div><div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Был 6 · подтверждено в 12:05</div></div>
+          <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">6 ученико-уроков · 720 сом</div>
+          <div style="display: flex; align-items: center; gap: 6px; background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 800">Проведено</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 18px; padding: 16px 20px; background: #FFF8E1">
+          <div style="font-family: Unbounded, sans-serif; font-size: 16px; font-weight: 700; min-width: 64px">14:00</div>
+          <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-width: 0"><div style="font-size: 15px; font-weight: 800">Математика · 8 класс Б</div><div style="font-size: 13px; font-weight: 700; color: #6B6B6B">8 учеников · групповая · каб. 2</div></div>
+          <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">до 8 ученико-уроков</div>
+          <a href="TeacherAttendance.dc.html" style="background: #141414; color: #F2C230; border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: 800">Отметить →</a>
+        </div>
+      </div>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 12px">
+      <h2 style="margin: 0; font-size: 16px; font-weight: 800">Требует внимания</h2>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px">
+        <a href="TeacherAttendance.dc.html" style="background: #FBECEC; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 6px; color: #8E2626"><div style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em">Не подтверждено</div><div style="font-size: 14px; font-weight: 800">Вчера, 15:00 · Математика · 5 класс</div><div style="font-size: 12px; font-weight: 700">Не входит в ЗП, пока не отмечено</div></a>
+        <a href="TeacherGroupsDesk.dc.html" style="background: #FFF3D6; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 6px; color: #8A5200"><div style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em">Заканчивают абонемент</div><div style="font-size: 14px; font-weight: 800">Данияр К. · 1 урок · Сезим Ж. · 2 урока</div><div style="font-size: 12px; font-weight: 700">Напомнить родителям об оплате</div></a>
+        <a href="TeacherGroupsDesk.dc.html" style="background: #FBECEC; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 6px; color: #8E2626"><div style="font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em">Долг</div><div style="font-size: 14px; font-weight: 800">Элина С. · 2 урока · 533 сом</div><div style="font-size: 12px; font-weight: 700">Допустимо до 3 уроков</div></a>
+      </div>
+    </section>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

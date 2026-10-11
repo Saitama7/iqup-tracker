@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Журнал изменений</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFDF6}
+/* бейджи и числа никогда не переносятся */
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"],span[style*="border-radius: 8px"],span[style*="border-radius: 6px"],td.num,td>a,.nw{white-space:nowrap}
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"]{display:inline-block;line-height:1.3}
+a{color:#1C8C9E;text-decoration:none}a:hover{color:#146f7e}
+button,input{font-family:inherit}
+button{cursor:pointer}
+</style>
+</helmet>
+<div style="min-height: 900px; box-sizing: border-box; background: #FFFDF6; font-family: Manrope, system-ui, sans-serif; color: #141414; display: flex; flex-wrap: wrap">
+
+  <nav style="flex: 0 1 232px; min-width: 200px; background: #141414; color: #FFFDF6; padding: 28px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 22px 8px"><div style="width: 36px; height: 36px; border-radius: 18px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 10px; font-weight: 800; color: #141414">IQ UP</div><div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700">Tracker</div></div>
+    <a href="AdminDashboard.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Дашборд</a>
+    <a href="AdminSchedule.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Расписание</a>
+    <a href="AdminGroups.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Группы</a>
+    <a href="AdminStudents.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Ученики</a>
+    <a href="AdminPayments.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Оплаты</a>
+    <a href="Payroll.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Расчёт ЗП</a>
+    <a href="AdminUsers.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Учителя и доступ</a>
+    <a href="AdminSettings.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Тарифы и праздники</a>
+    <a href="AuditLog.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; background: #F2C230; color: #141414; font-size: 14px; font-weight: 800">Журнал изменений</a>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(255,253,246,0.06)"><div style="width: 34px; height: 34px; border-radius: 17px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 800; color: #141414">К</div><div style="display: flex; flex-direction: column"><div style="font-size: 13px; font-weight: 800">Каныкей</div><div style="font-size: 11px; font-weight: 700; color: #B5AE98">администратор</div></div></div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 32px 36px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+    <header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 12px; font-weight: 800; color: #6B6B6B; letter-spacing: 0.06em; text-transform: uppercase">Кто, что и когда изменил · ничего не удаляется</div>
+        <h1 style="margin: 0; font-family: Unbounded, sans-serif; font-size: 30px; font-weight: 700; line-height: 1.1">Журнал изменений</h1>
+      </div>
+      <div style="display: flex; gap: 8px; flex-wrap: wrap">
+        <input placeholder="Ученик, группа, учитель…" style="width: 260px; box-sizing: border-box; min-height: 44px; border: 1.5px solid #E3DCC6; border-radius: 12px; padding: 0 14px; font-size: 14px; font-weight: 700; background: #FFFFFF">
+        <span style="display: flex; align-items: center; padding: 0 14px; border-radius: 12px; border: 1.5px solid #E3DCC6; background: #FFFFFF; font-size: 13px; font-weight: 700; color: #6B6B6B">Все типы ▾</span>
+        <span style="display: flex; align-items: center; padding: 0 14px; border-radius: 12px; border: 1.5px solid #E3DCC6; background: #FFFFFF; font-size: 13px; font-weight: 700; color: #6B6B6B">Все пользователи ▾</span>
+        <span style="display: flex; align-items: center; padding: 0 14px; border-radius: 12px; border: 1.5px solid #E3DCC6; background: #FFFFFF; font-size: 13px; font-weight: 700; color: #6B6B6B">7 дней ▾</span>
+      </div>
+    </header>
+
+    <div style="display: flex; gap: 8px; flex-wrap: wrap">
+      <span style="padding: 8px 14px; border-radius: 999px; background: #141414; color: #F2C230; font-size: 13px; font-weight: 800">Все · 214</span>
+      <span style="padding: 8px 14px; border-radius: 999px; background: #FBECEC; color: #8E2626; font-size: 13px; font-weight: 800">Правки задним числом · 6</span>
+      <span style="padding: 8px 14px; border-radius: 999px; background: #FFF3D6; color: #8A5200; font-size: 13px; font-weight: 800">Поздние подтверждения · 9</span>
+      <span style="padding: 8px 14px; border-radius: 999px; background: #FFFFFF; border: 1.5px solid #E3DCC6; font-size: 13px; font-weight: 700; color: #6B6B6B">Оплаты · 47</span>
+      <span style="padding: 8px 14px; border-radius: 999px; background: #FFFFFF; border: 1.5px solid #E3DCC6; font-size: 13px; font-weight: 700; color: #6B6B6B">Посещаемость · 131</span>
+    </div>
+
+    <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; display: flex; flex-direction: column">
+      <div style="padding: 10px 20px; background: #F5F2E8; font-size: 12px; font-weight: 800; color: #6B6B6B; border-radius: 20px 20px 0 0">Сегодня, 8 октября</div>
+
+      <div style="display: grid; grid-template-columns: 70px 150px minmax(0, 1fr) 120px; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #EDE7D3; align-items: start">
+        <div style="font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 700">13:40</div>
+        <div><span style="background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Оплата</span></div>
+        <div style="font-size: 14px; font-weight: 700">Камила Орозова · Химия 9 кл — записан платёж <b>3 800 сом · Mbank</b>, новый абонемент 12 уроков</div>
+        <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Алишка</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 70px 150px minmax(0, 1fr) 120px; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #EDE7D3; align-items: start; background: #FFF4F4">
+        <div style="font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 700">12:22</div>
+        <div><span style="background: #FBECEC; color: #8E2626; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Правка</span></div>
+        <div style="font-size: 14px; font-weight: 700">Занятие 6 окт 11:00 · Математика 6 кл — посещаемость <b>Тимур М.</b>: <span style="color: #B83232">Не был</span> → <span style="color: #15733F">Был</span><div style="font-size: 12px; color: #6B6B6B; margin-top: 4px">Причина: «учитель перепутала с братом, Тимур был на уроке». Ученику возвращён 1 урок, учителю ЗП не изменилась</div></div>
+        <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Каныкей</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 70px 150px minmax(0, 1fr) 120px; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #EDE7D3; align-items: start">
+        <div style="font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 700">12:05</div>
+        <div><span style="background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Проведено</span></div>
+        <div style="font-size: 14px; font-weight: 700">Математика 6 кл · 11:00 — проведено, был 6 из 6</div>
+        <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Гульзат</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 70px 150px minmax(0, 1fr) 120px; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #EDE7D3; align-items: start">
+        <div style="font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 700">10:02</div>
+        <div><span style="background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Проведено</span></div>
+        <div style="font-size: 14px; font-weight: 700">Математика 8 кл А · 09:00 — проведено, был 7, заморозка 1 (Айжан Б. — предупредила 7 окт)</div>
+        <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Гульзат</div>
+      </div>
+
+      <div style="padding: 10px 20px; background: #F5F2E8; font-size: 12px; font-weight: 800; color: #6B6B6B">Вчера, 7 октября</div>
+
+      <div style="display: grid; grid-template-columns: 70px 150px minmax(0, 1fr) 120px; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #EDE7D3; align-items: start; background: #FFF8E1">
+        <div style="font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 700">08:40</div>
+        <div><span style="background: #FFF3D6; color: #8A5200; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Поздно</span></div>
+        <div style="font-size: 14px; font-weight: 700">Занятие 6 окт 09:00 · Математика 8 кл А — подтверждено <b>на следующий день</b>, был 8</div>
+        <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Гульзат</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 70px 150px minmax(0, 1fr) 120px; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #EDE7D3; align-items: start">
+        <div style="font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 700">16:00</div>
+        <div><span style="background: #FBECEC; color: #8E2626; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Возврат</span></div>
+        <div style="font-size: 14px; font-weight: 700">Руслан Абдыев · Математика 6 кл — возврат <b>1 067 сом</b> за 4 неиспользованных урока, зачисление закрыто<div style="font-size: 12px; color: #6B6B6B; margin-top: 4px">Причина: «семья переезжает»</div></div>
+        <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Каныкей</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 70px 150px minmax(0, 1fr) 120px; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #EDE7D3; align-items: start">
+        <div style="font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 700">14:30</div>
+        <div><span style="background: #F1EEE4; color: #6B6B6B; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Отмена</span></div>
+        <div style="font-size: 14px; font-weight: 700">Химия 10 кл · 9 окт 18:00 — отменено, причина «нет света», доп. урок назначен на 17 окт 18:00</div>
+        <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Айпери</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 70px 150px minmax(0, 1fr) 120px; gap: 14px; padding: 14px 20px; align-items: start">
+        <div style="font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 700">09:15</div>
+        <div><span style="background: #E0F2F4; color: #146f7e; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Аванс</span></div>
+        <div style="font-size: 14px; font-weight: 700">Нургуль Токтоева — аванс <b>6 000 сом</b>, вычтется из выплаты 15 ноября</div>
+        <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Каныкей</div>
+      </div>
+    </div>
+    <div style="text-align: center; font-size: 13px; font-weight: 700; color: #6B6B6B">Показать ещё</div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
