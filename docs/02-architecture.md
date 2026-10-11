@@ -148,7 +148,10 @@ sequenceDiagram
 - Телефон нормализуется в `996XXXXXXXXX`; вводится как привык (`0552 775 771`).
 - Пароль выдаёт админ, пользователь может сменить; сброс — через админа.
 - Роли — массив в `app_metadata.roles` (`["admin","teacher"]` — Каныкей, З1; пользователь не может менять), дублируются в `profiles.roles`. RLS-хелперы: `current_roles()`, `is_admin()`, `is_accountant()`, `teaches_group(id)` (миграция `0001_core.sql`).
-- Связывание — триггер `link_teacher_profile` (`0003`): новый профиль с ролью `teacher` получает строку `teachers` с тем же телефоном или создаёт её; Edge Function и `seed-users.ts` ведут себя одинаково. `create-user` также умеет `action: "reset_password"`.
+- Связывание — триггер `link_teacher_profile` (`0003`): новый профиль с ролью `teacher` получает строку `teachers` с тем же телефоном или создаёт её; Edge Function и `seed-users.ts` ведут себя одинаково. С `0004` то же срабатывает, когда роль `teacher` **добавляют** существующему профилю (`after update of roles`).
+- `create-user` — единственная точка записи пользователей (экран А8 `/admin/users`), действия: `create` (по умолчанию), `reset_password`, `update_roles` (`profiles.roles` + `app_metadata.roles` через `auth.admin.updateUserById` — новая роль попадает в JWT при следующем обновлении токена), `update_rate` (новая строка `teacher_rates` с `valid_from`; дата уже занята → 409), `set_active` (`profiles.is_active` + бан в Auth). Админ не может снять с себя роль `admin` и отключить себя.
+- `teacher_rates` — только добавление: RLS даёт админу `insert`, но не `update/delete` (история процента не теряется).
+- Последний вход для А8 — `user_last_sign_in()` (security definer, только staff).
 - Учитель (`teachers`) существует до создания логина: `full_name`, `phone`, `user_id` — nullable, связывается при создании пользователя (сид — `scripts/seed-users.ts`).
 
 ### Матрица доступа (RLS-политики)
@@ -161,7 +164,8 @@ sequenceDiagram
 | `enrollments` | read (свои группы) | CRUD | read |
 | `lessons` | read (свои); update `status → held`, `confirmed_at`, `comment` до закрытия периода; не в день занятия → `confirmed_late`; create доп. урока своей группы | CRUD (если не locked) | read |
 | `attendance` | insert/update по своим занятиям до закрытия периода | CRUD (если не locked) | read |
-| `tariffs`, `teacher_rates`, `holidays` | read свой процент | CRUD | read |
+| `tariffs`, `holidays` | read | CRUD | read |
+| `teacher_rates` | read свой процент | read + insert (без update/delete) | read |
 | `subscriptions`, `payments` | read по своим ученикам (остаток и долг с суммами) | CRUD | read |
 | `payroll_periods` | read | read | open/close |
 | `payroll_adjustments` | read свои | CRUD (авансы) | CRUD |
