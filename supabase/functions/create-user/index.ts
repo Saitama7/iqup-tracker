@@ -36,7 +36,8 @@ const deps: CreateUserDeps = {
       app_metadata: { roles },
     })
     if (error) {
-      if (error.code === 'email_exists' || error.status === 422) return { error: 'email_exists' }
+      // Only a duplicate email is a 409; other 422s (weak password etc.) are real errors.
+      if (error.code === 'email_exists') return { error: 'email_exists' }
       throw new Error(error.message)
     }
     return { id: data.user.id }

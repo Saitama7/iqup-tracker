@@ -50,7 +50,8 @@ const phone = z.string().transform((value, ctx) => {
     return z.NEVER
   }
 })
-const password = z.string().min(6, 'Пароль — минимум 6 символов').max(72)
+// Must match auth.minimum_password_length (8) — otherwise Auth rejects with 422 after validation passed.
+const password = z.string().min(8, 'Пароль — минимум 8 символов').max(72)
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 
 const createSchema = z.object({

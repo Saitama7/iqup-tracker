@@ -59,7 +59,7 @@ describe('handleCreateUser', () => {
     const res = await handleCreateUser(
       {
         authorization: 'Bearer t',
-        body: { action: 'reset_password', phone: '0555123456', password: 'newpass' },
+        body: { action: 'reset_password', phone: '0555123456', password: 'newpass-1' },
       },
       deps,
     )
@@ -101,7 +101,7 @@ describe('handleCreateUser', () => {
           phone: '+996 555 300 300',
           full_name: 'Айгерим',
           roles: ['accountant'],
-          password: 'secret1',
+          password: 'secret-1',
         },
       },
       deps,
@@ -164,7 +164,7 @@ describe('handleCreateUser', () => {
     const res = await handleCreateUser(
       {
         authorization: 'Bearer a',
-        body: { action: 'reset_password', phone: '0555 123 456', password: 'newpass' },
+        body: { action: 'reset_password', phone: '0555 123 456', password: 'newpass-1' },
       },
       deps,
     )
@@ -177,7 +177,7 @@ describe('handleCreateUser', () => {
     const res = await handleCreateUser(
       {
         authorization: 'Bearer a',
-        body: { action: 'reset_password', phone: '0555 000 001', password: 'newpass' },
+        body: { action: 'reset_password', phone: '0555 000 001', password: 'newpass-1' },
       },
       makeDeps(ADMIN),
     )
