@@ -1,6 +1,6 @@
 // Creates local auth users for seeded people (`pnpm seed:users`, after `supabase db reset`).
 // Teachers come from public.teachers (seed.sql); the DB trigger link_teacher_profile links them by phone.
-// Local only: the service-role key is read from `supabase status`, never from the repo.
+// Local by default: the service-role key is read from `supabase status`, never from the repo. `--remote` — see target().
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { phoneToEmail } from '../supabase/functions/_shared/phone.ts'
 import type { Database } from '../src/lib/supabase/types.gen.ts'
@@ -68,11 +68,30 @@ async function ensureUser(
   return 'created'
 }
 
-async function main() {
+// `--remote`: seed the linked cloud project (dev). Credentials come only from the environment:
+//   SUPABASE_URL=https://<ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=<sb_secret_…> pnpm seed:users --remote
+// Never for prod with real people — the demo password is public in this file.
+function target(): { apiUrl: string; serviceRoleKey: string } {
+  if (process.argv.includes('--remote')) {
+    const apiUrl = process.env.SUPABASE_URL
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!apiUrl || !serviceRoleKey) {
+      throw new Error(
+        '--remote needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the environment',
+      )
+    }
+    console.warn(`!! seeding REMOTE project ${apiUrl} with demo users (password "${PASSWORD}")`)
+    return { apiUrl, serviceRoleKey }
+  }
   const { apiUrl, serviceRoleKey } = localSupabase()
   if (!/^https?:\/\/(127\.0\.0\.1|localhost)[:/]/.test(apiUrl)) {
-    throw new Error(`Refusing to seed a non-local Supabase: ${apiUrl}`)
+    throw new Error(`Refusing to seed a non-local Supabase: ${apiUrl} (use --remote explicitly)`)
   }
+  return { apiUrl, serviceRoleKey }
+}
+
+async function main() {
+  const { apiUrl, serviceRoleKey } = target()
   const admin = createClient<Database>(apiUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   })
