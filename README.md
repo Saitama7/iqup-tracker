@@ -40,7 +40,7 @@ pnpm dev                        # http://localhost:5173
 | `pnpm lint` | ESLint + Prettier check |
 | `pnpm typecheck` | `tsc -b` (strict) |
 | `pnpm test` | Vitest (jsdom) |
-| `pnpm e2e` | Playwright, WebKit 390×844 (iPhone 13); первый раз — `pnpm exec playwright install webkit` |
+| `pnpm e2e` | Playwright, WebKit 390×844 (iPhone 13) и 1280×800; против локального стека (`supabase start` + `pnpm seed:users`), переменные берутся из `supabase status`, `.env.local` не используется; первый раз — `pnpm exec playwright install webkit` |
 | `pnpm build` / `pnpm preview` | прод-сборка в `dist/` + PWA (manifest, service worker) |
 | `supabase start` / `supabase db reset` | локальный Postgres + Auth + Realtime на портах **544xx** (API `http://127.0.0.1:54421`, Studio `:54423`), миграции + `supabase/seed.sql` |
 | `pnpm seed:users` | логины для сид-людей (учителя из `teachers`, Каныкей, Алишка, бухгалтер), пароль `iqup-demo`; вход — телефон, напр. `0555 123 456` (Гульзат) |
