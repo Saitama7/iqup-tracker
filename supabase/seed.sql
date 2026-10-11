@@ -198,7 +198,7 @@ cross join lateral (
 drop table seed_students;
 
 -- Lessons: every running group from its start to 8 weeks ahead, holidays skipped (А4 «Занятия», У2 «Сегодня»).
--- Past ones stay planned (= «не подтверждено») until attendance comes with R1-8.
+-- September is held below; October's past lessons stay planned (= «не подтверждено»).
 select public.ensure_lessons(public.bishkek_today() + 56);
 
 -- September 2026 is held (R1-9: «Мой месяц», Б1 and the payroll reconciliation test have a month to show).

@@ -15,6 +15,10 @@ function supabaseEnv(): Record<string, string> {
   }
 }
 
+const PAYROLL = /payroll\.spec\.ts$/
+const PHONE = { ...devices['iPhone 13'], viewport: { width: 390, height: 844 } }
+const DESKTOP = { ...devices['Desktop Safari'], viewport: { width: 1280, height: 800 } }
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,
@@ -28,12 +32,28 @@ export default defineConfig({
   projects: [
     {
       name: 'webkit',
+      testIgnore: PAYROLL,
       // Device descriptor reports 390×664 (minus Safari UI); issue asks for full 390×844 screen.
-      use: { ...devices['iPhone 13'], viewport: { width: 390, height: 844 } },
+      use: PHONE,
     },
     {
       name: 'webkit-desktop',
-      use: { ...devices['Desktop Safari'], viewport: { width: 1280, height: 800 } },
+      testIgnore: PAYROLL,
+      use: DESKTOP,
+    },
+    // payroll.spec sums the seed's held September, and teacher-attendance.spec holds (and then
+    // removes) an extra September lesson while it runs — so the payroll checks go after the rest.
+    {
+      name: 'webkit-payroll',
+      testMatch: PAYROLL,
+      dependencies: ['webkit', 'webkit-desktop'],
+      use: PHONE,
+    },
+    {
+      name: 'webkit-desktop-payroll',
+      testMatch: PAYROLL,
+      dependencies: ['webkit', 'webkit-desktop'],
+      use: DESKTOP,
     },
   ],
   webServer: {

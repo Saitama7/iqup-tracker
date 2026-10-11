@@ -65,7 +65,8 @@ test('А5: list with balances, search by name and phone, group filter in the URL
 
   const kamila = studentRow(page, 'Камила Орозова')
   await expect(kamila).toContainText('Математика · 8 класс А · Химия · 9 класс')
-  await expect(kamila).toContainText('12 / 12 · 12 / 12')
+  // Seed: September is held (#13) — 13 lessons in each group, the 13th already from the renewal
+  await expect(kamila).toContainText('11 / 12 · 11 / 12')
   await expect(kamila).toContainText('0770 555 666')
   await expect(kamila).toContainText('Занимается')
   await page.screenshot({ path: testInfo.outputPath('students.png'), fullPage: true })
