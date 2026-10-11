@@ -120,10 +120,13 @@ export function viewsFor(roles: readonly Role[]): View[] {
 
 /**
  * Pushed screens with their own back button and bottom actions: no tab bar
- * (У7 Профиль, АМ2 Ученик, А4 Группа).
+ * (У7 Профиль, У3 Посещаемость, У5 Группа, АМ2 Ученик, А4 Группа).
  */
 export function isPushedScreen(pathname: string): boolean {
-  return pathname === '/profile' || /^\/admin\/(students|groups)\/[^/]+\/?$/.test(pathname)
+  return (
+    pathname === '/profile' ||
+    /^\/(admin\/students|admin\/groups|groups|lessons)\/[^/]+\/?$/.test(pathname)
+  )
 }
 
 function viewOfPath(pathname: string): View | null {
