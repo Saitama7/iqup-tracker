@@ -722,6 +722,26 @@ export type Database = {
           },
         ]
       }
+      v_payroll_preview: {
+        Row: {
+          base_amount: number | null
+          hours: number | null
+          lessons_held: number | null
+          month: string | null
+          student_lessons: number | null
+          teacher_id: string | null
+        }
+        ComputedFields: never
+        Relationships: [
+          {
+            foreignKeyName: 'groups_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teachers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       v_subscription_balances: {
         Row: {
           enrollment_id: string | null
