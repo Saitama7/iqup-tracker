@@ -146,13 +146,17 @@ export class GroupsApiError extends Error {
 /** Postgres error → admin-facing text; each RPC raises one code per rule (0008). */
 export function groupsErrorMessage(error: { code?: string; message?: string }): string {
   const m = error.message ?? ''
-  if (error.code === '42501') return 'Группы и занятия ведёт администратор'
+  if (error.code === '42501') {
+    if (m.includes('extra lesson')) return 'Доп. урок добавляет учитель этой группы'
+    return 'Группы и занятия ведёт администратор'
+  }
   if (error.code === '23505') {
     if (m.includes('made up')) return 'Это занятие уже восполнено'
     return 'В это время у группы уже есть занятие'
   }
   if (error.code === '23514') {
     if (m.includes('no tariff')) return 'На эту дату нет тарифа для этого типа группы'
+    if (m.includes('extra lesson in the past')) return 'Доп. урок — на сегодня или позже'
     if (m.includes('in the past') || m.includes('today or later'))
       return 'Новое расписание — с сегодняшнего дня или позже'
     if (m.includes('outside the group dates')) return 'Дата вне дат группы'

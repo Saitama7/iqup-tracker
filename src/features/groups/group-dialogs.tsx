@@ -30,6 +30,7 @@ import {
   type TeacherRow,
 } from './model'
 import { Segmented, WeekdayPicker } from './parts'
+import { TEACHER_GROUPS_KEY } from './teacher-api'
 
 // А4 actions. Every write is an RPC / RLS-checked update; the dialogs only collect input.
 
@@ -43,6 +44,7 @@ function useGroupMutation<T>(groupId: string, fn: (input: T) => Promise<unknown>
         queryClient.invalidateQueries({ queryKey: lessonsKey(groupId) }),
         queryClient.invalidateQueries({ queryKey: GROUPS_KEY }),
         queryClient.invalidateQueries({ queryKey: STUDENTS_KEY }),
+        queryClient.invalidateQueries({ queryKey: [TEACHER_GROUPS_KEY] }),
       ])
       toast.success(done)
     },
@@ -172,7 +174,7 @@ export function ExtraLessonDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  group: GroupRow
+  group: Pick<GroupRow, 'id' | 'schedule_rules'>
   lessons: readonly LessonRow[]
   makesUpFor?: string
   today: string
@@ -391,6 +393,7 @@ export function EditGroupDialog({
         queryClient.invalidateQueries({ queryKey: lessonsKey(group.id) }),
         queryClient.invalidateQueries({ queryKey: GROUPS_KEY }),
         queryClient.invalidateQueries({ queryKey: STUDENTS_KEY }),
+        queryClient.invalidateQueries({ queryKey: [TEACHER_GROUPS_KEY] }),
       ])
       toast.success(
         result
