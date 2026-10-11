@@ -10,6 +10,7 @@ export type AppPath =
   | '/groups'
   | '/my-month'
   | '/admin'
+  | '/admin/schedule'
   | '/admin/users'
   | '/admin/groups'
   | '/admin/students'
@@ -40,7 +41,7 @@ export const NAV: Record<View, NavItem[]> = {
   ],
   admin: [
     { label: 'Дашборд', to: '/admin', exact: true },
-    { label: 'Расписание', to: null },
+    { label: 'Расписание', to: '/admin/schedule' },
     { label: 'Группы', to: '/admin/groups' },
     { label: 'Ученики', to: '/admin/students' },
     { label: 'Пробные занятия', to: null },
@@ -82,7 +83,7 @@ export const TABS: Record<View, TabItem[]> = {
 export const MORE: Record<View, NavItem[]> = {
   teacher: [],
   admin: [
-    { label: 'Расписание', to: null },
+    { label: 'Расписание', to: '/admin/schedule' },
     { label: 'Группы', to: '/admin/groups' },
     { label: 'Пробные', to: null },
     { label: 'Учителя и доступ', to: '/admin/users' },

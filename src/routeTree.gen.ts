@@ -19,6 +19,7 @@ import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
+import { Route as AppAdminScheduleRouteImport } from './routes/_app/admin/schedule'
 import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppLessonsLessonIdRouteImport } from './routes/_app/lessons/$lessonId'
@@ -76,6 +77,11 @@ const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppAdminRouteRoute,
 } as any)
+const AppAdminScheduleRoute = AppAdminScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
+  getParentRoute: () => AppAdminRouteRoute,
+} as any)
 const AppAdminSettingsRoute = AppAdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -122,6 +128,7 @@ export interface FileRoutesByFullPath {
   '/payroll': typeof AppPayrollRoute
   '/profile': typeof AppProfileRoute
   '/today': typeof AppTodayRoute
+  '/admin/schedule': typeof AppAdminScheduleRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/lessons/$lessonId': typeof AppLessonsLessonIdRoute
@@ -139,6 +146,7 @@ export interface FileRoutesByTo {
   '/payroll': typeof AppPayrollRoute
   '/profile': typeof AppProfileRoute
   '/today': typeof AppTodayRoute
+  '/admin/schedule': typeof AppAdminScheduleRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/lessons/$lessonId': typeof AppLessonsLessonIdRoute
@@ -159,6 +167,7 @@ export interface FileRoutesById {
   '/_app/payroll': typeof AppPayrollRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/today': typeof AppTodayRoute
+  '/_app/admin/schedule': typeof AppAdminScheduleRoute
   '/_app/admin/settings': typeof AppAdminSettingsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/lessons/$lessonId': typeof AppLessonsLessonIdRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/payroll'
     | '/profile'
     | '/today'
+    | '/admin/schedule'
     | '/admin/settings'
     | '/admin/users'
     | '/lessons/$lessonId'
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/payroll'
     | '/profile'
     | '/today'
+    | '/admin/schedule'
     | '/admin/settings'
     | '/admin/users'
     | '/lessons/$lessonId'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/_app/payroll'
     | '/_app/profile'
     | '/_app/today'
+    | '/_app/admin/schedule'
     | '/_app/admin/settings'
     | '/_app/admin/users'
     | '/_app/lessons/$lessonId'
@@ -303,6 +315,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminIndexRouteImport
       parentRoute: typeof AppAdminRouteRoute
     }
+    '/_app/admin/schedule': {
+      id: '/_app/admin/schedule'
+      path: '/schedule'
+      fullPath: '/admin/schedule'
+      preLoaderRoute: typeof AppAdminScheduleRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
     '/_app/admin/settings': {
       id: '/_app/admin/settings'
       path: '/settings'
@@ -356,6 +375,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppAdminRouteRouteChildren {
+  AppAdminScheduleRoute: typeof AppAdminScheduleRoute
   AppAdminSettingsRoute: typeof AppAdminSettingsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
@@ -366,6 +386,7 @@ interface AppAdminRouteRouteChildren {
 }
 
 const AppAdminRouteRouteChildren: AppAdminRouteRouteChildren = {
+  AppAdminScheduleRoute: AppAdminScheduleRoute,
   AppAdminSettingsRoute: AppAdminSettingsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,

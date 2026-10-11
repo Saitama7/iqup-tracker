@@ -55,6 +55,7 @@ describe('NAV / TABS', () => {
       'Профиль',
     ])
     expect(MORE.admin.filter((i) => i.to).map((i) => i.to)).toEqual([
+      '/admin/schedule',
       '/admin/groups',
       '/admin/users',
       '/admin/settings',
@@ -65,6 +66,11 @@ describe('NAV / TABS', () => {
   it('admin «Ученики» tab and sidebar item open А5', () => {
     expect(TABS.admin.find((i) => i.label === 'Ученики')?.to).toBe('/admin/students')
     expect(NAV.admin.find((i) => i.label === 'Ученики')?.to).toBe('/admin/students')
+  })
+
+  it('admin «Расписание» opens А2 from the sidebar and the «Ещё» sheet', () => {
+    expect(NAV.admin.find((i) => i.label === 'Расписание')?.to).toBe('/admin/schedule')
+    expect(MORE.admin.find((i) => i.label === 'Расписание')?.to).toBe('/admin/schedule')
   })
 
   it('accountant has no tab bar (БМ1)', () => {

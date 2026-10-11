@@ -56,6 +56,9 @@
   --color-burned-deep: var(--burned-deep);
   --color-deck-back: var(--deck-back);
   --color-deck-dot: var(--deck-dot);
+  --color-trial-soft: var(--trial-soft);
+  --color-trial-strong: var(--trial-strong);
+  --color-today-col: var(--today-col);
 
   /* Artboard shadows, tinted with brand tokens */
   --shadow-float: 0 16px 32px color-mix(in srgb, var(--ink) 18%, transparent);
