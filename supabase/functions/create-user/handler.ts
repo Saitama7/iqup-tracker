@@ -43,6 +43,12 @@ export interface CreateUserDeps {
     percent: number
     valid_from: string
   }): Promise<'ok' | 'exists'>
+  /** Corrects the percent of the (teacher_id, valid_from) row; false when there is no such row. */
+  fixTeacherRate(input: {
+    teacher_id: string
+    percent: number
+    valid_from: string
+  }): Promise<boolean>
   /** profiles.roles; the DB trigger links/creates the teachers row when teacher is added. */
   setProfileRoles(userId: string, roles: Role[]): Promise<void>
   /** app_metadata.roles — what RLS reads from the JWT. */
@@ -92,8 +98,10 @@ const resetSchema = z.object({
   password,
 })
 
+// fix — correct the percent of the row starting at valid_from; new — a new row from valid_from.
 const updateRateSchema = z.object({
   action: z.literal('update_rate'),
+  mode: z.enum(['fix', 'new']),
   teacher_id: z.uuid(),
   percent: z.number().gt(0).lte(100),
   valid_from: isoDate,
@@ -154,11 +162,18 @@ export async function handleCreateUser(
     if (!(await deps.teacherExists(input.teacher_id))) {
       return fail(404, 'not_found', 'Учитель не найден')
     }
-    const added = await deps.addTeacherRate({
+    const rate = {
       teacher_id: input.teacher_id,
       percent: input.percent,
       valid_from: input.valid_from,
-    })
+    }
+    if (input.mode === 'fix') {
+      if (!(await deps.fixTeacherRate(rate))) {
+        return fail(404, 'not_found', 'Процент с этой даты не найден')
+      }
+      return { status: 200, body: { teacher_id: input.teacher_id } }
+    }
+    const added = await deps.addTeacherRate(rate)
     if (added === 'exists') {
       return fail(409, 'rate_exists', 'С этой даты процент уже задан — выберите другую дату')
     }

@@ -154,7 +154,7 @@ describe('Edge Function create-user: roles, rate, access (#6)', () => {
     expect(teacher?.user_id).toBe(userId)
   })
 
-  it('update_rate appends rows, existing ones untouched', async () => {
+  it('update_rate: new appends rows, fix corrects one in place', async () => {
     const { data: teacher } = await service
       .from('teachers')
       .select('id')
@@ -165,6 +165,7 @@ describe('Edge Function create-user: roles, rate, access (#6)', () => {
       (
         await call({
           action: 'update_rate',
+          mode: 'new',
           teacher_id: teacherId,
           percent: 45,
           valid_from: '2026-09-01',
@@ -175,6 +176,7 @@ describe('Edge Function create-user: roles, rate, access (#6)', () => {
       (
         await call({
           action: 'update_rate',
+          mode: 'new',
           teacher_id: teacherId,
           percent: 50,
           valid_from: '2026-11-01',
@@ -185,19 +187,42 @@ describe('Edge Function create-user: roles, rate, access (#6)', () => {
       (
         await call({
           action: 'update_rate',
+          mode: 'new',
           teacher_id: teacherId,
           percent: 99,
           valid_from: '2026-09-01',
         })
       ).status,
     ).toBe(409)
+    expect(
+      (
+        await call({
+          action: 'update_rate',
+          mode: 'fix',
+          teacher_id: teacherId,
+          percent: 47,
+          valid_from: '2026-09-01',
+        })
+      ).status,
+    ).toBe(200)
+    expect(
+      (
+        await call({
+          action: 'update_rate',
+          mode: 'fix',
+          teacher_id: teacherId,
+          percent: 47,
+          valid_from: '2026-10-01',
+        })
+      ).status,
+    ).toBe(404)
     const { data: rates } = await service
       .from('teacher_rates')
       .select('percent, valid_from')
       .eq('teacher_id', teacherId ?? '')
       .order('valid_from')
     expect(rates).toEqual([
-      { percent: 45, valid_from: '2026-09-01' },
+      { percent: 47, valid_from: '2026-09-01' },
       { percent: 50, valid_from: '2026-11-01' },
     ])
   })

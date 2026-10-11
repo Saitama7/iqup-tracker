@@ -120,6 +120,7 @@ export const createUserForm = z
 export type CreateUserInput = z.output<typeof createUserForm>
 
 export const rateForm = z.object({ percent: percentField, validFrom: dateField })
+export const fixRateForm = z.object({ percent: percentField })
 
 // ─── Edge Function calls ────────────────────────────────────────────────────
 
@@ -158,9 +159,16 @@ export const createUser = (input: CreateUserInput) =>
     ...input,
   })
 
-export const updateRate = (input: { teacherId: string; percent: number; validFrom: string }) =>
+/** fix — correct the rate starting at validFrom in place; new — add a rate from validFrom. */
+export const updateRate = (input: {
+  mode: 'fix' | 'new'
+  teacherId: string
+  percent: number
+  validFrom: string
+}) =>
   callUsersFunction<{ teacher_id: string }>({
     action: 'update_rate',
+    mode: input.mode,
     teacher_id: input.teacherId,
     percent: input.percent,
     valid_from: input.validFrom,

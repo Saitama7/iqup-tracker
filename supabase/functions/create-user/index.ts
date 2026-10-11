@@ -100,6 +100,16 @@ const deps: CreateUserDeps = {
     check(error)
     return 'ok'
   },
+  async fixTeacherRate(row) {
+    const { data, error } = await admin
+      .from('teacher_rates')
+      .update({ percent: row.percent })
+      .eq('teacher_id', row.teacher_id)
+      .eq('valid_from', row.valid_from)
+      .select('id')
+    check(error)
+    return (data ?? []).length > 0
+  },
   async setProfileRoles(userId, roles) {
     const { error } = await admin.from('profiles').update({ roles }).eq('id', userId)
     check(error)

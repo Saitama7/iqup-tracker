@@ -24,6 +24,7 @@ function makeDeps(
     ),
     teacherExists: vi.fn(() => Promise.resolve(true)),
     addTeacherRate: vi.fn(() => Promise.resolve<'ok' | 'exists'>('ok')),
+    fixTeacherRate: vi.fn(() => Promise.resolve(true)),
     setProfileRoles: vi.fn(() => Promise.resolve()),
     setAuthRoles: vi.fn(() => Promise.resolve()),
     setProfileActive: vi.fn(() => Promise.resolve()),
@@ -200,6 +201,7 @@ describe('handleCreateUser', () => {
     const TEACHER_ID = '00000000-0000-4000-a000-000000000001'
     const body = {
       action: 'update_rate',
+      mode: 'new',
       teacher_id: TEACHER_ID,
       percent: 50,
       valid_from: '2026-11-01',
@@ -215,6 +217,30 @@ describe('handleCreateUser', () => {
         valid_from: '2026-11-01',
       })
       expect(deps.insertTeacherRate).not.toHaveBeenCalled()
+    })
+
+    it('fix corrects the row from valid_from in place, no new row', async () => {
+      const deps = makeDeps(ADMIN)
+      const res = await handleCreateUser(
+        { authorization: 'Bearer a', body: { ...body, mode: 'fix', valid_from: '2026-09-01' } },
+        deps,
+      )
+      expect(res).toEqual({ status: 200, body: { teacher_id: TEACHER_ID } })
+      expect(deps.fixTeacherRate).toHaveBeenCalledWith({
+        teacher_id: TEACHER_ID,
+        percent: 50,
+        valid_from: '2026-09-01',
+      })
+      expect(deps.addTeacherRate).not.toHaveBeenCalled()
+    })
+
+    it('fix: 404 when there is no rate from that date', async () => {
+      const deps = makeDeps(ADMIN, { fixTeacherRate: vi.fn(() => Promise.resolve(false)) })
+      const res = await handleCreateUser(
+        { authorization: 'Bearer a', body: { ...body, mode: 'fix' } },
+        deps,
+      )
+      expect(res).toMatchObject({ status: 404, body: { error: 'not_found' } })
     })
 
     it('409 when a rate from that date already exists', async () => {
@@ -235,6 +261,8 @@ describe('handleCreateUser', () => {
         { ...body, valid_from: '2026-02-30' },
         { ...body, percent: 0 },
         { ...body, percent: 120 },
+        { ...body, mode: undefined },
+        { ...body, mode: 'replace' },
       ]) {
         expect(
           (await handleCreateUser({ authorization: 'Bearer a', body: bad }, deps)).status,
@@ -246,6 +274,7 @@ describe('handleCreateUser', () => {
       )
       expect(deps.addTeacherRate).not.toHaveBeenCalled()
       expect(teacher.addTeacherRate).not.toHaveBeenCalled()
+      expect(deps.fixTeacherRate).not.toHaveBeenCalled()
     })
   })
 

@@ -1,6 +1,7 @@
--- А8 «Учителя и доступ» (issue #6): role change links teachers, rates are append-only, last sign-in for staff.
+-- А8 «Учителя и доступ» (issue #6): role change links teachers, admin adds and fixes rates (0005),
+-- last sign-in for staff.
 begin;
-select plan(13);
+select plan(17);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 -- a…1 teacher A, a…2 teacher B, a…3 admin, a…4 accountant
@@ -55,7 +56,7 @@ select is(
   'removing and re-adding teacher keeps one teachers row'
 );
 
--- ─── Admin: rates are append-only ───────────────────────────────────────────
+-- ─── Admin: new rate from a date, fix of an existing one (0005) ─────────────
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a6000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"roles":["admin"]}}';
 
@@ -66,16 +67,26 @@ select lives_ok(
   'admin adds a new rate row'
 );
 
-update public.teacher_rates set percent = 99 where id = 'f6000000-0000-4000-8000-000000000001';
-delete from public.teacher_rates where id = 'f6000000-0000-4000-8000-000000000001';
+select lives_ok(
+  $$ update public.teacher_rates set percent = 47 where id = 'f6000000-0000-4000-8000-000000000001' $$,
+  'admin fixes a mistyped percent in place'
+);
 
 select results_eq(
   $$ select percent, valid_from from public.teacher_rates r
      join public.teachers t on t.id = r.teacher_id
      where t.user_id = 'a6000000-0000-4000-8000-000000000001'
      order by valid_from $$,
-  $$ values (45.00::numeric(5, 2), '2026-09-01'::date), (50.00::numeric(5, 2), '2026-11-01'::date) $$,
-  'admin cannot update or delete an existing rate: old row intact, new row added'
+  $$ values (47.00::numeric(5, 2), '2026-09-01'::date), (50.00::numeric(5, 2), '2026-11-01'::date) $$,
+  'fix changes the row, new rate adds one'
+);
+
+select is(
+  (select count(*) from public.audit_log
+   where entity = 'teacher_rates' and entity_id = 'f6000000-0000-4000-8000-000000000001'
+     and action = 'update'),
+  1::bigint,
+  'the fix is recorded in audit_log'
 );
 
 select throws_ok(
@@ -104,6 +115,12 @@ select throws_ok(
      where t.user_id = 'a6000000-0000-4000-8000-000000000001' $$,
   '42501', null, 'accountant cannot add a rate'
 );
+update public.teacher_rates set percent = 99 where id = 'f6000000-0000-4000-8000-000000000001';
+select is(
+  (select percent from public.teacher_rates where id = 'f6000000-0000-4000-8000-000000000001'),
+  47.00::numeric(5, 2),
+  'accountant cannot fix a rate'
+);
 
 -- ─── Teacher: no foreign data ───────────────────────────────────────────────
 set local request.jwt.claims = '{"sub":"a6000000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"roles":["teacher"]}}';
@@ -118,6 +135,15 @@ select throws_ok(
      select t.id, 90, '2026-12-01' from public.teachers t
      where t.user_id = 'a6000000-0000-4000-8000-000000000002' $$,
   '42501', null, 'teacher cannot raise own rate'
+);
+update public.teacher_rates r set percent = 90
+from public.teachers t
+where t.id = r.teacher_id and t.user_id = 'a6000000-0000-4000-8000-000000000002';
+select is(
+  (select max(r.percent) from public.teacher_rates r join public.teachers t on t.id = r.teacher_id
+   where t.user_id = 'a6000000-0000-4000-8000-000000000002'),
+  45.00::numeric(5, 2),
+  'teacher cannot fix own rate'
 );
 
 select * from finish();
