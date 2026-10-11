@@ -48,20 +48,68 @@ export function currentRate(
   return best ? best.percent : null
 }
 
-// Teacher's own percent: RLS lets a teacher read only their teachers row and rates.
-export const teacherPercentQuery = (userId: string, nowMs: number) => {
+const teacherRowSchema = z.object({
+  created_at: z.string(),
+  teacher_rates: z.array(rateSchema),
+  groups: z.array(
+    z.object({
+      subject: z.string(),
+      status: z.enum(['forming', 'active', 'archived']),
+      enrollments: z.array(
+        z.object({ student_id: z.uuid(), status: z.enum(['active', 'finished']) }),
+      ),
+    }),
+  ),
+})
+
+export interface TeacherSummary {
+  percent: number | null
+  /** Non-archived groups. */
+  groups: number
+  /** Distinct students actively enrolled in those groups. */
+  students: number
+  subjects: string[]
+  /** teachers.created_at — when the teacher was added to the system. */
+  since: string
+}
+
+export function summarizeTeacher(
+  row: z.infer<typeof teacherRowSchema>,
+  today: string,
+): TeacherSummary {
+  const groups = row.groups.filter((g) => g.status !== 'archived')
+  const students = new Set(
+    groups.flatMap((g) =>
+      g.enrollments.filter((e) => e.status === 'active').map((e) => e.student_id),
+    ),
+  )
+  const subjects = [...new Set(groups.map((g) => g.subject.trim().toLowerCase()))].sort()
+  return {
+    percent: currentRate(row.teacher_rates, today),
+    groups: groups.length,
+    students: students.size,
+    subjects,
+    since: row.created_at,
+  }
+}
+
+// Teacher's own row: RLS lets a teacher read only their teachers row, rates and groups.
+// Admin+teacher (staff) sees all groups — the embed is still scoped by groups.teacher_id.
+export const teacherSummaryQuery = (userId: string, nowMs: number) => {
   const today = bishkekDate(nowMs)
   return queryOptions({
-    queryKey: ['teacher-percent', userId, today],
-    queryFn: async (): Promise<number | null> => {
+    queryKey: ['teacher-summary', userId, today],
+    queryFn: async (): Promise<TeacherSummary | null> => {
       const { data, error } = await supabase
         .from('teachers')
-        .select('teacher_rates(percent, valid_from)')
+        .select(
+          'created_at, teacher_rates(percent, valid_from), groups(subject, status, enrollments(student_id, status))',
+        )
         .eq('user_id', userId)
         .maybeSingle()
       if (error) throw error
       if (!data) return null
-      return currentRate(z.array(rateSchema).parse(data.teacher_rates), today)
+      return summarizeTeacher(teacherRowSchema.parse(data), today)
     },
   })
 }

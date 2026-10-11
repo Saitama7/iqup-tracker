@@ -1,19 +1,4 @@
-import {
-  BookOpenCheck,
-  Calculator,
-  CalendarCheck,
-  CalendarDays,
-  CircleDollarSign,
-  History,
-  LayoutDashboard,
-  Settings2,
-  Sparkles,
-  UserCog,
-  Users,
-  UsersRound,
-  Wallet,
-  type LucideIcon,
-} from 'lucide-react'
+import { Calendar, CreditCard, Menu, User, Users, type LucideIcon } from 'lucide-react'
 import type { Role } from '@/lib/roles'
 
 // One user may hold several roles (Каныкей = admin + teacher, 05-decisions З1).
@@ -24,40 +9,72 @@ export type AppPath = '/today' | '/groups' | '/my-month' | '/admin' | '/payroll'
 
 export interface NavItem {
   label: string
-  icon: LucideIcon
-  /** `null` — screen is not built yet; shown disabled with «скоро». */
+  /** `null` — screen is not built yet; shown disabled. */
   to: AppPath | null
-  /** Shown in the phone tab bar (artboards У2–У6, АМ1–АМ3, БМ1). */
-  mobile?: boolean
 }
 
+export interface TabItem extends NavItem {
+  icon: LucideIcon
+}
+
+// Desktop sidebar, texts and order as on artboards УД1–УД4, А1–А11, Б1–Б3.
 export const NAV: Record<View, NavItem[]> = {
   teacher: [
-    { label: 'Сегодня', icon: CalendarCheck, to: '/today', mobile: true },
-    { label: 'Группы', icon: UsersRound, to: '/groups', mobile: true },
-    { label: 'Мой месяц', icon: Wallet, to: '/my-month', mobile: true },
+    { label: 'Сегодня', to: '/today' },
+    { label: 'Группы и ученики', to: '/groups' },
+    { label: 'Мой месяц', to: '/my-month' },
   ],
   admin: [
-    { label: 'Сегодня', icon: LayoutDashboard, to: '/admin', mobile: true },
-    { label: 'Расписание', icon: CalendarDays, to: null },
-    { label: 'Группы', icon: UsersRound, to: null },
-    { label: 'Ученики', icon: Users, to: null, mobile: true },
-    { label: 'Оплаты', icon: CircleDollarSign, to: null, mobile: true },
-    { label: 'Пробные', icon: Sparkles, to: null },
-    { label: 'Учителя и доступ', icon: UserCog, to: null },
-    { label: 'Тарифы и праздники', icon: Settings2, to: null },
-    { label: 'Журнал изменений', icon: History, to: null },
+    { label: 'Дашборд', to: '/admin' },
+    { label: 'Расписание', to: null },
+    { label: 'Группы', to: null },
+    { label: 'Ученики', to: null },
+    { label: 'Пробные занятия', to: null },
+    { label: 'Оплаты', to: null },
+    { label: 'Расчёт ЗП', to: null },
+    { label: 'Учителя и доступ', to: null },
+    { label: 'Тарифы и праздники', to: null },
+    { label: 'Журнал изменений', to: null },
   ],
   accountant: [
-    { label: 'Расчёт ЗП', icon: Calculator, to: '/payroll', mobile: true },
-    { label: 'Деньги за месяц', icon: BookOpenCheck, to: null },
+    { label: 'Расчёт ЗП', to: '/payroll' },
+    { label: 'Деньги за месяц', to: null },
+    { label: 'Расписание', to: null },
+    { label: 'Группы', to: null },
+    { label: 'Ученики', to: null },
+    { label: 'Оплаты', to: null },
+    { label: 'Журнал изменений', to: null },
   ],
+}
+
+// Phone tab bar: У2–У6 (teacher), АМ1–АМ3 (admin). БМ1–БМ2 (accountant) have no tab bar.
+export const TABS: Record<View, TabItem[]> = {
+  teacher: [
+    { label: 'Сегодня', icon: Calendar, to: '/today' },
+    { label: 'Группы', icon: Users, to: '/groups' },
+    { label: 'Мой месяц', icon: CreditCard, to: '/my-month' },
+  ],
+  admin: [
+    { label: 'Сегодня', icon: Calendar, to: '/admin' },
+    { label: 'Ученики', icon: User, to: null },
+    { label: 'Оплата', icon: CreditCard, to: null },
+    { label: 'Группы', icon: Users, to: null },
+    { label: 'Ещё', icon: Menu, to: null },
+  ],
+  accountant: [],
 }
 
 export const VIEW_LABEL: Record<View, string> = {
   teacher: 'Учитель',
   admin: 'Администратор',
   accountant: 'Бухгалтер',
+}
+
+/** Caption under the name in the sidebar user card (УД1, А1, Б1). */
+export function viewCaption(view: View, percent: number | null | undefined): string {
+  if (view === 'teacher') return percent != null ? `учитель · ${percent} %` : 'учитель'
+  if (view === 'admin') return 'администратор'
+  return 'бухгалтер · просмотр'
 }
 
 export const VIEW_HOME: Record<View, AppPath> = {

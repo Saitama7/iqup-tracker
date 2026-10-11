@@ -39,6 +39,18 @@
   --color-warn: var(--warn);
   --color-trial: var(--trial);
   --color-line: var(--line);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-deep: var(--brand-deep);
+  --color-line-strong: var(--line-strong);
+  --color-placeholder: var(--placeholder);
+  --color-sand: var(--sand);
+  --color-burned-strong: var(--burned-strong);
+
+  /* Artboard shadows, tinted with brand tokens */
+  --shadow-float: 0 16px 32px color-mix(in srgb, var(--ink) 18%, transparent);
+  --shadow-sheet: 0 -16px 40px color-mix(in srgb, var(--ink) 12%, transparent);
+  --shadow-cta: 0 12px 28px color-mix(in srgb, var(--ink) 22%, transparent);
+  --shadow-brand: 0 12px 28px color-mix(in srgb, var(--brand) 35%, transparent);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

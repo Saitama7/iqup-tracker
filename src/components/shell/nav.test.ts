@@ -1,4 +1,4 @@
-import { NAV, resolveView, viewsFor } from './nav'
+import { NAV, TABS, resolveView, viewCaption, viewsFor } from './nav'
 
 describe('viewsFor', () => {
   it('orders views by priority', () => {
@@ -28,12 +28,35 @@ describe('resolveView', () => {
   })
 })
 
-describe('NAV', () => {
-  it('teacher tab bar is Сегодня / Группы / Мой месяц', () => {
-    expect(NAV.teacher.filter((i) => i.mobile).map((i) => i.label)).toEqual([
+describe('NAV / TABS', () => {
+  it('teacher tab bar is Сегодня / Группы / Мой месяц (У2)', () => {
+    expect(TABS.teacher.map((i) => i.label)).toEqual(['Сегодня', 'Группы', 'Мой месяц'])
+  })
+
+  it('admin tab bar matches АМ1', () => {
+    expect(TABS.admin.map((i) => i.label)).toEqual([
       'Сегодня',
+      'Ученики',
+      'Оплата',
       'Группы',
-      'Мой месяц',
+      'Ещё',
     ])
+  })
+
+  it('accountant has no tab bar (БМ1)', () => {
+    expect(TABS.accountant).toEqual([])
+  })
+
+  it('teacher sidebar matches УД1', () => {
+    expect(NAV.teacher.map((i) => i.label)).toEqual(['Сегодня', 'Группы и ученики', 'Мой месяц'])
+  })
+})
+
+describe('viewCaption', () => {
+  it('describes the role as on the sidebar card', () => {
+    expect(viewCaption('teacher', 45)).toBe('учитель · 45 %')
+    expect(viewCaption('teacher', null)).toBe('учитель')
+    expect(viewCaption('admin', 45)).toBe('администратор')
+    expect(viewCaption('accountant', null)).toBe('бухгалтер · просмотр')
   })
 })

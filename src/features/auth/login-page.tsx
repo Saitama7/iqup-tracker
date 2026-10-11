@@ -1,14 +1,11 @@
 import { useNavigate } from '@tanstack/react-router'
-import { Eye, EyeOff, LoaderCircle } from 'lucide-react'
+import { ArrowRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { useId, useState, type SubmitEvent } from 'react'
-import { Logo } from '@/components/shell/shell-parts'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { InvalidCredentialsError, signIn } from '@/lib/auth'
 import { maskPhoneInput } from '@/lib/phone-input'
 import { homePath } from '@/lib/roles'
 
-// У1 Вход: phone + password, no SMS (05-decisions Д1).
+// У1 Вход (docs/design/Login.dc.html): phone + password, no SMS (05-decisions Д1).
 export function LoginPage() {
   const navigate = useNavigate()
   const phoneId = useId()
@@ -22,6 +19,10 @@ export function LoginPage() {
 
   async function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (!phone || !password) {
+      setError('Введите телефон и пароль')
+      return
+    }
     setError(null)
     setPending(true)
     try {
@@ -38,97 +39,131 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-dvh flex-col bg-paper pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:items-center lg:justify-center">
-      <div className="flex w-full flex-1 flex-col lg:max-w-md lg:flex-none">
-        <header className="rounded-b-[2rem] bg-brand px-6 pt-12 pb-10 lg:rounded-[2rem] lg:pt-10">
-          <Logo className="text-4xl [&>span]:text-ink" />
-          <p className="mt-3 text-lg font-semibold text-ink">Учёт занятий и зарплаты</p>
-          <p className="mt-1 text-sm font-medium text-ink/70">Учебный центр IQ UP · Бишкек</p>
+    <main className="relative flex min-h-dvh flex-col overflow-hidden bg-brand text-ink min-[900px]:items-center min-[900px]:justify-center">
+      <div
+        aria-hidden
+        className="absolute -top-[60px] -left-20 size-[300px] rounded-full bg-brand-soft"
+      />
+      <div
+        aria-hidden
+        className="absolute top-[120px] -right-[110px] size-[260px] rounded-full bg-brand-deep"
+      />
+
+      <div className="relative flex w-full flex-1 flex-col min-[900px]:max-w-[420px] min-[900px]:flex-none">
+        <header className="flex flex-col items-start gap-[22px] px-7 pt-[max(6rem,calc(env(safe-area-inset-top)+3.5rem))] min-[900px]:pt-0">
+          <div className="flex size-24 items-center justify-center rounded-full bg-paper shadow-float">
+            <span className="font-display text-[22px] font-extrabold tracking-[-0.02em]">
+              IQ UP
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <p className="font-display text-[30px] leading-[1.1] font-extrabold">Tracker</p>
+            <p className="text-[15px] leading-[1.4] font-bold opacity-75">
+              Занятия, посещаемость
+              <br />и зарплата — без споров
+            </p>
+          </div>
         </header>
 
         <form
           onSubmit={(e) => void onSubmit(e)}
           noValidate
           aria-describedby={error ? errorId : undefined}
-          className="flex flex-1 flex-col gap-5 px-6 pt-8 pb-6 lg:flex-none"
+          className="mt-auto flex flex-col gap-4 rounded-t-[32px] bg-paper px-6 pt-7 pb-[max(2.5rem,env(safe-area-inset-bottom))] shadow-sheet min-[900px]:mt-10 min-[900px]:rounded-[32px] min-[900px]:pb-8"
         >
-          <h1 className="font-display text-2xl font-bold text-ink">Вход</h1>
+          <h1 className="font-display text-lg font-bold">Вход</h1>
 
-          <div className="flex flex-col gap-2">
-            <label htmlFor={phoneId} className="text-sm font-semibold text-ink">
-              Телефон
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={phoneId} className={labelClass}>
+              Номер телефона
             </label>
-            <Input
-              id={phoneId}
-              name="phone"
-              type="tel"
-              inputMode="numeric"
-              autoComplete="username"
-              placeholder="0XXX XXX XXX"
-              required
-              value={phone}
-              onChange={(e) => {
-                setPhone(maskPhoneInput(e.target.value))
-              }}
-              aria-invalid={error ? true : undefined}
-              className="h-12 bg-card text-base md:text-base"
-            />
+            <div className={fieldClass}>
+              <span className="text-base font-extrabold text-ink-muted">+996</span>
+              <input
+                id={phoneId}
+                name="phone"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                placeholder="552 775 771"
+                required
+                value={phone}
+                onChange={(e) => {
+                  setPhone(maskPhoneInput(e.target.value))
+                }}
+                aria-invalid={error ? true : undefined}
+                className={inputClass}
+              />
+            </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <label htmlFor={passwordId} className="text-sm font-semibold text-ink">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={passwordId} className={labelClass}>
               Пароль
             </label>
-            <div className="relative">
-              <Input
+            <div className={fieldClass}>
+              <input
                 id={passwordId}
                 name="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
+                placeholder="••••••••"
                 required
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value)
                 }}
                 aria-invalid={error ? true : undefined}
-                className="h-12 bg-card pr-12 text-base md:text-base"
+                className={inputClass}
               />
-              <Button
+              <button
                 type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute top-0.5 right-0.5 text-ink-muted"
+                className="-mr-2.5 flex size-11 shrink-0 items-center justify-center rounded-full text-ink-muted"
                 aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
                 aria-pressed={showPassword}
                 onClick={() => {
                   setShowPassword((v) => !v)
                 }}
               >
-                {showPassword ? <EyeOff /> : <Eye />}
-              </Button>
+                {showPassword ? (
+                  <EyeOff className="size-5" strokeWidth={2.2} aria-hidden />
+                ) : (
+                  <Eye className="size-5" strokeWidth={2.2} aria-hidden />
+                )}
+              </button>
             </div>
           </div>
 
           {error && (
-            <p id={errorId} role="alert" className="text-sm font-semibold text-burned">
+            <p id={errorId} role="alert" className="text-sm font-bold text-burned">
               {error}
             </p>
           )}
 
-          <Button
+          <button
             type="submit"
-            disabled={pending || !phone || !password}
-            className="h-12 font-display text-base font-bold"
+            disabled={pending}
+            className="mt-1 flex min-h-14 items-center justify-center gap-2.5 rounded-[18px] bg-ink text-base font-extrabold text-brand shadow-cta transition-opacity disabled:opacity-60"
           >
-            {pending && <LoaderCircle className="animate-spin" aria-hidden />}
             Войти
-          </Button>
+            {pending ? (
+              <LoaderCircle className="size-5 animate-spin" aria-hidden />
+            ) : (
+              <ArrowRight className="size-5" strokeWidth={2.5} aria-hidden />
+            )}
+          </button>
 
-          <p className="mt-auto text-center text-sm text-ink-muted lg:mt-2">
-            Пароль выдаёт администратор. Забыли — обратитесь к администратору.
+          <p className="text-center text-[13px] font-bold text-ink-muted">
+            Забыли пароль? Обратитесь к администратору
           </p>
         </form>
       </div>
     </main>
   )
 }
+
+const labelClass = 'text-xs font-extrabold tracking-[0.04em] text-ink-muted uppercase'
+const fieldClass =
+  'flex min-h-14 items-center gap-2.5 rounded-2xl border-[1.5px] border-line-strong bg-card px-4 focus-within:border-ink'
+const inputClass =
+  'h-[52px] min-w-0 flex-1 bg-transparent p-0 text-[17px] font-bold text-ink outline-none placeholder:text-placeholder'

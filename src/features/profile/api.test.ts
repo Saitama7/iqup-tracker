@@ -1,6 +1,6 @@
 vi.mock('@/lib/supabase/client', () => ({ supabase: {} }))
 
-import { currentRate, passwordSchema } from './api'
+import { currentRate, passwordSchema, summarizeTeacher } from './api'
 
 describe('currentRate', () => {
   const rates = [
@@ -28,5 +28,51 @@ describe('passwordSchema', () => {
     expect(passwordSchema.safeParse({ password: 'longenough', repeat: 'longenough' }).success).toBe(
       true,
     )
+  })
+})
+
+describe('summarizeTeacher', () => {
+  const s1 = '00000000-0000-4000-8000-000000000001'
+  const s2 = '00000000-0000-4000-8000-000000000002'
+  const s3 = '00000000-0000-4000-8000-000000000003'
+
+  it('counts live groups and distinct active students', () => {
+    const summary = summarizeTeacher(
+      {
+        created_at: '2024-09-02T04:00:00Z',
+        teacher_rates: [{ percent: 45, valid_from: '2024-09-01' }],
+        groups: [
+          {
+            subject: 'Математика',
+            status: 'active',
+            enrollments: [
+              { student_id: s1, status: 'active' },
+              { student_id: s2, status: 'finished' },
+            ],
+          },
+          {
+            subject: 'математика ',
+            status: 'forming',
+            enrollments: [
+              { student_id: s1, status: 'active' },
+              { student_id: s2, status: 'active' },
+            ],
+          },
+          {
+            subject: 'Физика',
+            status: 'archived',
+            enrollments: [{ student_id: s3, status: 'active' }],
+          },
+        ],
+      },
+      '2026-10-11',
+    )
+    expect(summary).toEqual({
+      percent: 45,
+      groups: 2,
+      students: 2,
+      subjects: ['математика'],
+      since: '2024-09-02T04:00:00Z',
+    })
   })
 })

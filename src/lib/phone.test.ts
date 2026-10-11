@@ -1,4 +1,10 @@
-import { InvalidPhoneError, formatPhone, normalizePhone, phoneToEmail } from './phone'
+import {
+  InvalidPhoneError,
+  formatPhone,
+  formatPhoneIntl,
+  normalizePhone,
+  phoneToEmail,
+} from './phone'
 
 describe('normalizePhone', () => {
   it.each([
@@ -41,6 +47,16 @@ describe('formatPhone', () => {
 
   it('rejects non-canonical input', () => {
     expect(() => formatPhone('0552775771')).toThrow(InvalidPhoneError)
+  })
+})
+
+describe('formatPhoneIntl', () => {
+  it('formats canonical phone with +996', () => {
+    expect(formatPhoneIntl('996555123456')).toBe('+996 555 123 456')
+  })
+
+  it('round-trips with normalizePhone', () => {
+    expect(normalizePhone(formatPhoneIntl('996555123456'))).toBe('996555123456')
   })
 })
 
