@@ -35,6 +35,21 @@ export interface CreateUserDeps {
   }): Promise<void>
   findUserIdByPhone(phone: string): Promise<string | null>
   updatePassword(userId: string, password: string): Promise<void>
+  findProfile(userId: string): Promise<{ roles: Role[]; is_active: boolean } | null>
+  teacherExists(teacherId: string): Promise<boolean>
+  /** Plain insert: an existing (teacher_id, valid_from) pair is reported, never overwritten. */
+  addTeacherRate(input: {
+    teacher_id: string
+    percent: number
+    valid_from: string
+  }): Promise<'ok' | 'exists'>
+  /** profiles.roles; the DB trigger links/creates the teachers row when teacher is added. */
+  setProfileRoles(userId: string, roles: Role[]): Promise<void>
+  /** app_metadata.roles — what RLS reads from the JWT. */
+  setAuthRoles(userId: string, roles: Role[]): Promise<void>
+  setProfileActive(userId: string, active: boolean): Promise<void>
+  /** Auth ban: a deactivated user cannot sign in or refresh the session. */
+  setAuthBanned(userId: string, banned: boolean): Promise<void>
   /** Today in Asia/Bishkek, YYYY-MM-DD. */
   today(): string
 }
@@ -52,16 +67,20 @@ const phone = z.string().transform((value, ctx) => {
 })
 // Must match auth.minimum_password_length (8) — otherwise Auth rejects with 422 after validation passed.
 const password = z.string().min(8, 'Пароль — минимум 8 символов').max(72)
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((d) => new Date(`${d}T00:00:00Z`).toISOString().startsWith(d), 'invalid date')
+const roles = z
+  .array(z.enum(ROLES))
+  .min(1)
+  .transform((r) => [...new Set(r)])
 
 const createSchema = z.object({
   action: z.literal('create').optional(),
   phone,
   full_name: z.string().trim().min(1).max(200),
-  roles: z
-    .array(z.enum(ROLES))
-    .min(1)
-    .transform((r) => [...new Set(r)]),
+  roles,
   password,
   percent: z.number().gt(0).lte(100).optional(),
   valid_from: isoDate.optional(),
@@ -73,7 +92,32 @@ const resetSchema = z.object({
   password,
 })
 
-const bodySchema = z.union([resetSchema, createSchema])
+const updateRateSchema = z.object({
+  action: z.literal('update_rate'),
+  teacher_id: z.uuid(),
+  percent: z.number().gt(0).lte(100),
+  valid_from: isoDate,
+})
+
+const updateRolesSchema = z.object({
+  action: z.literal('update_roles'),
+  user_id: z.uuid(),
+  roles,
+})
+
+const setActiveSchema = z.object({
+  action: z.literal('set_active'),
+  user_id: z.uuid(),
+  active: z.boolean(),
+})
+
+const bodySchema = z.union([
+  resetSchema,
+  updateRateSchema,
+  updateRolesSchema,
+  setActiveSchema,
+  createSchema,
+])
 
 export type HandlerResult = { status: number; body: Record<string, unknown> }
 
@@ -104,6 +148,55 @@ export async function handleCreateUser(
     if (!userId) return fail(404, 'not_found', 'Пользователь с таким телефоном не найден')
     await deps.updatePassword(userId, input.password)
     return { status: 200, body: { user_id: userId } }
+  }
+
+  if (input.action === 'update_rate') {
+    if (!(await deps.teacherExists(input.teacher_id))) {
+      return fail(404, 'not_found', 'Учитель не найден')
+    }
+    const added = await deps.addTeacherRate({
+      teacher_id: input.teacher_id,
+      percent: input.percent,
+      valid_from: input.valid_from,
+    })
+    if (added === 'exists') {
+      return fail(409, 'rate_exists', 'С этой даты процент уже задан — выберите другую дату')
+    }
+    return { status: 201, body: { teacher_id: input.teacher_id } }
+  }
+
+  if (input.action === 'update_roles') {
+    if (input.user_id === caller.id && !input.roles.includes('admin')) {
+      return fail(409, 'self_lockout', 'Нельзя снять роль администратора с себя')
+    }
+    const profile = await deps.findProfile(input.user_id)
+    if (!profile) return fail(404, 'not_found', 'Пользователь не найден')
+    await deps.setProfileRoles(input.user_id, input.roles)
+    try {
+      await deps.setAuthRoles(input.user_id, input.roles)
+    } catch (e) {
+      // JWT and profiles must agree: put the old roles back (the teachers row, if created, stays).
+      await deps.setProfileRoles(input.user_id, profile.roles)
+      throw e
+    }
+    return { status: 200, body: { user_id: input.user_id, roles: input.roles } }
+  }
+
+  if (input.action === 'set_active') {
+    if (input.user_id === caller.id && !input.active) {
+      return fail(409, 'self_lockout', 'Нельзя отключить самого себя')
+    }
+    const profile = await deps.findProfile(input.user_id)
+    if (!profile) return fail(404, 'not_found', 'Пользователь не найден')
+    // Ban first: a failure leaves the user active everywhere rather than half-disabled.
+    await deps.setAuthBanned(input.user_id, !input.active)
+    try {
+      await deps.setProfileActive(input.user_id, input.active)
+    } catch (e) {
+      await deps.setAuthBanned(input.user_id, !profile.is_active)
+      throw e
+    }
+    return { status: 200, body: { user_id: input.user_id, active: input.active } }
   }
 
   if (input.percent !== undefined && !input.roles.includes('teacher')) {
