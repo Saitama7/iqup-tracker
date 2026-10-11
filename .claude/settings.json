@@ -11,7 +11,7 @@
     ],
     "deny": [
       "Bash(git push --force*)", "Bash(git push origin main*)", "Bash(gh pr merge*)", "Bash(rm -rf *)",
-      "Read(.env*)", "Read(**/.env*)"
+      "Read(./.env)", "Read(./.env.local)", "Read(./.env.*.local)"
     ]
   },
   "hooks": {

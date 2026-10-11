@@ -10,7 +10,11 @@ jobs:
     steps:
       # Корень Data API отвечает 200 на любой схеме (даже без таблиц) — этого достаточно, чтобы проект считался активным.
       - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          curl -fsS "${{ secrets.SUPABASE_URL }}/rest/v1/" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" -o /dev/null -w "HTTP %{http_code}\n"
+          URL="${SUPABASE_URL%/}"
+          code=$(curl -sS "$URL/rest/v1/" -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" -o /tmp/body -w "%{http_code}")
+          echo "HTTP $code"
+          if [ "$code" != "200" ]; then head -c 400 /tmp/body; echo; exit 1; fi
