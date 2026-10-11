@@ -1,5 +1,6 @@
 -- 0010 — «Провести занятие» (issue #12, У3 / УД2): attendance of the whole roster and the lesson → held
 -- in one transaction. Docs: 01-domain-model.md §4–5, 05-decisions Б1–Б2, В1–В2, В7, И4, И5, И12.
+-- Also: create_extra_lesson opens to the group's teacher (У5 «Доп. урок», today or later).
 --
 -- Who: the group's teacher (groups.teacher_id = my teachers.id) or an admin; calls without auth.uid()
 -- (service role) are allowed like the other RPCs, anon has no execute grant.
@@ -146,6 +147,77 @@ begin
   return v_confirmed_at;
 end;
 $$;
+
+-- ─── create_extra_lesson: also the group's teacher (У5 «Доп. урок») ─────────
+
+-- Same as 0008, plus the group's own teacher may add an extra lesson — for today or a later day
+-- only (a past one would be a lesson nobody planned, confirmed late into the payroll). An admin
+-- keeps any date inside the group dates.
+create or replace function public.create_extra_lesson(
+  p_group_id uuid,
+  p_date date,
+  p_start time,
+  p_makes_up_for uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_group public.groups%rowtype;
+  v_duration integer;
+  v_id uuid;
+  v_teacher boolean := auth.uid() is not null and not public.is_admin();
+begin
+  if v_teacher and not public.teaches_group(p_group_id) then
+    raise exception 'only an admin or the group''s teacher may add an extra lesson'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  select * into v_group from public.groups g where g.id = p_group_id;
+  if not found then
+    raise exception 'group % not found', p_group_id using errcode = 'foreign_key_violation';
+  end if;
+  if v_group.status = 'archived' then
+    raise exception 'group % is archived', p_group_id using errcode = 'check_violation';
+  end if;
+  if p_date is null or p_start is null then
+    raise exception 'date and time are required' using errcode = 'check_violation';
+  end if;
+  if p_date < v_group.start_date or (v_group.end_date is not null and p_date > v_group.end_date) then
+    raise exception 'extra lesson is outside the group dates' using errcode = 'check_violation';
+  end if;
+  if v_teacher and p_date < public.bishkek_today() then
+    raise exception 'extra lesson in the past' using errcode = 'check_violation';
+  end if;
+
+  if p_makes_up_for is not null then
+    if not exists (
+      select 1 from public.lessons l
+      where l.id = p_makes_up_for and l.group_id = p_group_id and l.status = 'cancelled'
+    ) then
+      raise exception 'an extra lesson makes up a cancelled lesson of the same group'
+        using errcode = 'check_violation';
+    end if;
+    if exists (select 1 from public.lessons l where l.makes_up_for_lesson_id = p_makes_up_for) then
+      raise exception 'lesson % is already made up', p_makes_up_for using errcode = 'unique_violation';
+    end if;
+  end if;
+
+  v_duration := public.tariff_duration(v_group.group_type, p_date);
+  if v_duration is null then
+    raise exception 'no tariff for % on %', v_group.group_type, p_date using errcode = 'check_violation';
+  end if;
+
+  insert into public.lessons (group_id, lesson_date, planned_start, duration_min, is_extra, makes_up_for_lesson_id)
+  values (p_group_id, p_date, p_start, v_duration, true, p_makes_up_for)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+-- ─── grants ─────────────────────────────────────────────────────────────────
 
 revoke execute on function
   public.attendance_subscription(uuid, uuid),

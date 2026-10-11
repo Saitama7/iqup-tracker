@@ -1,6 +1,6 @@
 -- Issue #12: confirm_lesson (0010) — «Провести занятие». Self-contained fixtures, rolled back.
 begin;
-select plan(32);
+select plan(35);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 -- users: a…1 teacher A (group A), a…2 teacher B (group B), a…3 admin
@@ -239,6 +239,20 @@ select lives_ok(
   $$ select public.confirm_lesson('2c000000-0000-4000-8000-000000000021',
        '[{"student_id":"ec000000-0000-4000-8000-000000000005","status":"absent_frozen","note":"предупредил"}]') $$,
   'teacher B confirms own lesson (extra keys in a mark are ignored)'
+);
+
+-- create_extra_lesson (0010): the group's teacher, today or later
+select lives_ok(
+  $$ select public.create_extra_lesson('dc000000-0000-4000-8000-000000000002', public.bishkek_today(), '20:00') $$,
+  'teacher B adds an extra lesson to own group today'
+);
+select throws_ok(
+  $$ select public.create_extra_lesson('dc000000-0000-4000-8000-000000000001', public.bishkek_today(), '20:00') $$,
+  '42501', null, 'teacher B cannot add an extra lesson to another group'
+);
+select throws_like(
+  $$ select public.create_extra_lesson('dc000000-0000-4000-8000-000000000002', public.bishkek_today() - 1, '20:00') $$,
+  '%in the past%', 'a teacher cannot add an extra lesson in the past'
 );
 
 set local request.jwt.claims = '{"sub":"ac000000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"roles":["admin"]}}';
