@@ -45,6 +45,16 @@ Cowork: gh pr diff → ревью (комментарии в PR) → «approve»
 
 Метки issues: `area:db`, `area:ui`, `area:infra`, `role:teacher`, `role:admin`, `role:accountant`, `blocked`, `question`.
 
+## Автономный режим (с 11.10)
+
+Кайрат делегировал Cowork полный цикл: Cowork сам запускает Claude Code, ревьюит и мержит. Механика:
+
+- Claude Code запускается на Mac Кайрата в headless-режиме: `~/Development/iqup-wt/run-issue.sh <N> <slug> ["уточнения"]` создаёт worktree `~/Development/iqup-wt/<N>` на ветке `feat/<N>-<slug>` от `origin/main` и запускает `claude -p` с промптом «сделай issue #N по CLAUDE.md… открой PR, не мержи». Лог — `<worktree>/.claude-run.log`. Повторный заход с правками по ревью — `run-followup.sh <N> "<промпт>"`.
+- Интерактивная сессия Кайрата в терминале не затрагивается (другой worktree, общий локальный Supabase-стек).
+- Ревью: Cowork читает дифф и скриншоты, сравнивает со своими рендерами артбордов, пишет review-комментарий в PR («approve» / «нужны правки» — Request changes на PR своего же аккаунта GitHub не даёт). Мерж — `gh pr merge --squash --delete-branch`, worktree удаляется.
+- Артборды макета — `docs/design/*.dc.html` (источник правды для UI, см. README там); Claude Code обязан открыть артборд до реализации экрана.
+- Мелкие правки инфраструктуры и docs Cowork коммитит в `main` напрямую (через worktree), код — только через PR.
+
 ## Ревью: на что смотрит Cowork
 
 1. Инварианты из `CLAUDE.md` (confirmed_at, is_locked, RLS на каждой таблице, audit_log).
