@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils'
 import {
   createUser,
   createUserForm,
+  fixRateForm,
   rateForm,
   resetPassword,
   setActive,
@@ -51,8 +52,8 @@ const STAFF_ROLE_ORDER: Role[] = ['admin', 'accountant', 'teacher']
 
 const cardClass = 'rounded-[20px] border border-line bg-card'
 const thClass =
-  'px-2 py-2.5 text-left text-[11px] font-extrabold tracking-[0.06em] whitespace-nowrap text-ink-muted uppercase'
-const tdClass = 'border-b border-line px-2 py-2.5 align-middle text-[13px]'
+  'px-1.5 py-2.5 text-left text-[11px] font-extrabold tracking-[0.06em] whitespace-nowrap text-ink-muted uppercase'
+const tdClass = 'border-b border-line px-1.5 py-2.5 align-middle text-[13px]'
 const labelClass = 'text-[11px] font-extrabold tracking-[0.06em] text-ink-muted uppercase'
 const inputClass =
   'min-h-11 w-full min-w-0 rounded-xl border-[1.5px] border-line-strong bg-card px-3.5 text-base font-bold text-ink outline-none placeholder:font-semibold placeholder:text-placeholder focus:border-ink'
@@ -828,37 +829,6 @@ function useInvalidateUsers() {
 }
 
 function RateEditor({ teacher }: { teacher: TeacherRow }) {
-  const now = useNow()
-  const invalidate = useInvalidateUsers()
-  const percentId = useId()
-  const fromId = useId()
-  const [percent, setPercent] = useState(String(teacher.percent ?? DEFAULT_PERCENT))
-  const [validFrom, setValidFrom] = useState(() => formatDateRu(bishkekDate(now)))
-  const [error, setError] = useState<string | null>(null)
-
-  const mutation = useMutation({
-    mutationFn: updateRate,
-    onSuccess: async () => {
-      await invalidate()
-      setError(null)
-      toast.success('Процент сохранён')
-    },
-    onError: (e) => {
-      setError(e.message)
-    },
-  })
-
-  function onSubmit(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const parsed = rateForm.safeParse({ percent, validFrom })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Проверьте процент и дату')
-      return
-    }
-    setError(null)
-    mutation.mutate({ teacherId: teacher.teacherId, ...parsed.data })
-  }
-
   return (
     <EditorBlock title="Процент">
       {teacher.history.length > 0 ? (
@@ -873,43 +843,162 @@ function RateEditor({ teacher }: { teacher: TeacherRow }) {
       ) : (
         <p className="text-[13px] text-ink-muted">Процент ещё не задан</p>
       )}
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-2.5">
-        <div className="grid grid-cols-2 gap-2.5">
-          <Field id={percentId} label="Новый процент">
-            <input
-              id={percentId}
-              inputMode="decimal"
-              className={inputClass}
-              value={percent}
-              onChange={(e) => {
-                setPercent(e.target.value)
-              }}
-            />
-          </Field>
-          <Field id={fromId} label="Действует с">
-            <input
-              id={fromId}
-              inputMode="numeric"
-              placeholder="ДД.ММ.ГГГГ"
-              className={inputClass}
-              value={validFrom}
-              onChange={(e) => {
-                setValidFrom(e.target.value)
-              }}
-            />
-          </Field>
-        </div>
-        <p className="text-xs font-bold text-ink-muted">
-          Старые проценты не меняются: новый действует с указанной даты.
-        </p>
-        {error && (
-          <p role="alert" className="text-sm font-bold text-burned">
-            {error}
-          </p>
-        )}
-        <SubmitButton pending={mutation.isPending}>Сохранить процент</SubmitButton>
-      </form>
+      {teacher.percent !== null && teacher.percentFrom && (
+        <FixRateForm
+          key={`${teacher.percentFrom}:${teacher.percent}`}
+          teacherId={teacher.teacherId}
+          percent={teacher.percent}
+          validFrom={teacher.percentFrom}
+        />
+      )}
+      <NewRateForm teacher={teacher} />
     </EditorBlock>
+  )
+}
+
+function useRateMutation(success: string) {
+  const invalidate = useInvalidateUsers()
+  const [error, setError] = useState<string | null>(null)
+  const mutation = useMutation({
+    mutationFn: updateRate,
+    onSuccess: async () => {
+      await invalidate()
+      setError(null)
+      toast.success(success)
+    },
+    onError: (e) => {
+      setError(e.message)
+    },
+  })
+  return { mutation, error, setError }
+}
+
+/** Typo in the rate in effect today: the same row gets the right percent (audit_log keeps the old one). */
+function FixRateForm({
+  teacherId,
+  percent: current,
+  validFrom,
+}: {
+  teacherId: string
+  percent: number
+  validFrom: string
+}) {
+  const percentId = useId()
+  const [percent, setPercent] = useState(String(current))
+  const { mutation, error, setError } = useRateMutation('Процент исправлен')
+
+  function onSubmit(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const parsed = fixRateForm.safeParse({ percent })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Проверьте процент')
+      return
+    }
+    setError(null)
+    mutation.mutate({ mode: 'fix', teacherId, validFrom, percent: parsed.data.percent })
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      aria-label="Исправить текущий процент"
+      className="flex flex-col gap-2.5 rounded-xl bg-muted p-3"
+    >
+      <div className="flex items-end gap-2.5">
+        <Field id={percentId} label={`Текущий, с ${formatDateRu(validFrom)}`}>
+          <input
+            id={percentId}
+            inputMode="decimal"
+            className={inputClass}
+            value={percent}
+            onChange={(e) => {
+              setPercent(e.target.value)
+            }}
+          />
+        </Field>
+        <SubmitButton
+          pending={mutation.isPending}
+          disabled={percent.trim() === String(current)}
+          variant="outline"
+          className="shrink-0"
+        >
+          Исправить
+        </SubmitButton>
+      </div>
+      <p className="text-xs font-bold text-ink-muted">
+        Если процент введён с ошибкой: занятия с {formatDateRu(validFrom)} пересчитаются.
+      </p>
+      {error && (
+        <p role="alert" className="text-sm font-bold text-burned">
+          {error}
+        </p>
+      )}
+    </form>
+  )
+}
+
+function NewRateForm({ teacher }: { teacher: TeacherRow }) {
+  const now = useNow()
+  const percentId = useId()
+  const fromId = useId()
+  const [percent, setPercent] = useState(String(teacher.percent ?? DEFAULT_PERCENT))
+  const [validFrom, setValidFrom] = useState(() => formatDateRu(bishkekDate(now)))
+  const { mutation, error, setError } = useRateMutation('Процент сохранён')
+
+  function onSubmit(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const parsed = rateForm.safeParse({ percent, validFrom })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Проверьте процент и дату')
+      return
+    }
+    setError(null)
+    mutation.mutate({ mode: 'new', teacherId: teacher.teacherId, ...parsed.data })
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      aria-label="Новая ставка с даты"
+      className="flex flex-col gap-2.5"
+    >
+      <div className="grid grid-cols-2 gap-2.5">
+        <Field id={percentId} label="Новый процент">
+          <input
+            id={percentId}
+            inputMode="decimal"
+            className={inputClass}
+            value={percent}
+            onChange={(e) => {
+              setPercent(e.target.value)
+            }}
+          />
+        </Field>
+        <Field id={fromId} label="Действует с">
+          <input
+            id={fromId}
+            inputMode="numeric"
+            placeholder="ДД.ММ.ГГГГ"
+            className={inputClass}
+            value={validFrom}
+            onChange={(e) => {
+              setValidFrom(e.target.value)
+            }}
+          />
+        </Field>
+      </div>
+      <p className="text-xs font-bold text-ink-muted">
+        Прежний процент сохранится: новый действует с указанной даты.
+      </p>
+      {error && (
+        <p role="alert" className="text-sm font-bold text-burned">
+          {error}
+        </p>
+      )}
+      <SubmitButton pending={mutation.isPending}>Новая ставка с даты</SubmitButton>
+    </form>
   )
 }
 
@@ -1020,8 +1109,8 @@ function AccessToggle({ userId, active }: { userId: string; active: boolean }) {
     <EditorBlock title="Доступ">
       <p className="text-xs font-bold text-ink-muted">
         {active
-          ? 'Отключённый пользователь не сможет войти. История занятий и выплат сохранится.'
-          : 'Доступ отключён. Включите, чтобы пользователь снова мог войти.'}
+          ? 'После отключения войти будет нельзя. История занятий и выплат сохранится.'
+          : 'Включите доступ, чтобы снова можно было войти. История занятий и выплат сохранена.'}
       </p>
       {error && (
         <p role="alert" className="text-sm font-bold text-burned">

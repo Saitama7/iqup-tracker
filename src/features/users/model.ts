@@ -6,7 +6,7 @@ import { bishkekDate, bishkekDaysBetween } from '@/lib/time'
 /** Default percent (05-decisions А2): other values are highlighted in the table. */
 export const DEFAULT_PERCENT = 45
 
-/** No sign-in for this many days → «Не входил(а) N дн.» instead of «Активен». */
+/** No sign-in for this many days → «Не входил(а) N дн.» instead of «Доступ открыт». */
 export const IDLE_DAYS = 7
 
 export interface ProfileRow {
@@ -96,13 +96,13 @@ export function userStatus(
 export function statusText(status: UserStatus): string {
   switch (status.kind) {
     case 'active':
-      return 'Активен'
+      return 'Доступ открыт'
     case 'idle':
       return `Не входил(а) ${status.days} дн.`
     case 'never':
       return 'Не входил(а)'
     case 'inactive':
-      return 'Отключён'
+      return 'Доступ закрыт'
     case 'no_login':
       return 'Нет входа'
   }

@@ -185,7 +185,9 @@ describe('captions', () => {
 
   it('statusText and rights', () => {
     expect(statusText({ kind: 'idle', days: 12 })).toBe('Не входил(а) 12 дн.')
-    expect(statusText({ kind: 'inactive' })).toBe('Отключён')
+    expect(statusText({ kind: 'active' })).toBe('Доступ открыт')
+    expect(statusText({ kind: 'never' })).toBe('Не входил(а)')
+    expect(statusText({ kind: 'inactive' })).toBe('Доступ закрыт')
     expect(rightsCaption(['admin', 'teacher'])).toBe('всё')
     expect(rightsCaption(['accountant'])).toBe('просмотр · закрытие периода · корректировки')
   })

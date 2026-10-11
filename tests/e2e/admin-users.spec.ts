@@ -54,7 +54,23 @@ test('А8: tables, phone under the name, nowrap badges', async ({ page }, testIn
       .getByRole('link', { name: 'Учителя и доступ' })
       .click()
   } else {
-    await page.goto('/admin/users')
+    // 390: А8 is reached through the «Ещё» bottom sheet; unbuilt sections are muted.
+    await page
+      .getByRole('navigation', { name: 'Основное меню' })
+      .getByRole('button', { name: 'Ещё' })
+      .click()
+    const more = page.getByRole('dialog', { name: 'Ещё' })
+    await expect(more).toBeVisible()
+    await expect(more.getByRole('listitem').filter({ hasText: 'Расписание' })).toContainText(
+      'скоро',
+    )
+    await expect(more.getByRole('link', { name: 'Расписание' })).toHaveCount(0)
+    await expect(more.getByRole('link', { name: 'Профиль' })).toBeVisible()
+    // let the slide-in finish before the screenshot
+    await expect(more).toHaveCSS('transform', 'none')
+    await page.screenshot({ path: testInfo.outputPath('more-sheet.png') })
+    await more.getByRole('link', { name: 'Учителя и доступ' }).click()
+    await expect(more).toBeHidden()
   }
   await expect(page).toHaveURL(/\/admin\/users$/)
   await expect(page.getByRole('heading', { name: 'Учителя и доступ' })).toBeVisible()
@@ -125,7 +141,7 @@ test('admin creates a teacher, changes the percent; the teacher can sign in', as
   // Radix hides the page from the a11y tree until the dialog is gone
   await expect(dialog).toBeHidden()
 
-  // Change the percent: a new teacher_rates row from 01.11.2026, the old one stays.
+  // New rate from a date: a new teacher_rates row from 01.11.2026, the old one stays.
   const teachers = page.getByRole('region', { name: 'Учителя' })
   const more = teachers.getByRole('button', { name: /^ещё \d+/ })
   if (await more.isVisible()) await more.click()
@@ -136,7 +152,7 @@ test('admin creates a teacher, changes the percent; the teacher can sign in', as
   ).toHaveCount(1)
   await edit.getByLabel('Новый процент').fill('50')
   await edit.getByLabel('Действует с').fill('01.11.2026')
-  await edit.getByRole('button', { name: 'Сохранить процент' }).click()
+  await edit.getByRole('button', { name: 'Новая ставка с даты' }).click()
   const history = edit.getByRole('list', { name: 'История процента' })
   await expect(history.getByRole('listitem')).toHaveCount(2)
   await expect(history.getByRole('listitem').first()).toContainText('с 01.11.2026')
@@ -145,9 +161,18 @@ test('admin creates a teacher, changes the percent; the teacher can sign in', as
 
   // same date again → explained 409, nothing overwritten
   await edit.getByLabel('Новый процент').fill('55')
-  await edit.getByRole('button', { name: 'Сохранить процент' }).click()
+  await edit.getByRole('button', { name: 'Новая ставка с даты' }).click()
   await expect(edit.getByRole('alert')).toHaveText(/С этой даты процент уже задан/)
   await expect(history.getByRole('listitem')).toHaveCount(2)
+
+  // Fix a typo in the current rate: the same row changes, no new one.
+  const fix = edit.getByRole('form', { name: 'Исправить текущий процент' })
+  await fix.getByLabel(/^Текущий, с/).fill('47')
+  await fix.getByRole('button', { name: 'Исправить' }).click()
+  await expect(history.getByRole('listitem').last()).toContainText('47 %')
+  await expect(history.getByRole('listitem')).toHaveCount(2)
+  await expect(history.getByRole('listitem').first()).toContainText('50 %')
+  await page.screenshot({ path: testInfo.outputPath('rate-editor.png') })
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toBeHidden()
 
@@ -185,7 +210,7 @@ test('deactivated user cannot sign in; admin role cannot be removed from self', 
   const edit = page.getByRole('dialog', { name })
   await edit.getByRole('button', { name: 'Отключить доступ' }).click()
   await edit.getByRole('button', { name: 'Да, отключить' }).click()
-  await expect(edit.getByText('Отключён')).toBeVisible()
+  await expect(edit.getByText('Доступ закрыт')).toBeVisible()
   await expect(edit.getByRole('button', { name: 'Включить доступ' })).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(page.getByRole('dialog')).toBeHidden()
