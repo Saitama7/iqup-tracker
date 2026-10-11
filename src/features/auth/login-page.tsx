@@ -1,13 +1,10 @@
-import { useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
 import { useId, useState, type SubmitEvent } from 'react'
 import { InvalidCredentialsError, signIn } from '@/lib/auth'
 import { maskPhoneInput } from '@/lib/phone-input'
-import { homePath } from '@/lib/roles'
 
 // У1 Вход (docs/design/Login.dc.html): phone + password, no SMS (05-decisions Д1).
 export function LoginPage() {
-  const navigate = useNavigate()
   const phoneId = useId()
   const passwordId = useId()
   const errorId = useId()
@@ -26,8 +23,9 @@ export function LoginPage() {
     setError(null)
     setPending(true)
     try {
-      const auth = await signIn(phone, password)
-      await navigate({ to: homePath(auth.roles), replace: true })
+      // No navigate() here: SIGNED_IN re-runs the guards (main.tsx) and /login's beforeLoad
+      // redirects to the role's home — a second navigation would race it (#27).
+      await signIn(phone, password)
     } catch (err) {
       setError(
         err instanceof InvalidCredentialsError
