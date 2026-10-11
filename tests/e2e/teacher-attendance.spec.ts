@@ -8,7 +8,8 @@ import type { Database } from '../../src/lib/supabase/types.gen'
 // each, ВТ/ЧТ/СБ, from 1 Sep). Each test works on its own extra lesson at 19:00 on a September day and
 // a group of its own per project (projects run in parallel), so nothing touches the October days
 // other specs count. September is in the past for the database clock, so the lesson may be held
-// (lessons_guard: not before the start, Б1).
+// (lessons_guard: not before the start, Б1). The seed's September is held (#13): tests never change
+// its marks, and payroll.spec (which sums September) runs after this spec (playwright.config.ts).
 const GULZAT = { phone: '555 123 456', password: 'iqup-demo' }
 const GROUP_8A = '00000000-0000-4000-b000-000000000001'
 const GROUP_8B = '00000000-0000-4000-b000-000000000003'
@@ -83,12 +84,39 @@ async function studentId(db: Db, name: string) {
   return data.id
 }
 
+/**
+ * The subscription the student's next mark is charged to — the oldest active one with lessons left
+ * (attendance_subscription, 0010): after the seed's September that is often the renewal.
+ */
 async function balance(db: Db, group: string, student: string) {
   const { data, error } = await db
     .from('v_subscription_balances')
-    .select('subscription_id, lessons_used')
+    .select('subscription_id, lessons_used, lessons_left, status')
     .eq('student_id', student)
     .eq('group_id', group)
+  if (error) throw error
+  const { data: subs, error: subsError } = await db
+    .from('subscriptions')
+    .select('id, started_at, created_at')
+    .in(
+      'id',
+      data.map((b) => b.subscription_id ?? ''),
+    )
+    .order('started_at')
+    .order('created_at')
+  if (subsError) throw subsError
+  const rows = subs.flatMap((s) => data.filter((b) => b.subscription_id === s.id))
+  const current =
+    rows.find((b) => b.status === 'active' && (b.lessons_left ?? 0) > 0) ?? rows.at(-1)
+  if (!current?.subscription_id) throw new Error(`no subscription of ${student}`)
+  return { subscription_id: current.subscription_id, lessons_used: current.lessons_used }
+}
+
+async function balanceOf(db: Db, subscriptionId: string) {
+  const { data, error } = await db
+    .from('v_subscription_balances')
+    .select('subscription_id, lessons_used')
+    .eq('subscription_id', subscriptionId)
     .single()
   if (error) throw error
   return data
@@ -124,7 +152,7 @@ test('Гульзат проводит занятие: 8 отметок → «П�
 
     // Three states: present, frozen, burned — then «Все были» for the rest.
     await students.nth(0).getByRole('button', { name: 'Был', exact: true }).click()
-    // 3 and 4: not the students the freeze-limit test fills up (Арсен, Бегимай)
+    // 3 and 4: not the students the freeze-limit test fills up (Улан, Бегимай)
     await students.nth(3).getByRole('button', { name: 'Заморозка' }).click()
     await students.nth(4).getByRole('button', { name: 'Не был' }).click()
     await expect(students.nth(3).getByRole('button', { name: 'Заморозка' })).toHaveAttribute(
@@ -156,8 +184,7 @@ test('Гульзат проводит занятие: 8 отметок → «П�
     await expect(row).toContainText(/\d\d:\d\d/)
     await expect(row).toContainText(`Был ${total - 2}`)
 
-    const after = await balance(db, group, await studentId(db, first))
-    expect(after.subscription_id).toBe(before.subscription_id)
+    const after = await balanceOf(db, before.subscription_id)
     expect(after.lessons_used).toBe((before.lessons_used ?? 0) + 1)
 
     const { data: lesson } = await db
@@ -191,42 +218,37 @@ test('третья заморозка на абонементе — кнопка
 }, testInfo) => {
   const desktop = testInfo.project.name === 'webkit-desktop'
   const day = desktop ? '2026-09-22' : '2026-09-24'
-  const name = desktop ? 'Арсен Дуйшеев' : 'Бегимай Осмонова'
+  // Students without a freeze on their current subscription (the seed's renewal).
+  const name = desktop ? 'Улан Жээнбеков' : 'Бегимай Осмонова'
+  // Two freezes on planned extra lessons of our own — the seed's held September stays untouched.
+  const freezeDays = desktop ? ['2026-09-01', '2026-09-03'] : ['2026-09-05', '2026-09-08']
   const db = service()
   const lessonId = await extraLesson(db, GROUP_8B, day)
   const student = await studentId(db, name)
   const { subscription_id } = await balance(db, GROUP_8B, student)
-  // Two freezes on earlier planned lessons of the group (1 and 3 September).
-  const { data: earlier, error } = await db
-    .from('lessons')
-    .select('id')
-    .eq('group_id', GROUP_8B)
-    .in('lesson_date', ['2026-09-01', '2026-09-03'])
-    .eq('planned_start', '14:00:00')
-  if (error) throw error
-  expect(earlier).toHaveLength(2)
-  const cleanup = async () => {
-    await db
-      .from('attendance')
-      .delete()
-      .eq('student_id', student)
-      .in(
-        'lesson_id',
-        earlier.map((l) => l.id),
-      )
-    await removeLesson(db, GROUP_8B, day)
+  const earlier: string[] = []
+  for (const d of freezeDays) {
+    await removeLesson(db, GROUP_8B, d)
+    const { data, error } = await db
+      .from('lessons')
+      .insert({
+        group_id: GROUP_8B,
+        lesson_date: d,
+        planned_start: '19:00',
+        duration_min: 60,
+        is_extra: true,
+      })
+      .select('id')
+      .single()
+    if (error) throw error
+    earlier.push(data.id)
   }
-  await db
-    .from('attendance')
-    .delete()
-    .eq('student_id', student)
-    .in(
-      'lesson_id',
-      earlier.map((l) => l.id),
-    )
+  const cleanup = async () => {
+    for (const d of [day, ...freezeDays]) await removeLesson(db, GROUP_8B, d)
+  }
   const { error: markError } = await db.from('attendance').insert(
-    earlier.map((l) => ({
-      lesson_id: l.id,
+    earlier.map((id) => ({
+      lesson_id: id,
       student_id: student,
       subscription_id,
       status: 'absent_frozen' as const,

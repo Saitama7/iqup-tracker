@@ -46,7 +46,7 @@ export const NAV: Record<View, NavItem[]> = {
     { label: 'Ученики', to: '/admin/students' },
     { label: 'Пробные занятия', to: null },
     { label: 'Оплаты', to: null },
-    { label: 'Расчёт ЗП', to: null },
+    { label: 'Расчёт ЗП', to: '/payroll' },
     { label: 'Учителя и доступ', to: '/admin/users' },
     { label: 'Тарифы и праздники', to: '/admin/settings' },
     { label: 'Журнал изменений', to: null },

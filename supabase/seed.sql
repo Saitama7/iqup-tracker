@@ -198,5 +198,94 @@ cross join lateral (
 drop table seed_students;
 
 -- Lessons: every running group from its start to 8 weeks ahead, holidays skipped (А4 «Занятия», У2 «Сегодня»).
--- Past ones stay planned (= «не подтверждено») until attendance comes with R1-8.
+-- September is held below; October's past lessons stay planned (= «не подтверждено»).
 select public.ensure_lessons(public.bishkek_today() + 56);
+
+-- September 2026 is held (R1-9: «Мой месяц», Б1 and the payroll reconciliation test have a month to show).
+-- Every lesson of every group, everyone present except the marks below. Гульзат: 52 lessons,
+-- 324 marks − 6 freezes = 318 student-lessons × 120 сом = 38 160 сом (Б1 / Б2 / БМ1).
+-- Written as history with triggers off: confirmed in the evening of the lesson day, not late, so the
+-- seed does not look like everything was confirmed at `db reset` time. October stays unconfirmed.
+create temp table seed_marks (full_name text, group_id uuid, lesson_date date, status public.attendance_status);
+insert into seed_marks values
+  ('Данияр Кадыров',     '00000000-0000-4000-b000-000000000001', '2026-09-10', 'absent_frozen'),
+  ('Данияр Кадыров',     '00000000-0000-4000-b000-000000000001', '2026-09-12', 'absent_frozen'),
+  ('Камила Орозова',     '00000000-0000-4000-b000-000000000001', '2026-09-24', 'absent_burned'),
+  ('Эрлан Шамшиев',      '00000000-0000-4000-b000-000000000002', '2026-09-17', 'absent_frozen'),
+  ('Бектур Алиев',       '00000000-0000-4000-b000-000000000002', '2026-09-19', 'absent_burned'),
+  ('Арсен Дуйшеев',      '00000000-0000-4000-b000-000000000003', '2026-09-03', 'absent_frozen'),
+  ('Жибек Абдраева',     '00000000-0000-4000-b000-000000000003', '2026-09-22', 'absent_frozen'),
+  ('Жибек Абдраева',     '00000000-0000-4000-b000-000000000003', '2026-09-24', 'absent_frozen');
+
+create temp table seed_september as
+select
+  l.id as lesson_id,
+  l.lesson_date,
+  l.planned_start,
+  l.duration_min,
+  e.id as enrollment_id,
+  e.student_id,
+  coalesce(m.status, 'present') as status
+from public.lessons l
+join public.enrollments e
+  on e.group_id = l.group_id and e.start_date <= l.lesson_date and (e.end_date is null or e.end_date >= l.lesson_date)
+join public.students s on s.id = e.student_id
+left join seed_marks m on m.full_name = s.full_name and m.group_id = l.group_id and m.lesson_date = l.lesson_date
+where l.lesson_date between '2026-09-01' and '2026-09-30' and l.status = 'planned';
+
+-- Who used up the first subscription in September renewed it (no discount, tariff on that day) —
+-- otherwise every September student would start October «в долг».
+with consumed as (
+  select
+    ss.enrollment_id,
+    ss.lesson_date,
+    row_number() over (partition by ss.enrollment_id order by ss.lesson_date, ss.planned_start) as n
+  from seed_september ss
+  where ss.status <> 'absent_frozen'
+)
+insert into public.subscriptions (enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at)
+select c.enrollment_id, t.id, t.lessons_in_package, t.package_price, t.package_price, c.lesson_date
+from consumed c
+join public.subscriptions s on s.enrollment_id = c.enrollment_id
+join public.enrollments e on e.id = c.enrollment_id
+join public.groups g on g.id = e.group_id
+cross join lateral (
+  select * from public.tariffs t
+  where t.group_type = g.group_type and t.valid_from <= c.lesson_date
+  order by t.valid_from desc
+  limit 1
+) t
+where c.n = s.lessons_total + 1;
+
+set session_replication_role = replica;
+
+do $$
+declare
+  r record;
+begin
+  -- Lesson by lesson: attendance_subscription() charges the first subscription until it is used up.
+  for r in select * from seed_september order by lesson_date, planned_start, student_id loop
+    insert into public.attendance (lesson_id, student_id, subscription_id, status, marked_at)
+    values (
+      r.lesson_id,
+      r.student_id,
+      public.attendance_subscription(r.lesson_id, r.student_id),
+      r.status,
+      ((r.lesson_date + r.planned_start) at time zone 'Asia/Bishkek') + make_interval(mins => r.duration_min)
+    );
+  end loop;
+end;
+$$;
+
+update public.lessons l
+set
+  status = 'held',
+  confirmed_at = ((l.lesson_date + l.planned_start) at time zone 'Asia/Bishkek')
+    + make_interval(mins => l.duration_min + 2 + (extract(day from l.lesson_date)::integer % 9)),
+  confirmed_late = false
+where l.lesson_date between '2026-09-01' and '2026-09-30' and l.status = 'planned';
+
+set session_replication_role = origin;
+
+drop table seed_september;
+drop table seed_marks;

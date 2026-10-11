@@ -58,6 +58,7 @@ pnpm test:integration    # supabase-js + create-user против локальн
 pnpm gen:types           # supabase gen types typescript --local > src/lib/supabase/types.gen.ts
 pnpm test                # vitest
 pnpm e2e                 # playwright webkit 390 + 1280; нужен supabase start + pnpm seed:users; E2E_PORT=… если 4173 занят
+                         # payroll.spec — отдельные проекты *-payroll после остальных (сид: сентябрь проведён, 38 160 у Гульзат)
 pnpm build               # деплой — push в main (Cloudflare Pages)
 ```
 

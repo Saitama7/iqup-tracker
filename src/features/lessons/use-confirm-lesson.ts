@@ -5,6 +5,7 @@ import { onlineManager, useMutation, useQueryClient, type QueryClient } from '@t
 import { toast } from 'sonner'
 import { lessonsKey } from '@/features/groups/api'
 import { TEACHER_GROUPS_KEY } from '@/features/groups/teacher-api'
+import { PAYROLL_KEY } from '@/features/payroll/api'
 import {
   confirmLesson,
   lessonKey,
@@ -61,6 +62,7 @@ async function refresh(qc: QueryClient, lessonId: string, groupId: string) {
     qc.invalidateQueries({ queryKey: [TODAY_KEY] }),
     qc.invalidateQueries({ queryKey: [TEACHER_GROUPS_KEY] }),
     qc.invalidateQueries({ queryKey: lessonsKey(groupId) }),
+    qc.invalidateQueries({ queryKey: [PAYROLL_KEY] }),
   ])
 }
 
