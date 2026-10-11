@@ -134,29 +134,66 @@ export function bishkekTime(iso: string): string {
   return new Date(Date.parse(iso) + 6 * 60 * MIN).toISOString().slice(11, 16)
 }
 
+const shiftDay = (date: string, days: number) =>
+  new Date(Date.parse(`${date}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+
 export interface DaySplit<T> {
   today: T[]
-  /** Yesterday's lessons still planned — «Вчера не подтверждено». */
-  yesterdayUnconfirmed: T[]
   /** Tomorrow, cancelled ones left out — «Завтра». */
   tomorrow: T[]
 }
 
-/** Rows of yesterday … tomorrow (one fetch) → the three blocks of У2, each by start time. */
+/** Rows of the month … tomorrow (one fetch) → today's list and «Завтра», each by start time. */
 export function splitDays<T extends LessonTiming>(
   lessons: readonly T[],
   today: string,
 ): DaySplit<T> {
   const sorted = [...lessons].sort(byStart)
-  const shift = (days: number) =>
-    new Date(Date.parse(`${today}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
-  const yesterday = shift(-1)
-  const tomorrow = shift(1)
+  const tomorrow = shiftDay(today, 1)
   return {
     today: sorted.filter((l) => l.lesson_date === today),
-    yesterdayUnconfirmed: sorted.filter(
-      (l) => l.lesson_date === yesterday && l.status === 'planned',
-    ),
     tomorrow: sorted.filter((l) => l.lesson_date === tomorrow && l.status !== 'cancelled'),
   }
+}
+
+export interface Unconfirmed<T> {
+  /** Nearest to now first. */
+  lessons: T[]
+  /** Every one is yesterday's — «Вчера не подтверждено». */
+  onlyYesterday: boolean
+}
+
+/** Banner on У2 and «Требует внимания» on УД1 show this many; the rest is «ещё M». */
+export const UNCONFIRMED_SHOWN = 3
+
+/**
+ * Planned lessons of the earlier days of the current Bishkek month — the teacher may still confirm
+ * them until the month is over (Б2). Today's are left out: they are on the deck and in today's list.
+ */
+export function unconfirmedInMonth<T extends LessonTiming>(
+  lessons: readonly T[],
+  now: number,
+): Unconfirmed<T> {
+  const today = new Date(now + 6 * 60 * MIN).toISOString().slice(0, 10)
+  const month = today.slice(0, 7)
+  const yesterday = shiftDay(today, -1)
+  const list = lessons
+    .filter(
+      (l) => l.status === 'planned' && l.lesson_date.startsWith(month) && l.lesson_date < today,
+    )
+    .sort((a, b) => byStart(b, a))
+  return {
+    lessons: list,
+    onlyYesterday: list.length > 0 && list.every((l) => l.lesson_date === yesterday),
+  }
+}
+
+/** «Вчера не подтверждено» / «Не подтверждено: 12 занятий». */
+export function unconfirmedTitle({ lessons, onlyYesterday }: Unconfirmed<LessonTiming>): string {
+  return onlyYesterday ? 'Вчера не подтверждено' : `Не подтверждено: ${lessonsWord(lessons.length)}`
+}
+
+/** УД1 header chip: «1 не подтверждено за вчера» / «12 не подтверждено». */
+export function unconfirmedChip({ lessons, onlyYesterday }: Unconfirmed<LessonTiming>): string {
+  return `${lessons.length} не подтверждено${onlyYesterday ? ' за вчера' : ''}`
 }

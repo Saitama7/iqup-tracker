@@ -10,6 +10,9 @@ import {
   minutesLeft,
   splitDays,
   timeRange,
+  unconfirmedChip,
+  unconfirmedInMonth,
+  unconfirmedTitle,
   untilLabel,
   type LessonTiming,
 } from './select'
@@ -145,7 +148,7 @@ describe('captions', () => {
 })
 
 describe('splitDays', () => {
-  it('today by time, yesterday only planned, tomorrow without cancelled', () => {
+  it('today by time, tomorrow without cancelled', () => {
     const rows = [
       lesson('t2', '14:00'),
       lesson('t1', '09:00', { status: 'held' }),
@@ -157,8 +160,61 @@ describe('splitDays', () => {
     const ids = (ls: LessonTiming[]) => ls.map((l) => l.id)
     const d = splitDays(rows, DAY)
     expect(ids(d.today)).toEqual(['t1', 't2'])
-    expect(ids(d.yesterdayUnconfirmed)).toEqual(['y1'])
     expect(ids(d.tomorrow)).toEqual(['m1'])
+  })
+})
+
+describe('unconfirmedInMonth', () => {
+  const ids = (ls: LessonTiming[]) => ls.map((l) => l.id)
+  const now = at(DAY, '14:24')
+
+  it('planned lessons of earlier days of this month, nearest first; today and last month left out', () => {
+    const rows = [
+      lesson('today', '09:00'), // ended today — it is on the deck, not in the banner
+      lesson('y15', '15:00', { lesson_date: '2026-10-07' }),
+      lesson('y09', '09:00', { lesson_date: '2026-10-07' }),
+      lesson('held', '11:00', { lesson_date: '2026-10-06', status: 'held' }),
+      lesson('cancelled', '11:00', { lesson_date: '2026-10-05', status: 'cancelled' }),
+      lesson('first', '09:00', { lesson_date: '2026-10-01' }),
+      lesson('sep', '15:00', { lesson_date: '2026-09-30' }),
+      lesson('tomorrow', '15:00', { lesson_date: '2026-10-09' }),
+    ]
+    const u = unconfirmedInMonth(rows, now)
+    expect(ids(u.lessons)).toEqual(['y15', 'y09', 'first'])
+    expect(u.onlyYesterday).toBe(false)
+    expect(unconfirmedTitle(u)).toBe('Не подтверждено: 3 занятия')
+    expect(unconfirmedChip(u)).toBe('3 не подтверждено')
+  })
+
+  it('only yesterday → «Вчера не подтверждено»', () => {
+    const u = unconfirmedInMonth([lesson('y', '15:00', { lesson_date: '2026-10-07' })], now)
+    expect(u.onlyYesterday).toBe(true)
+    expect(unconfirmedTitle(u)).toBe('Вчера не подтверждено')
+    expect(unconfirmedChip(u)).toBe('1 не подтверждено за вчера')
+  })
+
+  it('on the 1st yesterday is last month — nothing to show', () => {
+    const u = unconfirmedInMonth(
+      [lesson('sep', '15:00', { lesson_date: '2026-09-30' })],
+      at('2026-10-01', '10:00'),
+    )
+    expect(u.lessons).toEqual([])
+    expect(u.onlyYesterday).toBe(false)
+  })
+
+  it('the Bishkek day decides, not UTC: 00:30 in Bishkek is already the next day', () => {
+    const u = unconfirmedInMonth(
+      [lesson('y', '15:00', { lesson_date: '2026-10-07' })],
+      at('2026-10-08', '00:30'), // still 7 Oct in UTC
+    )
+    expect(u.onlyYesterday).toBe(true)
+  })
+
+  it('«12 занятий» plural', () => {
+    const rows = Array.from({ length: 12 }, (_, i) =>
+      lesson(`l${i}`, '09:00', { lesson_date: `2026-10-0${(i % 7) + 1}` }),
+    )
+    expect(unconfirmedTitle(unconfirmedInMonth(rows, now))).toBe('Не подтверждено: 12 занятий')
   })
 })
 

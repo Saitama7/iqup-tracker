@@ -272,7 +272,8 @@ export function CurrentLessonCard({ lesson, now }: { lesson: TeacherLesson; now:
         <span className="text-[13px] font-extrabold whitespace-nowrap opacity-70">{right}</span>
       </span>
       <span className="flex flex-col gap-1.5">
-        <span className="font-display text-[28px] leading-[1.1] font-bold">
+        {/* One line on 1280 like the artboard: the column is ~4 px narrower than there. */}
+        <span className="font-display text-[28px] leading-[1.1] font-bold tracking-tight text-balance">
           {lesson.group.subject} · {lesson.group.name}
         </span>
         <span className="text-[15px] font-bold opacity-75">{groupCaption(lesson)}</span>

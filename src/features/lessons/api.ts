@@ -94,7 +94,8 @@ export const myTeacherQuery = (userId: string) =>
 export const TODAY_KEY = 'today-lessons'
 
 /**
- * Yesterday … tomorrow for one teacher: today's deck and list, «Вчера не подтверждено», «Завтра».
+ * Start of the month … tomorrow for one teacher: today's deck and list, «Завтра» and the lessons of
+ * this month still not confirmed (Б2).
  * The key holds the date, so at midnight the list is fetched for the new day by itself (§7.1).
  */
 export const todayLessonsQuery = (teacherId: string, date: string) =>
@@ -105,7 +106,7 @@ export const todayLessonsQuery = (teacherId: string, date: string) =>
         .from('lessons')
         .select(LESSON_FIELDS)
         .eq('group.teacher_id', teacherId)
-        .gte('lesson_date', addDays(date, -1))
+        .gte('lesson_date', `${date.slice(0, 8)}01`)
         .lte('lesson_date', addDays(date, 1))
         .order('lesson_date')
         .order('planned_start')

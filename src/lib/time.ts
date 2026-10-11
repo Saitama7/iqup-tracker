@@ -34,6 +34,12 @@ export function formatDayLong(nowMs: number): string {
   return `${WEEKDAYS[d.getUTCDay()]}, ${d.getUTCDate()} ${MONTHS_GEN[d.getUTCMonth()]}`
 }
 
+/** '2026-10-05' → «5 октября». */
+export function formatDayMonth(isoDate: string): string {
+  const [, m = 1, d = 1] = isoDate.split('-').map(Number)
+  return `${d} ${MONTHS_GEN[m - 1]}`
+}
+
 /** «сентября 2024» — for «В IQ UP с …» on У7. */
 export function formatMonthYearGen(ms: number): string {
   const d = bishkekParts(ms)

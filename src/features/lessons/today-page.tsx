@@ -13,7 +13,7 @@ import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import { myTeacherQuery, useLessonsRealtime, useTodayLessons, type TeacherLesson } from './api'
 import { CurrentLessonCard, Deck } from './deck'
-import { lessonTitle, rowCaption, StatusChip, YesterdayBanner } from './parts'
+import { lessonTitle, pastLessonWhen, rowCaption, StatusChip, UnconfirmedBanner } from './parts'
 import {
   countsCaption,
   dayCounts,
@@ -22,7 +22,12 @@ import {
   lessonStartMs,
   lessonsWord,
   splitDays,
+  UNCONFIRMED_SHOWN,
+  unconfirmedChip,
+  unconfirmedInMonth,
+  unconfirmedTitle,
   type DaySplit,
+  type Unconfirmed,
 } from './select'
 
 export function TodayPage() {
@@ -48,23 +53,24 @@ export function TodayPage() {
     body = <Notice>Загружаем занятия…</Notice>
   } else {
     const days = splitDays(lessons.data, date)
+    const unconfirmed = unconfirmedInMonth(lessons.data, now)
     body = isDesktop ? (
-      <DesktopToday days={days} now={now} />
+      <DesktopToday days={days} unconfirmed={unconfirmed} today={date} now={now} />
     ) : (
-      <MobileToday days={days} now={now} />
+      <MobileToday days={days} unconfirmed={unconfirmed} today={date} now={now} />
     )
   }
 
   if (isDesktop) {
-    const missed = lessons.data ? splitDays(lessons.data, date).yesterdayUnconfirmed.length : 0
+    const missed = lessons.data ? unconfirmedInMonth(lessons.data, now) : null
     return (
       <section className="flex flex-col gap-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <PageHeader eyebrow={eyebrow} title={title} />
-          {missed > 0 && (
+          {missed && missed.lessons.length > 0 && (
             <span className="inline-flex items-center gap-2 rounded-full bg-burned-soft px-3.5 py-2.5 text-[13px] font-extrabold whitespace-nowrap text-burned-deep">
               <AlertCircle className="size-4 text-burned-strong" strokeWidth={2.5} aria-hidden />
-              {missed} не подтверждено за вчера
+              {unconfirmedChip(missed)}
             </span>
           )}
         </div>
@@ -99,7 +105,14 @@ const deckHeading = (top: TeacherLesson | undefined, now: number) => {
 
 // ─── У2 · phone ─────────────────────────────────────────────────────────────
 
-function MobileToday({ days, now }: { days: DaySplit<TeacherLesson>; now: number }) {
+interface DayProps {
+  days: DaySplit<TeacherLesson>
+  unconfirmed: Unconfirmed<TeacherLesson>
+  today: string
+  now: number
+}
+
+function MobileToday({ days, unconfirmed, today, now }: DayProps) {
   const deck = deckOrder(days.today, now)
   const counts = dayCounts(days.today)
 
@@ -135,9 +148,9 @@ function MobileToday({ days, now }: { days: DaySplit<TeacherLesson>; now: number
           </>
         )}
 
-        {days.yesterdayUnconfirmed.map((l) => (
-          <YesterdayBanner key={l.id} lesson={l} />
-        ))}
+        {unconfirmed.lessons.length > 0 && (
+          <UnconfirmedBanner unconfirmed={unconfirmed} today={today} />
+        )}
 
         {days.tomorrow.length > 0 && (
           <>
@@ -209,7 +222,7 @@ function DayRow({
 
 // ─── УД1 · desktop ──────────────────────────────────────────────────────────
 
-function DesktopToday({ days, now }: { days: DaySplit<TeacherLesson>; now: number }) {
+function DesktopToday({ days, unconfirmed, today, now }: DayProps) {
   const deck = deckOrder(days.today, now)
   const counts = dayCounts(days.today)
   const top = deck[0]
@@ -250,11 +263,14 @@ function DesktopToday({ days, now }: { days: DaySplit<TeacherLesson>; now: numbe
         )}
       </section>
 
-      {days.yesterdayUnconfirmed.length > 0 && (
+      {unconfirmed.lessons.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-base font-extrabold">Требует внимания</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-extrabold">Требует внимания</h2>
+            <p className="text-[13px] font-bold text-ink-muted">{unconfirmedTitle(unconfirmed)}</p>
+          </div>
           <ul className="grid grid-cols-3 gap-3.5">
-            {days.yesterdayUnconfirmed.map((l) => (
+            {unconfirmed.lessons.slice(0, UNCONFIRMED_SHOWN).map((l) => (
               <li key={l.id}>
                 <Link
                   to="/lessons/$lessonId"
@@ -265,13 +281,18 @@ function DesktopToday({ days, now }: { days: DaySplit<TeacherLesson>; now: numbe
                     Не подтверждено
                   </span>
                   <span className="text-sm font-extrabold">
-                    Вчера, {l.planned_start.slice(0, 5)} · {lessonTitle(l)}
+                    {pastLessonWhen(l, today)} · {lessonTitle(l)}
                   </span>
                   <span className="text-xs font-bold">Не входит в ЗП, пока не отмечено</span>
                 </Link>
               </li>
             ))}
           </ul>
+          {unconfirmed.lessons.length > UNCONFIRMED_SHOWN && (
+            <p className="text-[13px] font-bold text-ink-muted">
+              ещё {unconfirmed.lessons.length - UNCONFIRMED_SHOWN}
+            </p>
+          )}
         </section>
       )}
     </>
