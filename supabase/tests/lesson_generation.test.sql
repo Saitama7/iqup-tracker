@@ -1,7 +1,7 @@
 -- Issue #9: generate_lessons / ensure_lessons, create_group, reschedule_group, cancel_lesson,
 -- create_extra_lesson, archive_group (0008). Self-contained fixtures, rolled back.
 begin;
-select plan(49);
+select plan(52);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 -- users: a…1 admin, a…2 teacher A (group G1), a…3 teacher B
@@ -311,6 +311,27 @@ select is(
   (select count(*)::integer from generate_series((public.bishkek_today() + 7)::timestamp, (public.bishkek_today() + 28)::timestamp, interval '1 day') d
    where extract(isodow from d) in (2, 4) and not exists (select 1 from public.holidays h where h.day = d::date)),
   'new rule lessons generated up to the horizon'
+);
+
+-- a second change that keeps ВТ 15:00: those lessons stay (with their substitute), ЧТ go
+insert into r (key, id) select 'g5tue', id from public.lessons
+  where group_id = 'd9000000-0000-4000-8000-000000000005' and lesson_date >= public.bishkek_today() + 14
+    and extract(isodow from lesson_date) = 2 and planned_start = '15:00'
+  order by lesson_date limit 1;
+update public.lessons set substitute_teacher_id = 'b9000000-0000-4000-8000-000000000001' where id = (select id from r where key = 'g5tue');
+select lives_ok(
+  $$ select * from public.reschedule_group('d9000000-0000-4000-8000-000000000005', public.bishkek_today() + 14, '{2}', '15:00', public.bishkek_today() + 28) $$,
+  'second change from +14 days: ВТ 15:00 only'
+);
+select is(
+  (select substitute_teacher_id from public.lessons where id = (select id from r where key = 'g5tue')),
+  'b9000000-0000-4000-8000-000000000001'::uuid,
+  'a kept slot is not recreated: the substitute stays'
+);
+select is_empty(
+  $$ select 1 from public.lessons where group_id = 'd9000000-0000-4000-8000-000000000005'
+     and lesson_date >= public.bishkek_today() + 14 and extract(isodow from lesson_date) = 4 and status = 'planned' and not is_extra $$,
+  'ЧТ lessons after the second change are gone'
 );
 
 -- ─── archive_group ──────────────────────────────────────────────────────────
