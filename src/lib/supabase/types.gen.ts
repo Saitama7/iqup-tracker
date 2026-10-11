@@ -517,6 +517,7 @@ export type Database = {
       tariffs: {
         Row: {
           created_at: string
+          created_by: string | null
           freeze_limit: number
           group_type: Database['public']['Enums']['group_type']
           id: string
@@ -529,6 +530,7 @@ export type Database = {
         ComputedFields: never
         Insert: {
           created_at?: string
+          created_by?: string | null
           freeze_limit?: number
           group_type: Database['public']['Enums']['group_type']
           id?: string
@@ -540,6 +542,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           freeze_limit?: number
           group_type?: Database['public']['Enums']['group_type']
           id?: string

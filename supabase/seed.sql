@@ -2,16 +2,28 @@
 -- Auth users and profiles are NOT created here — see scripts/seed-users.ts (R0-3); it links teachers.user_id by phone.
 -- Lessons are not seeded: the schedule generator comes in R1.
 
--- Tariffs — docs/01-domain-model.md §3 (September 2026)
-insert into public.tariffs (group_type, lessons_in_package, package_price, max_students, lesson_duration_min, freeze_limit, valid_from) values
-  ('group',       12, 3200, 10,  60, 2, '2026-09-01'),
-  ('mini',        12, 3800,  4,  60, 2, '2026-09-01'),
-  ('pair',        12, 4400,  2,  60, 2, '2026-09-01'),
-  ('individual',  12, 7200,  1,  60, 2, '2026-09-01'),
-  ('afterschool', 20, 7400,  8, 180, 2, '2026-09-01');
+-- Tariffs — docs/01-domain-model.md §3; in effect since September 2026, earlier versions for А9а
+insert into public.tariffs (group_type, lessons_in_package, package_price, max_students, lesson_duration_min, freeze_limit, valid_from, created_at) values
+  ('group',       12, 2800, 10,  60, 2, '2025-02-01', '2025-01-20 12:00+06'),
+  ('mini',        12, 3200,  4,  60, 2, '2025-02-01', '2025-01-20 12:00+06'),
+  ('pair',        12, 3600,  2,  60, 2, '2025-02-01', '2025-01-20 12:00+06'),
+  ('individual',  12, 6000,  1,  60, 2, '2025-02-01', '2025-01-20 12:00+06'),
+  ('afterschool', 20, 6500,  8, 180, 2, '2025-02-01', '2025-01-20 12:00+06'),
+  ('group',       12, 3000, 10,  60, 2, '2025-09-01', '2025-08-20 12:00+06'),
+  ('mini',        12, 3500,  4,  60, 2, '2025-09-01', '2025-08-20 12:00+06'),
+  ('pair',        12, 4000,  2,  60, 2, '2025-09-01', '2025-08-20 12:00+06'),
+  ('individual',  12, 6500,  1,  60, 2, '2025-09-01', '2025-08-20 12:00+06'),
+  ('afterschool', 20, 7000,  8, 180, 2, '2025-09-01', '2025-08-20 12:00+06'),
+  ('group',       12, 3200, 10,  60, 2, '2026-09-01', '2026-08-25 12:00+06'),
+  ('mini',        12, 3800,  4,  60, 2, '2026-09-01', '2026-08-25 12:00+06'),
+  ('pair',        12, 4400,  2,  60, 2, '2026-09-01', '2026-08-25 12:00+06'),
+  ('individual',  12, 7200,  1,  60, 2, '2026-09-01', '2026-08-25 12:00+06'),
+  ('afterschool', 20, 7400,  8, 180, 2, '2026-09-01', '2026-08-25 12:00+06');
 
--- Holidays — А9, school year 2026/27
+-- Holidays — А9, school year 2026/27 (+ two past days: locked, cannot be deleted)
 insert into public.holidays (day, name) values
+  ('2026-05-09', 'День Победы'),
+  ('2026-08-31', 'День независимости'),
   ('2026-11-07', 'День Октябрьской революции'),
   ('2026-12-31', 'Новый год · каникулы центра'),
   ('2027-01-01', 'Новый год · каникулы центра'),
@@ -20,7 +32,8 @@ insert into public.holidays (day, name) values
   ('2027-02-23', 'День защитника Отечества'),
   ('2027-03-08', 'Международный женский день'),
   ('2027-03-21', 'Нооруз'),
-  ('2027-05-01', 'День труда');
+  ('2027-05-01', 'День труда'),
+  ('2027-05-09', 'День Победы');
 
 -- Teachers — А8 (phones are login candidates for seed-users)
 insert into public.teachers (id, full_name, phone) values
@@ -114,4 +127,9 @@ select
 from public.enrollments e
 join public.students st on st.id = e.student_id
 join public.groups g on g.id = e.group_id
-join public.tariffs t on t.group_type = g.group_type and t.valid_from <= e.start_date;
+cross join lateral (
+  select * from public.tariffs t
+  where t.group_type = g.group_type and t.valid_from <= e.start_date
+  order by t.valid_from desc
+  limit 1
+) t;

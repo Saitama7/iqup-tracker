@@ -54,7 +54,11 @@ describe('NAV / TABS', () => {
       'Журнал изменений',
       'Профиль',
     ])
-    expect(MORE.admin.filter((i) => i.to).map((i) => i.to)).toEqual(['/admin/users', '/profile'])
+    expect(MORE.admin.filter((i) => i.to).map((i) => i.to)).toEqual([
+      '/admin/users',
+      '/admin/settings',
+      '/profile',
+    ])
   })
 
   it('accountant has no tab bar (БМ1)', () => {
