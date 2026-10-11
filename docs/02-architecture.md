@@ -180,7 +180,7 @@ sequenceDiagram
 | Генерация занятий из расписания | SQL-функция `generate_lessons(group_id, until_date)` | Идемпотентна (unique `group_id + lesson_date + planned_start`), пропускает `holidays` |
 | Горизонт занятий | RPC `ensure_lessons(until)` — все группы `forming`/`active`, 8 недель вперёд; вызывают А3 при открытии и дашборд (R1-6) | Без cron; `duration_min` — из тарифа на дату (как `enroll_student`) |
 | Смена расписания | RPC `reschedule_group(group, valid_from, weekdays, time, until)` (0008) | Одна транзакция: старые правила `valid_to = valid_from − 1`, будущие `planned` не по новому расписанию удаляются, held/cancelled/доп./начавшиеся не трогаются |
-| Отмена / доп. урок / архив | RPC `cancel_lesson` (center/teacher/all_frozen, только `planned`, черновые отметки удаляются), `create_extra_lesson` (одно восполнение на отменённое), `archive_group` (удаляет будущие `planned`) | `attendance_guard` не даёт отметить посещаемость на `cancelled` |
+| Отмена / доп. урок / архив | RPC `cancel_lesson` (center/teacher/all_frozen, только `planned`, черновые отметки удаляются), `create_extra_lesson` (одно восполнение на отменённое), `archive_group` (удаляет будущие `planned`, завершает активные зачисления: `finished`, `end_date` = сегодня; абонементы не трогает — 0009) | `attendance_guard` не даёт отметить посещаемость на `cancelled` |
 | Статус «Не подтверждено» | Вычисляемый в view: `status = 'planned' AND lesson_date < current_date` | Без cron |
 | Баланс ученика (уроки и деньги) | View `subscription_balances` | Из первичных данных |
 | Списание / заморозка | Триггер на `attendance`: `consumes_credit`, проверка `freeze_limit` | Правило одно для всех |

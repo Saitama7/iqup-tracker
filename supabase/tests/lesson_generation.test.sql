@@ -1,7 +1,7 @@
 -- Issue #9: generate_lessons / ensure_lessons, create_group, reschedule_group, cancel_lesson,
 -- create_extra_lesson, archive_group (0008). Self-contained fixtures, rolled back.
 begin;
-select plan(52);
+select plan(57);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 -- users: a…1 admin, a…2 teacher A (group G1), a…3 teacher B
@@ -335,6 +335,17 @@ select is_empty(
 );
 
 -- ─── archive_group ──────────────────────────────────────────────────────────
+-- G5 students: one enrolled two weeks ago, one starting next week (end_date must not precede start_date)
+insert into public.students (id, full_name) values
+  ('e9000000-0000-4000-8000-000000000005', 'Student G5 now'),
+  ('e9000000-0000-4000-8000-000000000006', 'Student G5 later');
+insert into r (key, id) select 'sub5', subscription_id from public.enroll_student(
+  'e9000000-0000-4000-8000-000000000005', 'd9000000-0000-4000-8000-000000000005', public.bishkek_today() - 14);
+insert into r (key, id) select 'sub6', subscription_id from public.enroll_student(
+  'e9000000-0000-4000-8000-000000000006', 'd9000000-0000-4000-8000-000000000005', public.bishkek_today() + 7);
+create temp table subs_before as
+  select s.* from public.subscriptions s where s.id in (select id from r where key in ('sub5', 'sub6'));
+
 select ok(public.archive_group('d9000000-0000-4000-8000-000000000005') > 0, 'archive removes future planned lessons');
 select is_empty(
   $$ select 1 from public.lessons where group_id = 'd9000000-0000-4000-8000-000000000005'
@@ -344,6 +355,29 @@ select is_empty(
 select is(
   (select status::text from public.lessons where id = (select id from r where key = 'g5c')),
   'cancelled', 'cancelled history stays after archiving'
+);
+select is_empty(
+  $$ select 1 from public.enrollments where group_id = 'd9000000-0000-4000-8000-000000000005' and status = 'active' $$,
+  'archive finishes every active enrollment of the group'
+);
+select is(
+  (select end_date from public.enrollments
+   where group_id = 'd9000000-0000-4000-8000-000000000005' and student_id = 'e9000000-0000-4000-8000-000000000005'),
+  public.bishkek_today(), 'finished enrollment ends today (Bishkek)'
+);
+select is(
+  (select end_date from public.enrollments
+   where group_id = 'd9000000-0000-4000-8000-000000000005' and student_id = 'e9000000-0000-4000-8000-000000000006'),
+  public.bishkek_today() + 7, 'enrollment starting later ends on its start date'
+);
+select set_eq(
+  $$ select * from public.subscriptions where id in (select id from r where key in ('sub5', 'sub6')) $$,
+  $$ select * from subs_before $$,
+  'subscriptions are untouched by archiving'
+);
+select is(
+  (select count(*)::int from public.enrollments where student_id = 'e9000000-0000-4000-8000-000000000001' and status = 'active'),
+  1, 'enrollments of other groups stay active'
 );
 
 select * from finish();
