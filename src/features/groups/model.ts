@@ -376,7 +376,8 @@ const MONTHS_SHORT = [
   'ноя',
   'дек',
 ]
-const dayShort = (iso: string) => {
+/** «5 окт». */
+export const dayShort = (iso: string) => {
   const d = new Date(utc(iso))
   return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`
 }

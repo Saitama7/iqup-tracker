@@ -1,7 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Search } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { PageHeader, PageTitle } from '@/components/page'
 import { FormDialog } from '@/features/students/parts'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
@@ -9,47 +9,17 @@ import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
-import { ensureLessons, groupsQuery } from './api'
-import {
-  filterGroups,
-  groupListRows,
-  horizon,
-  listCaption,
-  type GroupListRow,
-  type GroupTab,
-} from './model'
+import { groupsQuery } from './api'
+import { filterGroups, groupListRows, listCaption, type GroupListRow, type GroupTab } from './model'
 import { NewGroupForm } from './new-group-form'
 import { GroupStatusChip, Segmented } from './parts'
+import { useEnsureLessons } from './use-ensure-lessons'
 
 const TABS: { value: GroupTab; label: string }[] = [
   { value: 'active', label: 'Активные' },
   { value: 'forming', label: 'Набор' },
   { value: 'archived', label: 'Архив' },
 ]
-
-/**
- * Lessons up to the 8-week horizon for every running group, once per day per session —
- * until the dashboard (R1-6) does it on load.
- */
-function useEnsureLessons(today: string) {
-  const queryClient = useQueryClient()
-  const until = horizon(today)
-  useEffect(() => {
-    let cancelled = false
-    ensureLessons(until)
-      .then(async (created) => {
-        if (!cancelled && created > 0) {
-          await queryClient.invalidateQueries({ queryKey: ['group-lessons'] })
-        }
-      })
-      .catch(() => {
-        // not fatal: the list does not depend on it, the next open retries
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [queryClient, until])
-}
 
 // А3 Группы (docs/design/AdminGroups.dc.html). Phone: same route, table → cards,
 // «Новая группа» opens in a dialog.
