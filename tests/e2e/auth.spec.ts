@@ -79,7 +79,7 @@ test('admin+teacher Каныкей lands on /admin and can switch to teacher', a
 }, testInfo) => {
   await login(page, KANYKEI)
   await expect(page).toHaveURL(/\/admin$/)
-  if (isDesktop(page)) await expect(page.getByText('Каныкей')).toBeVisible()
+  if (isDesktop(page)) await expect(page.getByText('Каныкей', { exact: true })).toBeVisible()
   else await expect(page.getByRole('link', { name: 'Профиль' })).toHaveText('К')
   await page.screenshot({ path: testInfo.outputPath('admin.png') })
 

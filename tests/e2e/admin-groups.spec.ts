@@ -14,7 +14,11 @@ async function login(page: Page, user: { phone: string; password: string }) {
   await page.getByLabel('Пароль', { exact: true }).fill(user.password)
   await page.getByRole('button', { name: 'Войти' }).click()
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Центр сегодня' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', {
+      name: /^(Центр сегодня|(Доброе утро|Добрый день|Добрый вечер), Каныкей)$/,
+    }),
+  ).toBeVisible()
 }
 
 // One group per project (different teachers), so the two viewports never touch the same rows.

@@ -50,7 +50,11 @@ test('А5: list with balances, search by name and phone, group filter in the URL
 }, testInfo) => {
   await login(page, KANYKEI)
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Центр сегодня' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', {
+      name: /^(Центр сегодня|(Доброе утро|Добрый день|Добрый вечер), Каныкей)$/,
+    }),
+  ).toBeVisible()
   await page
     .getByRole('navigation', { name: 'Основное меню' })
     .getByRole('link', { name: 'Ученики' })
@@ -98,7 +102,11 @@ test('create a student → enroll into «8 класс А» with 15 % → in the 
   await removeStudent(name)
   await login(page, KANYKEI)
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Центр сегодня' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', {
+      name: /^(Центр сегодня|(Доброе утро|Добрый день|Добрый вечер), Каныкей)$/,
+    }),
+  ).toBeVisible()
   await page.goto('/admin/students')
 
   await page.getByRole('button', { name: '+ Новый ученик' }).click()
@@ -170,7 +178,11 @@ test('create a student → enroll into «8 класс А» with 15 % → in the 
 test('А6: student card with referrer, notes and empty attendance', async ({ page }, testInfo) => {
   await login(page, KANYKEI)
   await expect(page).toHaveURL(/\/admin$/)
-  await expect(page.getByRole('heading', { name: 'Центр сегодня' })).toBeVisible()
+  await expect(
+    page.getByRole('heading', {
+      name: /^(Центр сегодня|(Доброе утро|Добрый день|Добрый вечер), Каныкей)$/,
+    }),
+  ).toBeVisible()
   await page.goto('/admin/students?q=Нурлан')
   await studentRow(page, 'Нурлан Асанов').getByRole('link').first().click()
   await expect(page.getByRole('heading', { name: 'Нурлан Асанов' })).toBeVisible()
