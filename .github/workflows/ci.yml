@@ -48,12 +48,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - id: has
-        run: echo "sb=$([ -f supabase/config.toml ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
-      - if: steps.has.outputs.sb == '1'
-        uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v1
         with: { version: latest }
-      - if: steps.has.outputs.sb == '1'
-        run: supabase db start
-      - if: steps.has.outputs.sb == '1'
-        run: supabase test db
+      # Auth + PostgREST + Kong are needed for seed:users and the Edge Function tests
+      - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,realtime,supavisor
+      - run: supabase test db
+      - uses: pnpm/action-setup@v4 # version from package.json packageManager
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm seed:users
+      - name: Serve Edge Functions
+        run: |
+          supabase functions serve > functions.log 2>&1 &
+          for i in $(seq 1 60); do grep -q "Serving functions" functions.log && exit 0; sleep 3; done
+          cat functions.log; exit 1
+      - run: pnpm test:integration
+      - if: failure()
+        run: cat functions.log || true

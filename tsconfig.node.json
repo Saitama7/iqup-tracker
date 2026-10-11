@@ -5,7 +5,7 @@
     "lib": ["ES2023"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["node"],
+    "types": ["node", "vitest/globals"],
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
@@ -16,5 +16,12 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "tests/e2e"]
+  "include": [
+    "vite.config.ts",
+    "vitest.integration.config.ts",
+    "playwright.config.ts",
+    "tests/e2e",
+    "tests/integration",
+    "scripts"
+  ]
 }

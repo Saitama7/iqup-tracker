@@ -48,6 +48,9 @@ pnpm dev                 # vite dev
 supabase start           # локальный Postgres + Auth + Realtime
 supabase db reset        # применить миграции + seed
 supabase test db         # pgTAP-тесты RLS
+pnpm seed:users          # логины для сид-людей, пароль iqup-demo (после db reset)
+supabase functions serve # Edge Function create-user локально
+pnpm test:integration    # supabase-js + create-user против локального стека
 pnpm gen:types           # supabase gen types typescript --local > src/lib/supabase/types.gen.ts
 pnpm test                # vitest
 pnpm e2e                 # playwright (webkit, iPhone 13 viewport)

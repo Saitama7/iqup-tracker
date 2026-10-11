@@ -43,6 +43,9 @@ pnpm dev                        # http://localhost:5173
 | `pnpm e2e` | Playwright, WebKit 390×844 (iPhone 13); первый раз — `pnpm exec playwright install webkit` |
 | `pnpm build` / `pnpm preview` | прод-сборка в `dist/` + PWA (manifest, service worker) |
 | `supabase start` / `supabase db reset` | локальный Postgres + Auth + Realtime на портах **544xx** (API `http://127.0.0.1:54421`, Studio `:54423`), миграции + `supabase/seed.sql` |
+| `pnpm seed:users` | логины для сид-людей (учителя из `teachers`, Каныкей, Алишка, бухгалтер), пароль `iqup-demo`; вход — телефон, напр. `0555 123 456` (Гульзат) |
+| `supabase functions serve` | Edge Function `create-user` локально |
+| `pnpm test:integration` | вход через supabase-js и `create-user` против локального стека (нужны `seed:users` и `functions serve`) |
 | `supabase test db` | pgTAP-тесты RLS и инвариантов (`supabase/tests/`) |
 | `pnpm gen:types` | типы БД из локального Supabase → `src/lib/supabase/types.gen.ts` |
 

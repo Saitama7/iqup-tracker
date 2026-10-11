@@ -148,6 +148,7 @@ sequenceDiagram
 - Телефон нормализуется в `996XXXXXXXXX`; вводится как привык (`0552 775 771`).
 - Пароль выдаёт админ, пользователь может сменить; сброс — через админа.
 - Роли — массив в `app_metadata.roles` (`["admin","teacher"]` — Каныкей, З1; пользователь не может менять), дублируются в `profiles.roles`. RLS-хелперы: `current_roles()`, `is_admin()`, `is_accountant()`, `teaches_group(id)` (миграция `0001_core.sql`).
+- Связывание — триггер `link_teacher_profile` (`0003`): новый профиль с ролью `teacher` получает строку `teachers` с тем же телефоном или создаёт её; Edge Function и `seed-users.ts` ведут себя одинаково. `create-user` также умеет `action: "reset_password"`.
 - Учитель (`teachers`) существует до создания логина: `full_name`, `phone`, `user_id` — nullable, связывается при создании пользователя (сид — `scripts/seed-users.ts`).
 
 ### Матрица доступа (RLS-политики)
