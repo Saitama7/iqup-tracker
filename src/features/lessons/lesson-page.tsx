@@ -1,38 +1,571 @@
-// /lessons/:id stub: lesson title and time; attendance marking is R1-8 (#12).
+// У3 «Посещаемость» (docs/design/Attendance.dc.html) and УД2 (docs/design/TeacherAttendance.dc.html).
+// Marks live in local state until «Провести занятие» sends the whole roster in one RPC (0010).
+// Trials (R2) get their own section under the roster — see the «Пробные» placeholders below.
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { ChevronLeft } from 'lucide-react'
-import { PageHeader } from '@/components/page'
+import { Link, useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router'
+import { Check, ChevronLeft } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
+import { PageTitle } from '@/components/page'
+import { percentOn } from '@/features/groups/model'
+import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
+import { tariffFor, teacherShare } from '@/features/tariffs/current'
+import { useNow } from '@/lib/now'
 import { formatDayLong } from '@/lib/time'
-import { lessonQuery } from './api'
-import { lessonTitle } from './parts'
-import { lessonStartMs, timeRange } from './select'
+import { useIsDesktop } from '@/lib/use-is-desktop'
+import { cn } from '@/lib/utils'
+import { lessonSheetQuery, type LessonSheet } from './api'
+import {
+  desktopMeta,
+  freezeBlocked,
+  freezeLimitHint,
+  lessonRoster,
+  MARK_LABEL,
+  markAllPresent,
+  MARKS,
+  marksPayload,
+  mobileMeta,
+  tally,
+  type Mark,
+  type RosterRow,
+  type Tally,
+  type Tone,
+} from './attendance'
+import { studentsWord } from './parts'
+import {
+  bishkekTime,
+  lessonStartMs,
+  lessonState,
+  timeRange,
+  untilLabel,
+  type LessonState,
+} from './select'
+import { useConfirmLesson } from './use-confirm-lesson'
 
 export function LessonPage({ lessonId }: { lessonId: string }) {
-  const { data, isError, isPending } = useQuery(lessonQuery(lessonId))
+  const { data, isError, isPending } = useQuery(lessonSheetQuery(lessonId))
+
+  if (!data) {
+    return (
+      <section className="flex flex-col gap-6">
+        <BackButton />
+        <PageTitle>{isPending ? 'Занятие' : 'Занятие не найдено'}</PageTitle>
+        <p className="rounded-[18px] border border-dashed border-line-strong bg-card p-6 font-bold text-ink-muted">
+          {isPending
+            ? 'Загружаем учеников…'
+            : isError
+              ? 'Не удалось загрузить занятие. Проверьте интернет.'
+              : 'Занятие удалено или принадлежит другой группе.'}
+        </p>
+      </section>
+    )
+  }
+  return <Sheet sheet={data} />
+}
+
+// ─── State shared by both layouts ───────────────────────────────────────────
+
+interface SheetModel {
+  sheet: LessonSheet
+  state: LessonState
+  roster: RosterRow[]
+  marks: ReadonlyMap<string, Mark>
+  counts: Tally
+  /** Marks can be changed and the lesson held now (Б1: from the start; held — admin only, И4). */
+  editable: boolean
+  canConfirm: boolean
+  /** Teacher's pay per student-lesson, null — no tariff / percent on that date. */
+  share: number | null
+  setMark: (studentId: string, mark: Mark) => void
+  allPresent: () => void
+  confirm: () => void
+  pending: boolean
+}
+
+function Sheet({ sheet }: { sheet: LessonSheet }) {
+  const now = useNow()
+  const isDesktop = useIsDesktop()
+  const navigate = useNavigate()
+  const [draft, setDraft] = useState<Map<string, Mark> | null>(null)
+  const mutation = useConfirmLesson(sheet.id, sheet.group.id)
+
+  const roster = useMemo(() => lessonRoster(sheet.enrollments, sheet, sheet.marks), [sheet])
+  const state = lessonState(sheet, now)
+  const editable = sheet.status === 'planned' && state !== 'upcoming'
+  const marks: ReadonlyMap<string, Mark> = editable ? (draft ?? sheet.marks) : sheet.marks
+  const counts = tally(roster, marks)
+
+  const tariff = tariffFor(sheet.group.group_type, sheet.lesson_date, sheet.tariffs)
+  const percent = percentOn({ rates: sheet.rates }, sheet.lesson_date)
+  const share = tariff && percent !== null ? teacherShare(tariff, percent) : null
+
+  const model: SheetModel = {
+    sheet,
+    state,
+    roster,
+    marks,
+    counts,
+    editable,
+    canConfirm: editable && counts.unmarked === 0 && !mutation.isPending,
+    share,
+    setMark: (studentId, mark) => {
+      const row = roster.find((r) => r.studentId === studentId)
+      if (!editable || !row) return
+      if (mark === 'absent_frozen' && freezeBlocked(row, marks.get(studentId))) return
+      setDraft(new Map(marks).set(studentId, mark))
+    },
+    allPresent: () => {
+      if (editable) setDraft(markAllPresent(roster, marks))
+    },
+    confirm: () => {
+      mutation.mutate({ marks: marksPayload(roster, marks), now })
+      void navigate({ to: '/today' })
+    },
+    pending: mutation.isPending,
+  }
+
+  return isDesktop ? <DesktopSheet m={model} now={now} /> : <MobileSheet m={model} now={now} />
+}
+
+/** «Сейчас · 14:00–15:00», «Проведено · 10:02», «Не подтверждено · 09:00–10:00». */
+function stateChip(sheet: LessonSheet, state: LessonState, now: number): string {
+  const range = timeRange(sheet)
+  if (state === 'held') {
+    return sheet.confirmed_at ? `Проведено · ${bishkekTime(sheet.confirmed_at)}` : 'Проведено'
+  }
+  if (state === 'current') return `Сейчас · ${range}`
+  if (state === 'ended_unconfirmed') return `Не подтверждено · ${range}`
+  if (state === 'cancelled') return 'Отменено'
+  const until = untilLabel(sheet, now)
+  return `${until.charAt(0).toUpperCase()}${until.slice(1)} · ${range}`
+}
+
+/** Why the marks cannot be changed now, null — they can. */
+function lockedReason({ sheet, state, editable }: SheetModel): string | null {
+  if (editable) return null
+  if (state === 'upcoming') return 'Отметить можно с начала занятия'
+  if (sheet.status === 'cancelled') return 'Занятие отменено — отметки не нужны'
+  return 'Занятие проведено. Исправить отметки может администратор'
+}
+
+const som = (n: number) => `${formatSom(n)} сом`
+
+function BackButton() {
+  const router = useRouter()
+  const canGoBack = useCanGoBack()
+  const navigate = useNavigate()
+  return (
+    <button
+      type="button"
+      aria-label="Назад"
+      onClick={() => {
+        if (canGoBack) router.history.back()
+        else void navigate({ to: '/today' })
+      }}
+      className="inline-flex size-11 items-center justify-center rounded-full bg-ink/8"
+    >
+      <ChevronLeft className="size-[22px]" strokeWidth={2.5} aria-hidden />
+    </button>
+  )
+}
+
+// ─── Marks ──────────────────────────────────────────────────────────────────
+
+const ACTIVE: Record<Mark, string> = {
+  present: 'border-present bg-present text-white',
+  absent_frozen: 'border-teal bg-teal text-white',
+  absent_burned: 'border-burned bg-burned text-white',
+}
+
+const EDGE: Record<Mark, string> = {
+  present: 'border-l-present',
+  absent_frozen: 'border-l-teal',
+  absent_burned: 'border-l-burned',
+}
+
+const TONE: Record<Tone, string> = {
+  muted: 'text-ink-muted',
+  warn: 'text-warn',
+  debt: 'text-burned-strong',
+}
+
+/**
+ * Initials flip into the colour of the mark — one of the three 3D accents (§3);
+ * prefers-reduced-motion → a plain fade, no 3D.
+ */
+function MarkAvatar({
+  row,
+  mark,
+  className,
+}: {
+  row: RosterRow
+  mark: Mark | undefined
+  className: string
+}) {
+  const reduce = useReducedMotion() ?? false
+  const tone = mark ? ACTIVE[mark] : 'bg-brand text-ink'
+  return (
+    <span className="shrink-0" style={reduce ? undefined : { perspective: 400 }} aria-hidden>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={mark ?? 'none'}
+          initial={reduce ? { opacity: 0 } : { rotateY: -180 }}
+          animate={reduce ? { opacity: 1 } : { rotateY: 0 }}
+          transition={{ duration: reduce ? 0.15 : 0.4, ease: 'easeOut' }}
+          className={cn(
+            'flex items-center justify-center rounded-full font-display font-bold [backface-visibility:hidden]',
+            tone,
+            className,
+          )}
+        >
+          {row.initials}
+        </motion.span>
+      </AnimatePresence>
+    </span>
+  )
+}
+
+function MarkButtons({
+  m,
+  row,
+  hintId,
+  desktop = false,
+}: {
+  m: SheetModel
+  row: RosterRow
+  hintId: string
+  desktop?: boolean
+}) {
+  const mark = m.marks.get(row.studentId)
+  const blocked = freezeBlocked(row, mark)
+  return (
+    <div className="grid grid-cols-3 gap-1.5">
+      {MARKS.map((k) => {
+        const active = mark === k
+        const limit = k === 'absent_frozen' && blocked
+        return (
+          <button
+            key={k}
+            type="button"
+            aria-pressed={active}
+            disabled={!m.editable || limit}
+            aria-describedby={limit ? hintId : undefined}
+            onClick={() => {
+              m.setMark(row.studentId, k)
+            }}
+            className={cn(
+              'border-[1.5px] text-[13px] font-extrabold transition-opacity',
+              desktop ? 'min-h-10 rounded-[10px]' : 'min-h-11 rounded-xl',
+              active ? ACTIVE[k] : 'border-line-strong bg-card text-ink',
+              limit && 'bg-stone text-placeholder',
+              !m.editable && !active && 'opacity-50',
+            )}
+          >
+            {MARK_LABEL[k]}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function FreezeHint({ id, row, mark }: { id: string; row: RosterRow; mark: Mark | undefined }) {
+  if (!row.balance || !freezeBlocked(row, mark)) return null
+  return (
+    <p id={id} className="text-xs font-bold text-ink-muted">
+      Заморозка недоступна — {freezeLimitHint(row.balance)}
+    </p>
+  )
+}
+
+// ─── У3 · phone ─────────────────────────────────────────────────────────────
+
+function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
+  const { sheet, counts } = m
+  const percent = counts.total ? Math.round((counts.marked / counts.total) * 100) : 100
+  const caption = [
+    formatDayLong(lessonStartMs(sheet)),
+    GROUP_TYPE_LABEL[sheet.group.group_type].toLowerCase(),
+    sheet.group.room ? `каб. ${sheet.group.room}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
-    <section className="flex flex-col gap-6">
-      <Link
-        to="/today"
-        className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-extrabold text-teal"
-      >
-        <ChevronLeft className="size-4" aria-hidden />
-        Сегодня
-      </Link>
-      {data ? (
-        <PageHeader
-          eyebrow={`${formatDayLong(lessonStartMs(data))} · ${timeRange(data)}`}
-          title={lessonTitle(data)}
-        />
+    <section className="flex flex-1 flex-col gap-3.5">
+      <header className="-mx-5 -mt-[max(1.5rem,calc(env(safe-area-inset-top)+0.75rem))] flex flex-col gap-3 rounded-b-[28px] bg-brand px-5 pt-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] pb-3.5">
+        <div className="flex items-center justify-between">
+          <BackButton />
+          <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-brand">
+            {stateChip(sheet, m.state, now)}
+          </span>
+          <span className="w-11" />
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <h1 className="font-display text-[22px] leading-[1.15] font-bold">
+            {sheet.group.subject} · {sheet.group.name}
+          </h1>
+          <p className="text-[13px] font-bold text-ink/75">{caption}</p>
+        </div>
+        <div className="flex items-center gap-2.5">
+          <div className="h-2 flex-1 overflow-hidden rounded bg-ink/12">
+            <div
+              className="h-2 origin-left rounded bg-ink transition-transform"
+              style={{ transform: `scaleX(${percent / 100})` }}
+            />
+          </div>
+          <p className="text-[13px] font-extrabold whitespace-nowrap">
+            {counts.marked} из {counts.total}
+          </p>
+        </div>
+      </header>
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-extrabold">Ученики</h2>
+        {m.editable && (
+          <button
+            type="button"
+            onClick={m.allPresent}
+            className="min-h-11 rounded-full border border-line bg-card px-3.5 text-xs font-extrabold"
+          >
+            Все были
+          </button>
+        )}
+      </div>
+
+      {m.roster.length === 0 ? (
+        <p className="rounded-[18px] border border-dashed border-line-strong bg-card p-5 text-sm font-bold text-ink-muted">
+          В группе на эту дату нет учеников.
+        </p>
       ) : (
-        <PageHeader title={isPending ? 'Занятие' : 'Занятие не найдено'} />
+        <ul aria-label="Ученики" className="flex flex-col gap-2.5">
+          {m.roster.map((row) => (
+            <MobileStudent key={row.studentId} m={m} row={row} />
+          ))}
+        </ul>
       )}
-      <p className="rounded-[18px] border border-dashed border-line-strong bg-card p-6 font-bold text-ink-muted">
-        {isError
-          ? 'Не удалось загрузить занятие. Проверьте интернет.'
-          : 'Отметка посещаемости появится в следующем обновлении.'}
-      </p>
+      {/* «Пробные · N» (не списывается · не в ЗП) — R2, trials table comes later. */}
+
+      <footer className="sticky bottom-0 -mx-5 mt-auto -mb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col gap-2.5 border-t border-line bg-card px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        <p className="flex justify-between text-[13px] font-extrabold">
+          <span className="text-present-strong">Был {counts.present}</span>
+          <span className="text-teal-strong">Заморозка {counts.frozen}</span>
+          <span className="text-burned-strong">Не был {counts.burned}</span>
+          <span className="text-ink-muted">Не отмечено {counts.unmarked}</span>
+        </p>
+        <ConfirmAction m={m} />
+      </footer>
     </section>
+  )
+}
+
+function MobileStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
+  const hintId = useId()
+  const mark = m.marks.get(row.studentId)
+  const meta = mobileMeta(row)
+  return (
+    <li
+      aria-label={row.fullName}
+      className={cn(
+        'flex flex-col gap-2.5 rounded-[18px] border border-l-[5px] border-line bg-card py-3 pr-3 pl-3.5',
+        mark ? EDGE[mark] : 'border-l-line',
+      )}
+    >
+      <div className="flex items-center gap-3">
+        <MarkAvatar row={row} mark={mark} className="size-10 text-[13px]" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span className="text-[15px] font-extrabold">{row.fullName}</span>
+          <span className={cn('text-xs font-bold', TONE[meta.tone])}>{meta.text}</span>
+        </div>
+      </div>
+      <MarkButtons m={m} row={row} hintId={hintId} />
+      <FreezeHint id={hintId} row={row} mark={mark} />
+    </li>
+  )
+}
+
+function ConfirmAction({ m, desktop = false }: { m: SheetModel; desktop?: boolean }) {
+  const reason = lockedReason(m)
+  const size = desktop ? 'min-h-[52px] rounded-2xl text-sm' : 'min-h-14 rounded-[18px] text-[15px]'
+  if (reason || !m.canConfirm) {
+    return (
+      <p
+        className={cn(
+          'flex items-center justify-center bg-line px-4 text-center font-extrabold text-ink-muted',
+          size,
+        )}
+      >
+        {reason ?? (m.pending ? 'Проводим…' : 'Отметьте всех, чтобы провести')}
+      </p>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={m.confirm}
+      className={cn(
+        'flex items-center justify-center gap-2.5 bg-ink font-extrabold text-brand shadow-[0_12px_28px_rgb(20_20_20/0.25)]',
+        size,
+        !desktop && 'text-base',
+      )}
+    >
+      <Check className="size-5" strokeWidth={3} aria-hidden />
+      Провести занятие
+    </button>
+  )
+}
+
+// ─── УД2 · desktop ──────────────────────────────────────────────────────────
+
+const COLS = 'grid grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_300px] gap-3 px-5'
+
+function DesktopSheet({ m, now }: { m: SheetModel; now: number }) {
+  const { sheet } = m
+  const caption = [
+    formatDayLong(lessonStartMs(sheet)),
+    GROUP_TYPE_LABEL[sheet.group.group_type].toLowerCase(),
+    studentsWord(m.roster.length),
+    sheet.group.room ? `каб. ${sheet.group.room}` : null,
+    m.share !== null ? `${som(m.share)} за ученико-урок` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <section className="flex flex-col gap-[22px]">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-col gap-2">
+          <Link
+            to="/today"
+            className="inline-flex min-h-11 w-fit items-center gap-1.5 text-[13px] font-extrabold text-ink-muted"
+          >
+            <ChevronLeft className="size-4" strokeWidth={2.5} aria-hidden />
+            Сегодня
+          </Link>
+          <div className="flex flex-wrap items-center gap-3.5">
+            <PageTitle className="min-[900px]:text-[28px]">
+              {sheet.group.subject} · {sheet.group.name}
+            </PageTitle>
+            <span className="inline-flex items-center gap-2 rounded-full bg-ink px-3.5 py-[7px] text-[13px] font-extrabold whitespace-nowrap text-brand">
+              <span className="size-2 rounded-full bg-brand" aria-hidden />
+              {stateChip(sheet, m.state, now)}
+            </span>
+          </div>
+          <p className="text-sm font-bold text-ink-muted">{caption}</p>
+        </div>
+        {m.editable && (
+          <button
+            type="button"
+            onClick={m.allPresent}
+            className="min-h-11 rounded-xl border-[1.5px] border-line-strong bg-card px-4 text-[13px] font-extrabold"
+          >
+            Все были
+          </button>
+        )}
+      </header>
+
+      <div className="grid grid-cols-[minmax(0,2fr)_minmax(280px,1fr)] items-start gap-6">
+        <div className="flex flex-col rounded-[20px] border border-line bg-card">
+          <div
+            className={cn(
+              COLS,
+              'border-b border-line py-3 text-[11px] font-extrabold tracking-[0.06em] text-ink-muted uppercase',
+            )}
+          >
+            <span>Ученик</span>
+            <span>Абонемент</span>
+            <span>Отметка</span>
+          </div>
+          {m.roster.length === 0 ? (
+            <p className="p-5 text-sm font-bold text-ink-muted">
+              В группе на эту дату нет учеников.
+            </p>
+          ) : (
+            <ul aria-label="Ученики">
+              {m.roster.map((row) => (
+                <DesktopStudent key={row.studentId} m={m} row={row} />
+              ))}
+            </ul>
+          )}
+          {/* «Пробные · N» row group (бесплатно · не списывается · в ЗП не входит) — R2. */}
+        </div>
+        <Summary m={m} />
+      </div>
+    </section>
+  )
+}
+
+function DesktopStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
+  const hintId = useId()
+  const mark = m.marks.get(row.studentId)
+  const meta = desktopMeta(row)
+  return (
+    <li
+      aria-label={row.fullName}
+      className={cn(
+        COLS,
+        'items-center border-b border-l-[5px] border-b-line py-3 last:rounded-bl-[20px] last:border-b-0',
+        mark ? EDGE[mark] : 'border-l-line',
+      )}
+    >
+      <span className="flex items-center gap-3">
+        <MarkAvatar row={row} mark={mark} className="size-9 text-xs" />
+        <span className="text-[15px] font-extrabold">{row.fullName}</span>
+      </span>
+      <span className="flex flex-col gap-0.5">
+        <span className={cn('text-[13px] font-bold', TONE[meta.tone])}>{meta.text}</span>
+        <FreezeHint id={hintId} row={row} mark={mark} />
+      </span>
+      <MarkButtons m={m} row={row} hintId={hintId} desktop />
+    </li>
+  )
+}
+
+function Summary({ m }: { m: SheetModel }) {
+  const { counts } = m
+  const percent = counts.total ? Math.round((counts.marked / counts.total) * 100) : 100
+  const lines: [string, ReactNode, string?][] = [
+    ['Был', counts.present, 'text-present-strong'],
+    ['Заморозка', counts.frozen, 'text-teal-strong'],
+    ['Не был (сгорел)', counts.burned, 'text-burned-strong'],
+  ]
+  return (
+    <aside className="sticky top-6 flex flex-col gap-3.5">
+      <div className="flex flex-col gap-3.5 rounded-[20px] border border-line bg-card p-5">
+        <h2 className="text-sm font-extrabold">Итог занятия</h2>
+        <div className="h-2 overflow-hidden rounded bg-line">
+          <div
+            className="h-2 origin-left rounded bg-ink transition-transform"
+            style={{ transform: `scaleX(${percent / 100})` }}
+          />
+        </div>
+        <p className="text-[13px] font-bold text-ink-muted">
+          Отмечено {counts.marked} из {counts.total}
+        </p>
+        <dl className="flex flex-col gap-2 text-sm font-extrabold">
+          {lines.map(([label, value, tone]) => (
+            <div key={label} className="flex justify-between">
+              <dt className={tone}>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+          <div className="flex justify-between border-t border-line pt-2">
+            <dt>Ученико-уроков</dt>
+            <dd>{counts.studentLessons}</dd>
+          </div>
+          {m.share !== null && (
+            <div className="flex justify-between">
+              <dt>{m.sheet.status === 'held' ? 'Начислено' : 'Начислится'}</dt>
+              <dd className="font-display">{som(counts.studentLessons * m.share)}</dd>
+            </div>
+          )}
+        </dl>
+        <ConfirmAction m={m} desktop />
+      </div>
+      <p className="rounded-2xl bg-stone px-4 py-3.5 text-xs leading-normal font-bold text-ink-muted">
+        Заморозка — ученик предупредил за день или минимум за 2 часа. Не более 2 на абонемент.
+        Сгоревший урок списывается и начисляется учителю.
+      </p>
+    </aside>
   )
 }

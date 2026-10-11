@@ -100,4 +100,11 @@ describe('isPushedScreen', () => {
     expect(isPushedScreen('/admin/groups')).toBe(false)
     expect(isPushedScreen('/admin')).toBe(false)
   })
+
+  it('teacher: a lesson and a group are pushed, «Группы» keeps the tab bar', () => {
+    expect(isPushedScreen('/lessons/1f0c')).toBe(true)
+    expect(isPushedScreen('/groups/1f0c')).toBe(true)
+    expect(isPushedScreen('/groups')).toBe(false)
+    expect(isPushedScreen('/today')).toBe(false)
+  })
 })

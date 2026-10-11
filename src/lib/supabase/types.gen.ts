@@ -764,6 +764,10 @@ export type Database = {
     Functions: {
       archive_group: { Args: { p_group_id: string }; Returns: number }
       assert_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
+      attendance_subscription: {
+        Args: { p_lesson_id: string; p_student_id: string }
+        Returns: string
+      }
       bishkek_today: { Args: Record<PropertyKey, never>; Returns: string }
       cancel_lesson: {
         Args: {
@@ -773,6 +777,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      confirm_lesson: { Args: { p_lesson_id: string; p_marks: Json }; Returns: string }
       create_extra_lesson: {
         Args: { p_date: string; p_group_id: string; p_makes_up_for?: string; p_start: string }
         Returns: string

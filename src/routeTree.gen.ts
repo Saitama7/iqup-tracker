@@ -13,7 +13,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppAdminRouteRouteImport } from './routes/_app/admin/route'
-import { Route as AppGroupsRouteImport } from './routes/_app/groups'
 import { Route as AppMyMonthRouteImport } from './routes/_app/my-month'
 import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
@@ -22,6 +21,8 @@ import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppAdminScheduleRouteImport } from './routes/_app/admin/schedule'
 import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
+import { Route as AppGroupsIndexRouteImport } from './routes/_app/groups/index'
+import { Route as AppGroupsGroupIdRouteImport } from './routes/_app/groups/$groupId'
 import { Route as AppLessonsLessonIdRouteImport } from './routes/_app/lessons/$lessonId'
 import { Route as AppAdminGroupsIndexRouteImport } from './routes/_app/admin/groups/index'
 import { Route as AppAdminGroupsGroupIdRouteImport } from './routes/_app/admin/groups/$groupId'
@@ -45,11 +46,6 @@ const LoginRoute = LoginRouteImport.update({
 const AppAdminRouteRoute = AppAdminRouteRouteImport.update({
   id: '/admin',
   path: '/admin',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppGroupsRoute = AppGroupsRouteImport.update({
-  id: '/groups',
-  path: '/groups',
   getParentRoute: () => AppRoute,
 } as any)
 const AppMyMonthRoute = AppMyMonthRouteImport.update({
@@ -92,6 +88,16 @@ const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AppAdminRouteRoute,
 } as any)
+const AppGroupsIndexRoute = AppGroupsIndexRouteImport.update({
+  id: '/groups/',
+  path: '/groups/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppGroupsGroupIdRoute = AppGroupsGroupIdRouteImport.update({
+  id: '/groups/$groupId',
+  path: '/groups/$groupId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLessonsLessonIdRoute = AppLessonsLessonIdRouteImport.update({
   id: '/lessons/$lessonId',
   path: '/lessons/$lessonId',
@@ -123,7 +129,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/admin': typeof AppAdminRouteRouteWithChildren
-  '/groups': typeof AppGroupsRoute
   '/my-month': typeof AppMyMonthRoute
   '/payroll': typeof AppPayrollRoute
   '/profile': typeof AppProfileRoute
@@ -131,8 +136,10 @@ export interface FileRoutesByFullPath {
   '/admin/schedule': typeof AppAdminScheduleRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/groups/$groupId': typeof AppGroupsGroupIdRoute
   '/lessons/$lessonId': typeof AppLessonsLessonIdRoute
   '/admin/': typeof AppAdminIndexRoute
+  '/groups/': typeof AppGroupsIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
   '/admin/groups/': typeof AppAdminGroupsIndexRoute
@@ -141,7 +148,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/groups': typeof AppGroupsRoute
   '/my-month': typeof AppMyMonthRoute
   '/payroll': typeof AppPayrollRoute
   '/profile': typeof AppProfileRoute
@@ -149,8 +155,10 @@ export interface FileRoutesByTo {
   '/admin/schedule': typeof AppAdminScheduleRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
+  '/groups/$groupId': typeof AppGroupsGroupIdRoute
   '/lessons/$lessonId': typeof AppLessonsLessonIdRoute
   '/admin': typeof AppAdminIndexRoute
+  '/groups': typeof AppGroupsIndexRoute
   '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
   '/admin/groups': typeof AppAdminGroupsIndexRoute
@@ -162,7 +170,6 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/admin': typeof AppAdminRouteRouteWithChildren
-  '/_app/groups': typeof AppGroupsRoute
   '/_app/my-month': typeof AppMyMonthRoute
   '/_app/payroll': typeof AppPayrollRoute
   '/_app/profile': typeof AppProfileRoute
@@ -170,8 +177,10 @@ export interface FileRoutesById {
   '/_app/admin/schedule': typeof AppAdminScheduleRoute
   '/_app/admin/settings': typeof AppAdminSettingsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
+  '/_app/groups/$groupId': typeof AppGroupsGroupIdRoute
   '/_app/lessons/$lessonId': typeof AppLessonsLessonIdRoute
   '/_app/admin/': typeof AppAdminIndexRoute
+  '/_app/groups/': typeof AppGroupsIndexRoute
   '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/_app/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
   '/_app/admin/groups/': typeof AppAdminGroupsIndexRoute
@@ -183,7 +192,6 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/admin'
-    | '/groups'
     | '/my-month'
     | '/payroll'
     | '/profile'
@@ -191,8 +199,10 @@ export interface FileRouteTypes {
     | '/admin/schedule'
     | '/admin/settings'
     | '/admin/users'
+    | '/groups/$groupId'
     | '/lessons/$lessonId'
     | '/admin/'
+    | '/groups/'
     | '/admin/groups/$groupId'
     | '/admin/students/$studentId'
     | '/admin/groups/'
@@ -201,7 +211,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/login'
-    | '/groups'
     | '/my-month'
     | '/payroll'
     | '/profile'
@@ -209,8 +218,10 @@ export interface FileRouteTypes {
     | '/admin/schedule'
     | '/admin/settings'
     | '/admin/users'
+    | '/groups/$groupId'
     | '/lessons/$lessonId'
     | '/admin'
+    | '/groups'
     | '/admin/groups/$groupId'
     | '/admin/students/$studentId'
     | '/admin/groups'
@@ -221,7 +232,6 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/admin'
-    | '/_app/groups'
     | '/_app/my-month'
     | '/_app/payroll'
     | '/_app/profile'
@@ -229,8 +239,10 @@ export interface FileRouteTypes {
     | '/_app/admin/schedule'
     | '/_app/admin/settings'
     | '/_app/admin/users'
+    | '/_app/groups/$groupId'
     | '/_app/lessons/$lessonId'
     | '/_app/admin/'
+    | '/_app/groups/'
     | '/_app/admin/groups/$groupId'
     | '/_app/admin/students/$studentId'
     | '/_app/admin/groups/'
@@ -271,13 +283,6 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AppAdminRouteRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/_app/groups': {
-      id: '/_app/groups'
-      path: '/groups'
-      fullPath: '/groups'
-      preLoaderRoute: typeof AppGroupsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/my-month': {
@@ -335,6 +340,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/users'
       preLoaderRoute: typeof AppAdminUsersRouteImport
       parentRoute: typeof AppAdminRouteRoute
+    }
+    '/_app/groups/': {
+      id: '/_app/groups/'
+      path: '/groups'
+      fullPath: '/groups/'
+      preLoaderRoute: typeof AppGroupsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/groups/$groupId': {
+      id: '/_app/groups/$groupId'
+      path: '/groups/$groupId'
+      fullPath: '/groups/$groupId'
+      preLoaderRoute: typeof AppGroupsGroupIdRouteImport
+      parentRoute: typeof AppRoute
     }
     '/_app/lessons/$lessonId': {
       id: '/_app/lessons/$lessonId'
@@ -402,22 +421,24 @@ const AppAdminRouteRouteWithChildren = AppAdminRouteRoute._addFileChildren(
 
 interface AppRouteChildren {
   AppAdminRouteRoute: typeof AppAdminRouteRouteWithChildren
-  AppGroupsRoute: typeof AppGroupsRoute
   AppMyMonthRoute: typeof AppMyMonthRoute
   AppPayrollRoute: typeof AppPayrollRoute
   AppProfileRoute: typeof AppProfileRoute
   AppTodayRoute: typeof AppTodayRoute
+  AppGroupsGroupIdRoute: typeof AppGroupsGroupIdRoute
   AppLessonsLessonIdRoute: typeof AppLessonsLessonIdRoute
+  AppGroupsIndexRoute: typeof AppGroupsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppAdminRouteRoute: AppAdminRouteRouteWithChildren,
-  AppGroupsRoute: AppGroupsRoute,
   AppMyMonthRoute: AppMyMonthRoute,
   AppPayrollRoute: AppPayrollRoute,
   AppProfileRoute: AppProfileRoute,
   AppTodayRoute: AppTodayRoute,
+  AppGroupsGroupIdRoute: AppGroupsGroupIdRoute,
   AppLessonsLessonIdRoute: AppLessonsLessonIdRoute,
+  AppGroupsIndexRoute: AppGroupsIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
