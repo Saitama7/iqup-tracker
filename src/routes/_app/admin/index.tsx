@@ -1,14 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { ComingSoon } from '@/components/page'
-import { useNow } from '@/lib/now'
-import { formatDayLong } from '@/lib/time'
+import { DashboardPage } from '@/features/schedule/dashboard-page'
 
+// А1 Дашборд on desktop, АМ1 «Центр сегодня» on the phone; role guard — admin/route.tsx.
 export const Route = createFileRoute('/_app/admin/')({
-  component: AdminHome,
+  component: DashboardPage,
 })
-
-// Header as on АМ1; dashboard А1 is a later issue.
-function AdminHome() {
-  const now = useNow()
-  return <ComingSoon eyebrow={formatDayLong(now)} title="Центр сегодня" />
-}

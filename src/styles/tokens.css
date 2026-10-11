@@ -37,4 +37,8 @@
   --burned-deep: #8e2626;
   --deck-back: #efe8d0;
   --deck-dot: #d9d2bc;
+  /* А1 / А2: trials (dashed violet), today's column of the week grid */
+  --trial-soft: #f7f3ff;
+  --trial-strong: #5b34d6;
+  --today-col: #fffbeb;
 }
