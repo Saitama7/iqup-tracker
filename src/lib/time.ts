@@ -61,3 +61,28 @@ export function bishkekDaysBetween(fromMs: number, toMs: number): number {
   const day = (ms: number) => Date.parse(`${bishkekDate(ms)}T00:00:00Z`)
   return Math.round((day(toMs) - day(fromMs)) / 86_400_000)
 }
+
+const MONTHS_NOM = [
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
+]
+
+/** «Октябрь» — month card on УД1. */
+export function formatMonthNom(ms: number): string {
+  return MONTHS_NOM[bishkekParts(ms).getUTCMonth()] ?? ''
+}
+
+/** «пятница» — «Завтра, пятница» on У2. */
+export function formatWeekdayLower(ms: number): string {
+  return (WEEKDAYS[bishkekParts(ms).getUTCDay()] ?? '').toLowerCase()
+}
