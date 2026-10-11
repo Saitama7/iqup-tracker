@@ -1,0 +1,436 @@
+{
+  "v": 3,
+  "attachments": {},
+  "createdOnFiles": {
+    "v": 1,
+    "at": "2026-10-08T10:40:00Z"
+  },
+  "title": "IQ UP Tracker — дизайн всех экранов",
+  "launch": {
+    "view": "canvas"
+  },
+  "pages": [],
+  "boards": {
+    "Login.dc.html": {
+      "x": 0,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "У1 · Вход",
+      "radius": 40
+    },
+    "Main.dc.html": {
+      "x": 470,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "У2 · Сегодня",
+      "radius": 40
+    },
+    "Attendance.dc.html": {
+      "x": 940,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "У3 · Посещаемость",
+      "radius": 40,
+      "is_interactive": true
+    },
+    "Groups.dc.html": {
+      "x": 1410,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "У4 · Группы",
+      "radius": 40
+    },
+    "GroupDetail.dc.html": {
+      "x": 1880,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "У5 · Группа",
+      "radius": 40
+    },
+    "MyMonth.dc.html": {
+      "x": 2350,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "У6 · Мой месяц",
+      "radius": 40
+    },
+    "Profile.dc.html": {
+      "x": 2820,
+      "y": 0,
+      "w": 390,
+      "h": 844,
+      "title": "У7 · Профиль",
+      "radius": 40
+    },
+    "TeacherToday.dc.html": {
+      "x": 0,
+      "y": 1300,
+      "w": 1280,
+      "h": 900,
+      "title": "УД1 · Сегодня",
+      "expand": "fill"
+    },
+    "TeacherAttendance.dc.html": {
+      "x": 1360,
+      "y": 1300,
+      "w": 1280,
+      "h": 900,
+      "title": "УД2 · Посещаемость",
+      "expand": "fill"
+    },
+    "TeacherGroupsDesk.dc.html": {
+      "x": 2720,
+      "y": 1300,
+      "w": 1280,
+      "h": 900,
+      "title": "УД3 · Группы и ученики",
+      "expand": "fill"
+    },
+    "TeacherMonthDesk.dc.html": {
+      "x": 0,
+      "y": 2320,
+      "w": 1280,
+      "h": 900,
+      "title": "УД4 · Мой месяц",
+      "expand": "fill"
+    },
+    "AdminDashboard.dc.html": {
+      "x": 0,
+      "y": 3640,
+      "w": 1280,
+      "h": 900,
+      "title": "А1 · Дашборд",
+      "expand": "fill"
+    },
+    "AdminSchedule.dc.html": {
+      "x": 1360,
+      "y": 3640,
+      "w": 1280,
+      "h": 900,
+      "title": "А2 · Расписание",
+      "expand": "fill"
+    },
+    "AdminGroups.dc.html": {
+      "x": 2720,
+      "y": 3640,
+      "w": 1280,
+      "h": 900,
+      "title": "А3 · Группы",
+      "expand": "fill"
+    },
+    "AdminGroup.dc.html": {
+      "x": 0,
+      "y": 4660,
+      "w": 1280,
+      "h": 900,
+      "title": "А4 · Группа",
+      "expand": "fill"
+    },
+    "AdminStudents.dc.html": {
+      "x": 1360,
+      "y": 4660,
+      "w": 1280,
+      "h": 900,
+      "title": "А5 · Ученики",
+      "expand": "fill"
+    },
+    "AdminStudent.dc.html": {
+      "x": 2720,
+      "y": 4660,
+      "w": 1280,
+      "h": 900,
+      "title": "А6 · Ученик",
+      "expand": "fill"
+    },
+    "AdminPayments.dc.html": {
+      "x": 0,
+      "y": 5680,
+      "w": 1280,
+      "h": 900,
+      "title": "А7 · Оплаты",
+      "expand": "fill"
+    },
+    "AdminUsers.dc.html": {
+      "x": 1360,
+      "y": 5680,
+      "w": 1280,
+      "h": 900,
+      "title": "А8 · Пользователи и учителя",
+      "expand": "fill"
+    },
+    "AdminSettings.dc.html": {
+      "x": 2720,
+      "y": 5680,
+      "w": 1280,
+      "h": 900,
+      "title": "А9 · Тарифы и праздники",
+      "expand": "fill"
+    },
+    "AuditLog.dc.html": {
+      "x": 0,
+      "y": 6700,
+      "w": 1280,
+      "h": 900,
+      "title": "А10 · Журнал изменений",
+      "expand": "fill"
+    },
+    "AdminTrials.dc.html": {
+      "x": 1360,
+      "y": 6700,
+      "w": 1280,
+      "h": 900,
+      "title": "А11 · Пробные занятия",
+      "expand": "fill"
+    },
+    "AdminMobileToday.dc.html": {
+      "x": 0,
+      "y": 8020,
+      "w": 390,
+      "h": 844,
+      "title": "АМ1 · Сегодня (все учителя)",
+      "radius": 40
+    },
+    "AdminMobileStudent.dc.html": {
+      "x": 470,
+      "y": 8020,
+      "w": 390,
+      "h": 844,
+      "title": "АМ2 · Ученик",
+      "radius": 40
+    },
+    "AdminMobilePayment.dc.html": {
+      "x": 940,
+      "y": 8020,
+      "w": 390,
+      "h": 844,
+      "title": "АМ3 · Записать оплату",
+      "radius": 40
+    },
+    "Payroll.dc.html": {
+      "x": 0,
+      "y": 9400,
+      "w": 1280,
+      "h": 900,
+      "title": "Б1 · Расчёт ЗП",
+      "expand": "fill"
+    },
+    "PayrollTeacher.dc.html": {
+      "x": 1360,
+      "y": 9400,
+      "w": 1280,
+      "h": 900,
+      "title": "Б2 · Детализация по учителю",
+      "expand": "fill"
+    },
+    "MoneyReport.dc.html": {
+      "x": 2720,
+      "y": 9400,
+      "w": 1280,
+      "h": 900,
+      "title": "Б3 · Деньги за месяц",
+      "expand": "fill"
+    },
+    "AccMobilePayroll.dc.html": {
+      "x": 0,
+      "y": 10720,
+      "w": 390,
+      "h": 844,
+      "title": "БМ1 · Расчёт ЗП",
+      "radius": 40
+    },
+    "AccMobileTeacher.dc.html": {
+      "x": 470,
+      "y": 10720,
+      "w": 390,
+      "h": 844,
+      "title": "БМ2 · Учитель за месяц",
+      "radius": 40
+    },
+    "PayrollPeriods.dc.html": {
+      "x": 0,
+      "y": 12040,
+      "w": 1280,
+      "h": 900,
+      "title": "Б1а · Архив периодов (клик по месяцу)",
+      "expand": "fill"
+    },
+    "PayrollClose.dc.html": {
+      "x": 1360,
+      "y": 12040,
+      "w": 1280,
+      "h": 900,
+      "title": "Б1б · Закрыть период",
+      "expand": "fill"
+    },
+    "PayrollCompare.dc.html": {
+      "x": 2720,
+      "y": 12040,
+      "w": 1280,
+      "h": 900,
+      "title": "Б1в · Сверка со старой схемой",
+      "expand": "fill"
+    },
+    "PayrollAdjustment.dc.html": {
+      "x": 0,
+      "y": 13060,
+      "w": 1280,
+      "h": 900,
+      "title": "Б2а · Корректировка",
+      "expand": "fill"
+    },
+    "PayrollSlip.dc.html": {
+      "x": 1360,
+      "y": 13060,
+      "w": 1280,
+      "h": 900,
+      "title": "Б2б · Расчётный лист (печать / PDF)",
+      "expand": "fill"
+    },
+    "SettingsTariffHistory.dc.html": {
+      "x": 2720,
+      "y": 13060,
+      "w": 1280,
+      "h": 900,
+      "title": "А9а · История тарифов",
+      "expand": "fill"
+    }
+  },
+  "order": [
+    "Login.dc.html",
+    "Main.dc.html",
+    "Attendance.dc.html",
+    "Groups.dc.html",
+    "GroupDetail.dc.html",
+    "MyMonth.dc.html",
+    "Profile.dc.html",
+    "TeacherToday.dc.html",
+    "TeacherAttendance.dc.html",
+    "TeacherGroupsDesk.dc.html",
+    "TeacherMonthDesk.dc.html",
+    "AdminDashboard.dc.html",
+    "AdminSchedule.dc.html",
+    "AdminGroups.dc.html",
+    "AdminGroup.dc.html",
+    "AdminStudents.dc.html",
+    "AdminStudent.dc.html",
+    "AdminPayments.dc.html",
+    "AdminUsers.dc.html",
+    "AdminSettings.dc.html",
+    "AuditLog.dc.html",
+    "AdminTrials.dc.html",
+    "AdminMobileToday.dc.html",
+    "AdminMobileStudent.dc.html",
+    "AdminMobilePayment.dc.html",
+    "Payroll.dc.html",
+    "PayrollTeacher.dc.html",
+    "MoneyReport.dc.html",
+    "AccMobilePayroll.dc.html",
+    "AccMobileTeacher.dc.html",
+    "PayrollPeriods.dc.html",
+    "PayrollClose.dc.html",
+    "PayrollCompare.dc.html",
+    "PayrollAdjustment.dc.html",
+    "PayrollSlip.dc.html",
+    "SettingsTariffHistory.dc.html"
+  ],
+  "notes": {
+    "t1": {
+      "x": 0,
+      "y": -300,
+      "w": 240,
+      "text": "Учитель · телефон",
+      "kind": "title1",
+      "maxW": 3200
+    },
+    "t1d": {
+      "x": 0,
+      "y": 1000,
+      "w": 240,
+      "text": "Учитель · десктоп и планшет",
+      "kind": "title1",
+      "maxW": 4000
+    },
+    "t2": {
+      "x": 0,
+      "y": 3340,
+      "w": 240,
+      "text": "Администратор · десктоп и планшет",
+      "kind": "title1",
+      "maxW": 4000
+    },
+    "t3": {
+      "x": 0,
+      "y": 7720,
+      "w": 240,
+      "text": "Администратор · телефон",
+      "kind": "title1",
+      "maxW": 1400
+    },
+    "t4": {
+      "x": 0,
+      "y": 9100,
+      "w": 240,
+      "text": "Бухгалтер · десктоп и планшет",
+      "kind": "title1",
+      "maxW": 4000
+    },
+    "t5": {
+      "x": 0,
+      "y": 10420,
+      "w": 240,
+      "text": "Бухгалтер · телефон",
+      "kind": "title1",
+      "maxW": 1000
+    },
+    "s1": {
+      "x": 3300,
+      "y": 0,
+      "w": 320,
+      "text": "Палитра из Instagram IQ UP: жёлтый #F2C230 (главное действие), чёрный #141414, тёплый фон #FFFDF6, бирюза #1C8C9E (время, заморозка), зелёный #1E9E5A (был), красный #D64545 (сгорел, долг, не подтверждено), оранжевый #B86A00 (пора оплачивать). Шрифты: Unbounded (заголовки, суммы) + Manrope (текст).",
+      "fill": "orange"
+    },
+    "s2": {
+      "x": 3300,
+      "y": 440,
+      "w": 320,
+      "text": "Анимации (в статике не показаны): колода занятий на «Сегодня» — свайп с перспективой; flip карточки ученика в цвет статуса; tilt карточки ЗП за пальцем + count-up суммы. Остальное — spring-переходы 200–300 мс, только transform/opacity, prefers-reduced-motion отключает 3D.",
+      "fill": "teal"
+    },
+    "s4": {
+      "x": 2720,
+      "y": 6700,
+      "w": 320,
+      "text": "Пробные занятия (по Excel Каныкей: красным — записались на пробное, после оплаты — чёрным). В системе: фиолетовый пунктир + подпись «пробный». Урок не списывается, учителю не начисляется, в заполненность группы не входит. Учитель отмечает был / не был; админ после оплаты нажимает «Оплатил → зачислить».",
+      "fill": "purple"
+    },
+    "s3": {
+      "x": 1360,
+      "y": 2320,
+      "w": 320,
+      "text": "Планшет: десктопные экраны резиновые — на iPad боковое меню остаётся, на ширине меньше 900 px складывается в верхнюю панель, таблицы скроллятся горизонтально. Отдельных планшетных макетов нет — это один и тот же экран.",
+      "fill": "blue"
+    },
+    "t6": {
+      "x": 0,
+      "y": 11740,
+      "w": 240,
+      "text": "Диалоги и состояния · что открывают кнопки",
+      "kind": "title1",
+      "maxW": 4000
+    },
+    "s5": {
+      "x": 4100,
+      "y": 12040,
+      "w": 320,
+      "text": "Эти 6 артбордов отвечают на вопросы «что делает кнопка»: архив периодов (клик по месяцу), закрытие периода с чек-листом, сверка со старой схемой, корректировка (аванс / премия / удержание / исправление), расчётный лист A4 и история тарифов. В приложении это модальные окна и выезжающие панели поверх тех же экранов.",
+      "fill": "teal"
+    }
+  },
+  "designSystems": []
+}

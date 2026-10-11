@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Мои группы</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+/* бейджи и числа никогда не переносятся */
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"],span[style*="border-radius: 8px"],span[style*="border-radius: 6px"],td.num,td>a,.nw{white-space:nowrap}
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"]{display:inline-block;line-height:1.3}
+a{color:#1C8C9E;text-decoration:none}a:hover{color:#146f7e}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #FFFDF6; font-family: Manrope, system-ui, sans-serif; color: #141414; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="padding: 56px 20px 0 20px; display: flex; flex-direction: column; gap: 4px">
+    <div style="font-size: 13px; font-weight: 700; color: #6B6B6B; letter-spacing: 0.04em; text-transform: uppercase">4 группы · 28 учеников</div>
+    <div style="font-family: Unbounded, sans-serif; font-size: 26px; font-weight: 700; line-height: 1.1">Мои группы</div>
+  </div>
+
+  <div style="padding: 18px 20px 0 20px; display: flex; gap: 8px">
+    <div style="background: #141414; color: #F2C230; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 800">Все</div>
+    <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 700; color: #6B6B6B">ПН · СР · ПТ</div>
+    <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 700; color: #6B6B6B">ВТ · ЧТ · СБ</div>
+  </div>
+
+  <div style="padding: 16px 20px 0 20px; display: flex; flex-direction: column; gap: 10px; flex: 1 1 auto; min-height: 0; overflow-y: auto">
+
+    <a href="GroupDetail.dc.html" style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 12px; color: #141414">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 3px">
+          <div style="font-family: Unbounded, sans-serif; font-size: 16px; font-weight: 700">Математика · 8 класс А</div>
+          <div style="font-size: 13px; font-weight: 700; color: #1C8C9E">ВТ · ЧТ · СБ · 09:00</div>
+        </div>
+        <div style="background: #F2C230; border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 800; white-space: nowrap">8 / 10</div>
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 700; background: #F5F2E8; border-radius: 8px; padding: 4px 8px">Групповая</span>
+        <span style="font-size: 12px; font-weight: 700; background: #F5F2E8; border-radius: 8px; padding: 4px 8px">В октябре: 4 занятия</span>
+        <span style="font-size: 12px; font-weight: 700; background: #FBECEC; color: #8E2626; border-radius: 8px; padding: 4px 8px">1 долг</span>
+      </div>
+    </a>
+
+    <a href="GroupDetail.dc.html" style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 12px; color: #141414">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 3px">
+          <div style="font-family: Unbounded, sans-serif; font-size: 16px; font-weight: 700">Математика · 6 класс</div>
+          <div style="font-size: 13px; font-weight: 700; color: #1C8C9E">ВТ · ЧТ · СБ · 11:00</div>
+        </div>
+        <div style="background: #F2C230; border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 800; white-space: nowrap">6 / 10</div>
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 700; background: #F5F2E8; border-radius: 8px; padding: 4px 8px">Групповая</span>
+        <span style="font-size: 12px; font-weight: 700; background: #F5F2E8; border-radius: 8px; padding: 4px 8px">В октябре: 4 занятия</span>
+      </div>
+    </a>
+
+    <a href="GroupDetail.dc.html" style="background: #FFFFFF; border: 2px solid #F2C230; border-radius: 20px; padding: 15px; display: flex; flex-direction: column; gap: 12px; color: #141414">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 3px">
+          <div style="font-family: Unbounded, sans-serif; font-size: 16px; font-weight: 700">Математика · 8 класс Б</div>
+          <div style="font-size: 13px; font-weight: 700; color: #1C8C9E">ВТ · ЧТ · СБ · 14:00 · сейчас</div>
+        </div>
+        <div style="background: #F2C230; border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 800; white-space: nowrap">8 / 10</div>
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 700; background: #F5F2E8; border-radius: 8px; padding: 4px 8px">Групповая</span>
+        <span style="font-size: 12px; font-weight: 700; background: #F5F2E8; border-radius: 8px; padding: 4px 8px">В октябре: 3 занятия</span>
+        <span style="font-size: 12px; font-weight: 700; background: #FFF3D6; color: #8A5200; border-radius: 8px; padding: 4px 8px">2 заканчивают абонемент</span>
+      </div>
+    </a>
+
+    <a href="GroupDetail.dc.html" style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 12px; color: #141414">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px">
+        <div style="display: flex; flex-direction: column; gap: 3px">
+          <div style="font-family: Unbounded, sans-serif; font-size: 16px; font-weight: 700">Математика · 5 класс</div>
+          <div style="font-size: 13px; font-weight: 700; color: #1C8C9E">ПН · СР · ПТ · 15:00</div>
+        </div>
+        <div style="background: #F2C230; border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 800; white-space: nowrap">6 / 10</div>
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap">
+        <span style="font-size: 12px; font-weight: 700; background: #F5F2E8; border-radius: 8px; padding: 4px 8px">Групповая</span>
+        <span style="font-size: 12px; font-weight: 700; background: #FBECEC; color: #8E2626; border-radius: 8px; padding: 4px 8px">1 не подтверждено</span>
+      </div>
+    </a>
+
+    <div style="display: flex; align-items: center; gap: 10px; background: #F5F2E8; border-radius: 14px; padding: 12px 14px; font-size: 12px; font-weight: 700; color: #6B6B6B">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
+      Состав групп и расписание меняет администратор
+    </div>
+  </div>
+
+  <div style="display: flex; justify-content: space-around; align-items: center; padding: 10px 12px 28px 12px; background: #FFFFFF; border-top: 1px solid #EDE7D3">
+    <a href="Main.dc.html" aria-label="Сегодня" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 72px; padding: 6px 0; color: #6B6B6B">
+      <div style="width: 48px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+      </div>
+      <span style="font-size: 11px; font-weight: 700">Сегодня</span>
+    </a>
+    <a href="Groups.dc.html" aria-label="Группы" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 72px; padding: 6px 0; color: #141414">
+      <div style="width: 48px; height: 32px; border-radius: 16px; background: #F2C230; display: flex; align-items: center; justify-content: center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="10" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15 17c.5-1.8 2-3 4-3 1.3 0 2.5.6 3 1.5"/></svg>
+      </div>
+      <span style="font-size: 11px; font-weight: 800">Группы</span>
+    </a>
+    <a href="MyMonth.dc.html" aria-label="Мой месяц" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 72px; padding: 6px 0; color: #6B6B6B">
+      <div style="width: 48px; height: 32px; display: flex; align-items: center; justify-content: center">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M7 15h3"/></svg>
+      </div>
+      <span style="font-size: 11px; font-weight: 700">Мой месяц</span>
+    </a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

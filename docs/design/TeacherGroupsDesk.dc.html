@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Группы и ученики — учитель, десктоп</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFDF6}
+/* плотные таблицы: имена не переносятся */
+/* бейджи и числа никогда не переносятся */
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"],span[style*="border-radius: 8px"],span[style*="border-radius: 6px"],td.num,td>a,.nw{white-space:nowrap}
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"]{display:inline-block;line-height:1.3}
+a{color:#1C8C9E;text-decoration:none}a:hover{color:#146f7e}
+button{font-family:inherit;cursor:pointer}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid #EDE7D3;font-size:14px;vertical-align:middle}
+th{font-size:11px;font-weight:800;color:#6B6B6B;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+th,td{padding:10px 10px;font-size:13px}td:first-child{white-space:nowrap}
+</style>
+</helmet>
+<div style="min-height: 900px; box-sizing: border-box; background: #FFFDF6; font-family: Manrope, system-ui, sans-serif; color: #141414; display: flex; flex-wrap: wrap">
+
+  <nav style="flex: 0 1 232px; min-width: 200px; background: #141414; color: #FFFDF6; padding: 28px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 22px 8px">
+      <div style="width: 36px; height: 36px; border-radius: 18px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 10px; font-weight: 800; color: #141414">IQ UP</div>
+      <div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700">Tracker</div>
+    </div>
+    <a href="TeacherToday.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Сегодня</a>
+    <a href="TeacherGroupsDesk.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #F2C230; color: #141414; font-size: 14px; font-weight: 800">Группы и ученики</a>
+    <a href="TeacherMonthDesk.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Мой месяц</a>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(255,253,246,0.06)">
+      <div style="width: 34px; height: 34px; border-radius: 17px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 800; color: #141414">Г</div>
+      <div style="display: flex; flex-direction: column"><div style="font-size: 13px; font-weight: 800">Гульзат</div><div style="font-size: 11px; font-weight: 700; color: #B5AE98">учитель · 45 %</div></div>
+    </div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 32px 36px; box-sizing: border-box; display: flex; flex-direction: column; gap: 22px">
+    <header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+      <div style="display: flex; flex-direction: column; gap: 6px">
+        <div style="font-size: 12px; font-weight: 800; color: #6B6B6B; letter-spacing: 0.06em; text-transform: uppercase">4 группы · 28 учеников</div>
+        <h1 style="margin: 0; font-family: Unbounded, sans-serif; font-size: 30px; font-weight: 700; line-height: 1.1">Группы и ученики</h1>
+      </div>
+      <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Состав и расписание меняет администратор</div>
+    </header>
+
+    <div style="display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start">
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <a href="TeacherGroupsDesk.dc.html" style="background: #141414; color: #FFFDF6; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px">
+          <div style="font-size: 15px; font-weight: 800">Математика · 8 класс А</div>
+          <div style="font-size: 12px; font-weight: 700; color: #F2C230">ВТ · ЧТ · СБ · 09:00 · 8/10</div>
+        </a>
+        <a href="TeacherGroupsDesk.dc.html" style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; color: #141414">
+          <div style="font-size: 15px; font-weight: 800">Математика · 6 класс</div>
+          <div style="font-size: 12px; font-weight: 700; color: #1C8C9E">ВТ · ЧТ · СБ · 11:00 · 6/10</div>
+        </a>
+        <a href="TeacherGroupsDesk.dc.html" style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; color: #141414">
+          <div style="font-size: 15px; font-weight: 800">Математика · 8 класс Б</div>
+          <div style="font-size: 12px; font-weight: 700; color: #1C8C9E">ВТ · ЧТ · СБ · 14:00 · 8/10</div>
+        </a>
+        <a href="TeacherGroupsDesk.dc.html" style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; color: #141414">
+          <div style="font-size: 15px; font-weight: 800">Математика · 5 класс</div>
+          <div style="font-size: 12px; font-weight: 700; color: #1C8C9E">ПН · СР · ПТ · 15:00 · 6/10</div>
+        </a>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 16px">
+        <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; padding: 20px 24px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px">
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <div style="font-family: Unbounded, sans-serif; font-size: 20px; font-weight: 700">Математика · 8 класс А</div>
+            <div style="font-size: 13px; font-weight: 700; color: #6B6B6B">Групповая · ВТ, ЧТ, СБ 09:00–10:00 · каб. 1 · 3 200 сом / 12 занятий</div>
+          </div>
+          <div style="display: flex; gap: 10px">
+            <a href="TeacherGroupsDesk.dc.html" style="display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1.5px solid #141414; color: #141414; font-size: 13px; font-weight: 800"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Доп. урок</a>
+            <a href="TeacherGroupsDesk.dc.html" style="display: flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 12px; background: #141414; color: #F2C230; font-size: 13px; font-weight: 800">Занятия группы</a>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+          <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 800; color: #6B6B6B; text-transform: uppercase; letter-spacing: 0.06em">В октябре</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 700">4 занятия</div></div>
+          <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 800; color: #6B6B6B; text-transform: uppercase; letter-spacing: 0.06em">Ученико-уроков</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 700">30</div></div>
+          <div style="background: #F2C230; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 800; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.06em">Начислено</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 800">3 600 сом</div></div>
+          <div style="background: #FBECEC; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px"><div style="font-size: 11px; font-weight: 800; color: #8E2626; text-transform: uppercase; letter-spacing: 0.06em">Долги</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 700; color: #8E2626">1 ученик</div></div>
+        </div>
+
+        <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; overflow-x: auto">
+          <table style="min-width: 520px">
+            <thead><tr><th>Ученик · родитель</th><th>С даты</th><th class="num">Осталось</th><th class="num">Замор.</th><th>Оплата</th></tr></thead>
+            <tbody>
+              <tr><td><div style="font-weight: 800; white-space: nowrap">Айжан Бекова</div><div style="font-size: 11px; color: #6B6B6B; font-weight: 700">0555 111 222</div></td><td>15 сен</td><td class="num">4 / 12</td><td class="num">1 / 2</td><td><span style="background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Оплачено</span></td></tr>
+              <tr><td><div style="font-weight: 800; white-space: nowrap">Бакыт Токтосунов</div><div style="font-size: 11px; color: #6B6B6B; font-weight: 700">0700 333 444</div></td><td>1 сен</td><td class="num">9 / 12</td><td class="num">0 / 2</td><td><span style="background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Оплачено</span></td></tr>
+              <tr style="background: #FFF8E1"><td><div style="font-weight: 800; white-space: nowrap">Данияр Кадыров</div><div style="font-size: 11px; color: #6B6B6B; font-weight: 700">0555 777 888</div></td><td>1 сен</td><td class="num" style="color: #B86A00; font-weight: 800">1 / 12</td><td class="num">2 / 2</td><td><span style="background: #FFF3D6; color: #8A5200; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Пора оплачивать</span></td></tr>
+              <tr style="background: #FFF4F4"><td><div style="font-weight: 800; white-space: nowrap">Элина Сыдыкова</div><div style="font-size: 11px; color: #6B6B6B; font-weight: 700">0555 123 456</div></td><td>1 сен</td><td class="num" style="color: #B83232; font-weight: 800">−2</td><td class="num">0 / 2</td><td><span style="background: #FBECEC; color: #8E2626; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Долг 533 сом</span></td></tr>
+              <tr><td><div style="font-weight: 800; white-space: nowrap">Камила Орозова</div><div style="font-size: 11px; color: #6B6B6B; font-weight: 700">0770 555 666</div></td><td>1 сен</td><td class="num">6 / 12</td><td class="num">1 / 2</td><td><span style="background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Оплачено</span></td></tr>
+              <tr><td><div style="font-weight: 800; white-space: nowrap">Нурлан Асанов</div><div style="font-size: 11px; color: #6B6B6B; font-weight: 700">0555 999 000</div></td><td>1 окт</td><td class="num">11 / 12</td><td class="num">0 / 2</td><td><span style="background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Частично · 6 ур.</span></td></tr>
+              <tr><td><div style="font-weight: 800; white-space: nowrap">Сезим Жумабекова</div><div style="font-size: 11px; color: #6B6B6B; font-weight: 700">0555 222 333</div></td><td>1 сен</td><td class="num" style="color: #B86A00; font-weight: 800">2 / 12</td><td class="num">0 / 2</td><td><span style="background: #FFF3D6; color: #8A5200; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Пора оплачивать</span></td></tr>
+              <tr><td><div style="font-weight: 800; white-space: nowrap">Тимур Мамбетов</div><div style="font-size: 11px; color: #6B6B6B; font-weight: 700">0555 444 555</div></td><td>1 сен</td><td class="num">7 / 12</td><td class="num">2 / 2</td><td><span style="background: #E3F5EA; color: #15733F; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 800">Оплачено</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

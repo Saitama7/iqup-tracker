@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Сегодня — администратор, телефон</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+/* бейджи и числа никогда не переносятся */
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"],span[style*="border-radius: 8px"],span[style*="border-radius: 6px"],td.num,td>a,.nw{white-space:nowrap}
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"]{display:inline-block;line-height:1.3}
+a{color:#1C8C9E;text-decoration:none}a:hover{color:#146f7e}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #FFFDF6; font-family: Manrope, system-ui, sans-serif; color: #141414; display: flex; flex-direction: column; overflow: hidden">
+
+  <div style="padding: 56px 20px 0 20px; display: flex; justify-content: space-between; align-items: flex-start">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="font-size: 13px; font-weight: 700; color: #6B6B6B; letter-spacing: 0.04em; text-transform: uppercase">Четверг, 8 октября</div>
+      <div style="font-family: Unbounded, sans-serif; font-size: 26px; font-weight: 700; line-height: 1.1">Центр сегодня</div>
+    </div>
+    <div style="width: 44px; height: 44px; border-radius: 22px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-weight: 800; font-size: 14px">К</div>
+  </div>
+
+  <div style="padding: 18px 20px 0 20px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+    <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 12px 14px"><div style="font-size: 11px; font-weight: 800; color: #6B6B6B; text-transform: uppercase; letter-spacing: 0.04em">Занятий</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 700">14</div><div style="font-size: 11px; font-weight: 700; color: #15733F">9 проведено · 2 идут</div></div>
+    <div style="background: #FBECEC; border-radius: 16px; padding: 12px 14px; color: #8E2626"><div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em">Не подтверждено</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 700">3</div><div style="font-size: 11px; font-weight: 700">2 учителя</div></div>
+    <div style="background: #FFF3D6; border-radius: 16px; padding: 12px 14px; color: #8A5200"><div style="font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em">Долги</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 700">5</div><div style="font-size: 11px; font-weight: 700">2 933 сом</div></div>
+    <a href="AdminMobilePayment.dc.html" style="background: #F2C230; border-radius: 16px; padding: 12px 14px; color: #141414; display: flex; flex-direction: column; justify-content: space-between"><div style="font-size: 11px; font-weight: 800; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.04em">Оплат сегодня</div><div style="font-family: Unbounded, sans-serif; font-size: 22px; font-weight: 800">9 600</div><div style="font-size: 11px; font-weight: 800">+ Записать →</div></a>
+  </div>
+
+  <div style="padding: 16px 20px 0 20px; display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; overflow-y: auto">
+    <div style="display: flex; justify-content: space-between; align-items: center"><div style="font-size: 14px; font-weight: 800">Занятия · все учителя</div><div style="font-size: 12px; font-weight: 700; color: #6B6B6B">по времени</div></div>
+
+    <div style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 11px 14px"><div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700; min-width: 46px">09:00</div><div style="flex: 1 1 auto; min-width: 0"><div style="font-size: 14px; font-weight: 800">Матем · 8 кл А</div><div style="font-size: 12px; font-weight: 700; color: #6B6B6B">Гульзат · 7+1</div></div><span style="width: 10px; height: 10px; border-radius: 5px; background: #1E9E5A"></span></div>
+    <div style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 11px 14px"><div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700; min-width: 46px">09:00</div><div style="flex: 1 1 auto; min-width: 0"><div style="font-size: 14px; font-weight: 800">Продлёнка · утро</div><div style="font-size: 12px; font-weight: 700; color: #6B6B6B">Нургуль · 7 из 8</div></div><span style="width: 10px; height: 10px; border-radius: 5px; background: #1E9E5A"></span></div>
+    <div style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 11px 14px"><div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700; min-width: 46px">11:00</div><div style="flex: 1 1 auto; min-width: 0"><div style="font-size: 14px; font-weight: 800">Матем · 6 кл</div><div style="font-size: 12px; font-weight: 700; color: #6B6B6B">Гульзат · 6 из 6</div></div><span style="width: 10px; height: 10px; border-radius: 5px; background: #1E9E5A"></span></div>
+    <div style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border: 2px solid #F2C230; border-radius: 16px; padding: 10px 13px"><div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700; min-width: 46px">14:00</div><div style="flex: 1 1 auto; min-width: 0"><div style="font-size: 14px; font-weight: 800">Матем · 8 кл Б</div><div style="font-size: 12px; font-weight: 700; color: #6B6B6B">Гульзат · 8 уч · идёт</div></div><span style="background: #F2C230; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 800">Идёт</span></div>
+    <div style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border: 2px solid #F2C230; border-radius: 16px; padding: 10px 13px"><div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700; min-width: 46px">14:00</div><div style="flex: 1 1 auto; min-width: 0"><div style="font-size: 14px; font-weight: 800">Продлёнка · день</div><div style="font-size: 12px; font-weight: 700; color: #6B6B6B">Нургуль · 6 уч · идёт</div></div><span style="background: #F2C230; border-radius: 999px; padding: 4px 8px; font-size: 11px; font-weight: 800">Идёт</span></div>
+    <div style="display: flex; align-items: center; gap: 12px; background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 16px; padding: 11px 14px"><div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700; min-width: 46px">15:00</div><div style="flex: 1 1 auto; min-width: 0"><div style="font-size: 14px; font-weight: 800">Химия · 9 кл</div><div style="font-size: 12px; font-weight: 700; color: #6B6B6B">Айпери · 4 уч</div></div><span style="font-size: 11px; font-weight: 800; color: #6B6B6B">Далее</span></div>
+
+    <div style="font-size: 14px; font-weight: 800; padding-top: 8px">Требует внимания</div>
+    <a href="AdminMobileToday.dc.html" style="display: flex; align-items: center; gap: 10px; background: #FBECEC; border-radius: 14px; padding: 10px 14px; color: #8E2626"><div style="font-size: 13px; font-weight: 700; flex: 1 1 auto">Вчера 15:00 · Матем 5 кл · Гульзат — не подтверждено</div><div style="font-size: 13px; font-weight: 800">→</div></a>
+    <a href="AdminMobileToday.dc.html" style="display: flex; align-items: center; gap: 10px; background: #FBECEC; border-radius: 14px; padding: 10px 14px; color: #8E2626"><div style="font-size: 13px; font-weight: 700; flex: 1 1 auto">Вчера 18:00 · Химия 10 кл · Айпери — не подтверждено</div><div style="font-size: 13px; font-weight: 800">→</div></a>
+    <a href="AdminMobileStudent.dc.html" style="display: flex; align-items: center; gap: 10px; background: #FFF3D6; border-radius: 14px; padding: 10px 14px; color: #8A5200"><div style="font-size: 13px; font-weight: 700; flex: 1 1 auto">Азамат Уулу · продлёнка — долг 3 урока, 1 110 сом</div><div style="font-size: 13px; font-weight: 800">→</div></a>
+    <div style="height: 8px"></div>
+  </div>
+
+  <div style="display: flex; justify-content: space-around; align-items: center; padding: 10px 8px 28px 8px; background: #FFFFFF; border-top: 1px solid #EDE7D3">
+    <a href="AdminMobileToday.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; padding: 6px 0; color: #141414"><div style="width: 44px; height: 30px; border-radius: 15px; background: #F2C230; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div><span style="font-size: 10px; font-weight: 800">Сегодня</span></a>
+    <a href="AdminMobileStudent.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; padding: 6px 0; color: #6B6B6B"><div style="width: 44px; height: 30px; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg></div><span style="font-size: 10px; font-weight: 700">Ученики</span></a>
+    <a href="AdminMobilePayment.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; padding: 6px 0; color: #6B6B6B"><div style="width: 44px; height: 30px; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M7 15h3"/></svg></div><span style="font-size: 10px; font-weight: 700">Оплата</span></a>
+    <a href="AdminMobileToday.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; padding: 6px 0; color: #6B6B6B"><div style="width: 44px; height: 30px; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="10" r="2.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M15 17c.5-1.8 2-3 4-3 1.3 0 2.5.6 3 1.5"/></svg></div><span style="font-size: 10px; font-weight: 700">Группы</span></a>
+    <a href="AdminMobileToday.dc.html" style="display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; padding: 6px 0; color: #6B6B6B"><div style="width: 44px; height: 30px; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div><span style="font-size: 10px; font-weight: 700">Ещё</span></a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>

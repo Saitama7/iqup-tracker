@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Б2а Корректировка · Детализация ЗП — Гульзат, сентябрь 2026</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;800&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#FFFDF6}
+/* бейджи и числа никогда не переносятся */
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"],span[style*="border-radius: 8px"],span[style*="border-radius: 6px"],td.num,td>a,.nw{white-space:nowrap}
+span[style*="border-radius: 999px"],span[style*="border-radius:999px"]{display:inline-block;line-height:1.3}
+a{color:#1C8C9E;text-decoration:none}a:hover{color:#146f7e}
+button{font-family:inherit;cursor:pointer}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:11px 12px;border-bottom:1px solid #EDE7D3;font-size:13px;vertical-align:middle}
+th{font-size:11px;font-weight:800;color:#6B6B6B;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+
+.ov{position:absolute;inset:0;background:rgba(20,20,20,.55);display:flex;align-items:center;justify-content:center;padding:40px;box-sizing:border-box;z-index:50}
+.ov.right{justify-content:flex-end;padding:0}
+.ov.pop{background:rgba(20,20,20,.18);align-items:flex-start;justify-content:flex-start}
+.modal{background:#FFFDF6;border-radius:24px;box-shadow:0 30px 80px rgba(0,0,0,.35);padding:26px 28px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;font-family:Manrope,system-ui,sans-serif;color:#141414}
+.drawer{background:#FFFDF6;height:100%;box-shadow:-20px 0 60px rgba(0,0,0,.3);padding:28px 30px;box-sizing:border-box;display:flex;flex-direction:column;gap:16px;overflow:auto;font-family:Manrope,system-ui,sans-serif;color:#141414}
+.h2{margin:0;font-family:Unbounded,sans-serif;font-size:22px;font-weight:700;line-height:1.15}
+.sub{font-size:13px;font-weight:700;color:#6B6B6B;line-height:1.5}
+.btn{min-height:46px;padding:0 18px;border-radius:14px;border:0;background:#141414;color:#F2C230;font-size:14px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;gap:8px;white-space:nowrap}
+.btn.ghost{background:#FFFFFF;color:#141414;border:1.5px solid #E3DCC6}
+.btn.warn{background:#D64545;color:#FFFFFF}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:14px;font-weight:700}
+.pill{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;white-space:nowrap}
+.ok{background:#E3F5EA;color:#15733F}.wr{background:#FFF3D6;color:#8A5200}.bad{background:#FBECEC;color:#8E2626}.nt{background:#F5F2E8;color:#6B6B6B}
+.card{background:#FFFFFF;border:1px solid #EDE7D3;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.note{background:#F5F2E8;border-radius:12px;padding:10px 12px;font-size:12px;font-weight:700;color:#6B6B6B;line-height:1.5}
+.seg{display:flex;background:#F5F2E8;border-radius:14px;padding:4px;gap:4px}
+.seg span{flex:1;text-align:center;padding:10px 8px;border-radius:11px;font-size:13px;font-weight:800;color:#6B6B6B}
+.seg span.on{background:#141414;color:#F2C230}
+.fld{display:flex;flex-direction:column;gap:6px}
+.inp{width:100%;box-sizing:border-box;min-height:44px;border:1.5px solid #E3DCC6;border-radius:12px;padding:0 14px;font-size:14px;font-weight:700;color:#141414;background:#FFFFFF;display:flex;align-items:center}
+.lbl{font-size:11px;font-weight:800;color:#6B6B6B;letter-spacing:.06em;text-transform:uppercase}
+.hint{position:absolute;z-index:60;background:#1C8C9E;color:#fff;border-radius:12px;padding:8px 12px;font-size:12px;font-weight:800;box-shadow:0 10px 30px rgba(0,0,0,.25);font-family:Manrope,system-ui,sans-serif;max-width:260px;line-height:1.4}
+.hint:before{content:"";position:absolute;left:18px;top:-6px;border:6px solid transparent;border-top:0;border-bottom-color:#1C8C9E}
+</style>
+</helmet>
+<div style="position: relative; min-height: 900px; box-sizing: border-box; background: #FFFDF6; font-family: Manrope, system-ui, sans-serif; color: #141414; display: flex; flex-wrap: wrap">
+
+  <nav style="flex: 0 1 232px; min-width: 200px; background: #141414; color: #FFFDF6; padding: 28px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+    <div style="display: flex; align-items: center; gap: 10px; padding: 4px 8px 22px 8px"><div style="width: 36px; height: 36px; border-radius: 18px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 10px; font-weight: 800; color: #141414">IQ UP</div><div style="font-family: Unbounded, sans-serif; font-size: 14px; font-weight: 700">Tracker</div></div>
+    <a href="Payroll.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; background: #F2C230; color: #141414; font-size: 14px; font-weight: 800">Расчёт ЗП</a>
+    <a href="MoneyReport.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Деньги за месяц</a>
+    <a href="AdminSchedule.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Расписание</a>
+    <a href="AdminGroups.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Группы</a>
+    <a href="AdminStudents.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Ученики</a>
+    <a href="AdminPayments.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Оплаты</a>
+    <a href="AuditLog.dc.html" style="display: flex; padding: 10px 12px; border-radius: 12px; color: #B5AE98; font-size: 14px; font-weight: 700">Журнал изменений</a>
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(255,253,246,0.06)"><div style="width: 34px; height: 34px; border-radius: 17px; background: #1C8C9E; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 13px; font-weight: 800">А</div><div style="display: flex; flex-direction: column"><div style="font-size: 13px; font-weight: 800">Айгерим</div><div style="font-size: 11px; font-weight: 700; color: #B5AE98">бухгалтер · просмотр</div></div></div>
+  </nav>
+
+  <main style="flex: 999 1 560px; min-width: 0; padding: 32px 36px; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px">
+    <header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+      <div style="display: flex; flex-direction: column; gap: 8px">
+        <a href="Payroll.dc.html" style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; color: #6B6B6B"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6B6B6B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>Расчёт ЗП · Сентябрь 2026</a>
+        <div style="display: flex; align-items: center; gap: 14px">
+          <div style="width: 48px; height: 48px; border-radius: 24px; background: #F2C230; display: flex; align-items: center; justify-content: center; font-family: Unbounded, sans-serif; font-size: 16px; font-weight: 800">Г</div>
+          <h1 style="margin: 0; font-family: Unbounded, sans-serif; font-size: 28px; font-weight: 700; line-height: 1.1">Гульзат Асанова</h1>
+          <span style="background: #F5F2E8; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 800">45 %</span>
+        </div>
+        <div style="font-size: 14px; font-weight: 700; color: #6B6B6B">Математика · 4 группы · 48 занятий · 318 ученико-уроков · 0 поздних подтверждений</div>
+      </div>
+      <div style="display: flex; gap: 10px">
+        <button style="min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1.5px solid #E3DCC6; background: #FFFFFF; font-size: 13px; font-weight: 800; color: #141414">+ Корректировка</button>
+        <button style="min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1.5px solid #E3DCC6; background: #FFFFFF; font-size: 13px; font-weight: 800; color: #141414">Печать расчётного листа</button>
+      </div>
+    </header>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 20px; align-items: start">
+      <div style="background: #141414; color: #FFFDF6; border-radius: 20px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+        <div style="font-size: 12px; font-weight: 800; color: #F2C230; text-transform: uppercase; letter-spacing: 0.06em">Новая схема · по проведённым урокам</div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px; font-size: 14px; font-weight: 700">
+          <div style="display: flex; justify-content: space-between"><span style="opacity: 0.7">Ученико-уроков</span><span>318</span></div>
+          <div style="display: flex; justify-content: space-between"><span style="opacity: 0.7">× цена урока</span><span>266,67</span></div>
+          <div style="display: flex; justify-content: space-between"><span style="opacity: 0.7">= стоимость уроков</span><span>84 800</span></div>
+          <div style="display: flex; justify-content: space-between"><span style="opacity: 0.7">× 45 %</span><span style="color: #F2C230">38 160</span></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; border-top: 1px solid rgba(255,253,246,0.12); padding-top: 12px; font-size: 14px; font-weight: 700"><span style="opacity: 0.7">Аванс 18 сентября</span><span>− 5 000</span></div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline"><span style="font-size: 15px; font-weight: 800">К выплате 15 октября</span><span style="font-family: Unbounded, sans-serif; font-size: 30px; font-weight: 800; color: #F2C230">33 160</span></div>
+      </div>
+
+      <div style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+        <div style="font-size: 12px; font-weight: 800; color: #6B6B6B; text-transform: uppercase; letter-spacing: 0.06em">Сверка · старая схема (45 % от оплат месяца)</div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700"><span style="color: #6B6B6B">Оплаты по её группам в сентябре</span><span>92 000</span></div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 700"><span style="color: #6B6B6B">× 45 %</span><span>41 400</span></div>
+        <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #EDE7D3; padding-top: 10px"><span>Разница</span><span style="color: #B83232">− 3 240</span></div>
+        <div style="background: #FFF8E1; border-radius: 12px; padding: 10px 12px; font-size: 12px; font-weight: 700; color: #8A5200; line-height: 1.5">Почему меньше: 3 ученика оплатили абонементы 25–30 сентября, их уроки пройдут в октябре — начислятся в октябрьской ЗП. Деньги не теряются, а переносятся.</div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start">
+      <section style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; overflow-x: auto">
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #EDE7D3"><div style="font-size: 15px; font-weight: 800">Занятия · сентябрь</div><div style="display: flex; gap: 6px"><span style="padding: 5px 10px; border-radius: 999px; background: #141414; color: #F2C230; font-size: 12px; font-weight: 800">Все 48</span><span style="padding: 5px 10px; border-radius: 999px; border: 1.5px solid #E3DCC6; font-size: 12px; font-weight: 700; color: #6B6B6B">8 кл А</span><span style="padding: 5px 10px; border-radius: 999px; border: 1.5px solid #E3DCC6; font-size: 12px; font-weight: 700; color: #6B6B6B">6 кл</span><span style="padding: 5px 10px; border-radius: 999px; border: 1.5px solid #E3DCC6; font-size: 12px; font-weight: 700; color: #6B6B6B">8 кл Б</span><span style="padding: 5px 10px; border-radius: 999px; border: 1.5px solid #E3DCC6; font-size: 12px; font-weight: 700; color: #6B6B6B">5 кл</span></div></div>
+        <table style="min-width: 680px">
+          <thead><tr><th>Дата</th><th>Группа</th><th class="num">Был</th><th class="num">Сгорел</th><th class="num">Замор.</th><th class="num">Уч-уроков</th><th class="num">Сумма</th><th>Подтверждено</th></tr></thead>
+          <tbody>
+            <tr><td>30 сен, вт 14:00</td><td style="font-weight: 800">8 кл Б</td><td class="num">8</td><td class="num">0</td><td class="num">0</td><td class="num">8</td><td class="num" style="font-weight: 800">960</td><td style="color: #15733F; font-weight: 700">15:04</td></tr>
+            <tr><td>30 сен, вт 11:00</td><td style="font-weight: 800">6 кл</td><td class="num">5</td><td class="num">1</td><td class="num">0</td><td class="num">6</td><td class="num" style="font-weight: 800">720</td><td style="color: #15733F; font-weight: 700">12:01</td></tr>
+            <tr><td>30 сен, вт 09:00</td><td style="font-weight: 800">8 кл А</td><td class="num">7</td><td class="num">0</td><td class="num">1</td><td class="num">7</td><td class="num" style="font-weight: 800">840</td><td style="color: #15733F; font-weight: 700">10:03</td></tr>
+            <tr><td>29 сен, пн 15:00</td><td style="font-weight: 800">5 кл</td><td class="num">6</td><td class="num">0</td><td class="num">0</td><td class="num">6</td><td class="num" style="font-weight: 800">720</td><td style="color: #15733F; font-weight: 700">16:00</td></tr>
+            <tr><td>27 сен, сб 14:00</td><td style="font-weight: 800">8 кл Б</td><td class="num">7</td><td class="num">1</td><td class="num">0</td><td class="num">8</td><td class="num" style="font-weight: 800">960</td><td style="color: #15733F; font-weight: 700">15:10</td></tr>
+            <tr><td>27 сен, сб 11:00</td><td style="font-weight: 800">6 кл</td><td class="num">6</td><td class="num">0</td><td class="num">0</td><td class="num">6</td><td class="num" style="font-weight: 800">720</td><td style="color: #15733F; font-weight: 700">12:02</td></tr>
+            <tr><td>27 сен, сб 09:00</td><td style="font-weight: 800">8 кл А</td><td class="num">6</td><td class="num">0</td><td class="num">1</td><td class="num">6</td><td class="num" style="font-weight: 800">720</td><td style="color: #15733F; font-weight: 700">10:00</td></tr>
+            <tr><td colspan="8" style="text-align: center; color: #6B6B6B; font-weight: 700; border-bottom: 0">ещё 41 занятие · итого 318 уч-уроков · 38 160 сом</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <aside style="display: flex; flex-direction: column; gap: 14px">
+        <section style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+          <div style="font-size: 14px; font-weight: 800">По группам</div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 700"><span>8 кл А · 13 зан · 94 уч-ур</span><span style="font-family: Unbounded, sans-serif">11 280</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 700"><span>8 кл Б · 13 зан · 98 уч-ур</span><span style="font-family: Unbounded, sans-serif">11 760</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 700"><span>6 кл · 13 зан · 74 уч-ур</span><span style="font-family: Unbounded, sans-serif">8 880</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 700"><span>5 кл · 9 зан · 52 уч-ур</span><span style="font-family: Unbounded, sans-serif">6 240</span></div>
+          <div style="display: flex; justify-content: space-between; font-size: 14px; font-weight: 800; border-top: 1px solid #EDE7D3; padding-top: 10px"><span>Итого</span><span style="font-family: Unbounded, sans-serif">38 160</span></div>
+        </section>
+        <section style="background: #FFFFFF; border: 1px solid #EDE7D3; border-radius: 20px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px">
+          <div style="font-size: 14px; font-weight: 800">Корректировки</div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; font-weight: 700"><span>18 сен · аванс · Каныкей</span><span style="color: #B83232">− 5 000</span></div>
+          <div style="font-size: 12px; font-weight: 700; color: #6B6B6B">Премий и исправлений нет</div>
+        </section>
+        <section style="background: #F5F2E8; border-radius: 16px; padding: 14px 16px; font-size: 12px; font-weight: 700; color: #6B6B6B; line-height: 1.5">Учитель видит ровно эти же цифры в своём «Моём месяце». Спорный урок — кликните строку: откроется список учеников с отметками и временем.</section>
+      </aside>
+    </div>
+  </main>
+
+<div class="ov">
+  <div class="modal" style="width:560px">
+    <div><h2 class="h2">Корректировка · Гульзат Асанова</h2><div class="sub" style="margin-top:6px">Сентябрь 2026 · период открыт</div></div>
+    <div class="seg"><span class="on">Аванс</span><span>Премия</span><span>Удержание</span><span>Исправление</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="fld"><div class="lbl">Сумма, сом</div><div class="inp" style="font-family:Unbounded,sans-serif;font-size:18px">5 000</div></div>
+      <div class="fld"><div class="lbl">Дата</div><div class="inp">18.09.2026</div></div>
+    </div>
+    <div class="fld"><div class="lbl">Причина · обязательно</div><div class="inp" style="min-height:64px;align-items:flex-start;padding-top:12px">Выдала наличными в офисе по просьбе учителя</div></div>
+    <div class="fld"><div class="lbl">Кто выдал</div><div class="inp" style="justify-content:space-between">Каныкей · администратор <span style="color:#6B6B6B">▾</span></div></div>
+    <div class="card" style="background:#141414;color:#FFFDF6;border:0;gap:6px">
+      <div class="row"><span style="opacity:.7">Начислено за сентябрь</span><span>38 160</span></div>
+      <div class="row"><span style="opacity:.7">Аванс 18 сен</span><span style="color:#FF9B9B">− 5 000</span></div>
+      <div class="row" style="border-top:1px solid rgba(255,253,246,.15);padding-top:8px"><span style="font-weight:800">К выплате 15 октября</span><span style="font-family:Unbounded,sans-serif;font-size:22px;font-weight:800;color:#F2C230">33 160</span></div>
+    </div>
+    <div class="note">Аванс и удержание уменьшают выплату, премия — увеличивает. «Исправление» — единственный способ изменить сумму после закрытия периода. Учитель сразу увидит строку в «Моём месяце»; запись с причиной попадает в журнал изменений.</div>
+    <div class="row" style="justify-content:flex-end"><a href="PayrollTeacher.dc.html" class="btn ghost">Отмена</a><a href="PayrollTeacher.dc.html" class="btn">Добавить аванс − 5 000</a></div>
+  </div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
