@@ -770,6 +770,13 @@ export type Database = {
       teaches_group: { Args: { p_group_id: string }; Returns: boolean }
       teaches_lesson: { Args: { p_lesson_id: string }; Returns: boolean }
       teaches_student: { Args: { p_student_id: string }; Returns: boolean }
+      user_last_sign_in: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          last_sign_in_at: string
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       attendance_status: 'present' | 'absent_frozen' | 'absent_burned'
