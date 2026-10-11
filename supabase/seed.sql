@@ -57,6 +57,13 @@ insert into public.groups (id, name, subject, grade, group_type, teacher_id, sta
   ('00000000-0000-4000-b000-000000000003', '8 класс Б', 'Математика', 8, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active'),
   ('00000000-0000-4000-b000-000000000004', '5 класс',   'Математика', 5, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active');
 
+-- Other teachers' groups from А5 (one student each in the seed; the full rosters come with the Excel import, #14)
+insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
+  ('00000000-0000-4000-b000-000000000005', 'утро',       'Продлёнка',  3,  'afterschool', '00000000-0000-4000-a000-000000000004', '2026-09-01', 'active'),
+  ('00000000-0000-4000-b000-000000000006', 'математика', 'ОРТ',        11, 'group',       '00000000-0000-4000-a000-000000000002', '2026-09-01', 'active'),
+  ('00000000-0000-4000-b000-000000000007', 'Бекзат',     'Индивидуально', 10, 'individual', '00000000-0000-4000-a000-000000000003', '2026-09-01', 'active'),
+  ('00000000-0000-4000-b000-000000000008', '9 класс',    'Химия',      9,  'group',       '00000000-0000-4000-a000-000000000005', '2026-09-01', 'active');
+
 -- Schedule: 8А 09:00, 6 кл 11:00, 8Б 14:00 — ВТ/ЧТ/СБ; 5 кл 15:00 — ПН/СР/ПТ
 insert into public.schedule_rules (group_id, weekday, start_time, valid_from)
 select g.id, d.weekday, g.t::time, '2026-09-01'
@@ -64,72 +71,124 @@ from (values
   ('00000000-0000-4000-b000-000000000001'::uuid, '09:00', array[2, 4, 6]),
   ('00000000-0000-4000-b000-000000000002'::uuid, '11:00', array[2, 4, 6]),
   ('00000000-0000-4000-b000-000000000003'::uuid, '14:00', array[2, 4, 6]),
-  ('00000000-0000-4000-b000-000000000004'::uuid, '15:00', array[1, 3, 5])
+  ('00000000-0000-4000-b000-000000000004'::uuid, '15:00', array[1, 3, 5]),
+  ('00000000-0000-4000-b000-000000000005'::uuid, '08:00', array[1, 2, 3, 4, 5]),
+  ('00000000-0000-4000-b000-000000000006'::uuid, '16:00', array[1, 3, 5]),
+  ('00000000-0000-4000-b000-000000000007'::uuid, '17:00', array[2, 4]),
+  ('00000000-0000-4000-b000-000000000008'::uuid, '16:00', array[2, 4, 6])
 ) as g (id, t, days)
 cross join lateral unnest(g.days) as d (weekday);
 
--- Students + enrollments (8А exactly as УД3; other groups — dev placeholders of the same size as У4)
-with roster (group_id, full_name, grade, parent_phone, start_date, is_returning) as (
+-- Students — А5 / А4 / А6 (8А exactly as the artboards; other groups — dev placeholders of the same size as У4)
+create temp table seed_students (full_name text primary key, grade integer, parent_name text, parent_phone text, is_returning boolean, notes text);
+insert into seed_students values
+  ('Айжан Бекова',        8, 'Гульмира Бекова',   '996555111222', true,  null),
+  ('Бакыт Токтосунов',    8, 'Нурбек Токтосунов', '996700333444', false, null),
+  ('Данияр Кадыров',      8, 'Айнура Кадырова',   '996555777888', false, null),
+  ('Элина Сыдыкова',      8, 'Жылдыз Сыдыкова',   '996555123456', false, null),
+  ('Камила Орозова',      8, 'Бакыт Орозов',      '996770555666', false, null),
+  ('Нурлан Асанов',       8, 'Асан Асанов',       '996555999000', false,
+   'Пришёл по рекомендации Тимура Мамбетова — Тимуру скидка 5 % на следующий абонемент. Родитель предпочитает Mbank.'),
+  ('Сезим Жумабекова',    8, 'Чолпон Жумабекова', '996555222333', false, null),
+  ('Тимур Мамбетов',      8, 'Эркин Мамбетов',    '996555444555', false, null),
+  ('Азамат Уулу',         3, 'Айгуль',            '996555010203', false, null),
+  ('Алина Токтогулова',  11, 'Динара Токтогулова','996700404505', false, null),
+  ('Асель Кубанычбекова',10, 'Мира Кубанычбекова','996555606707', false, null),
+  ('Адилет Сапаров',      6, null, '996555310001', false, null),
+  ('Айдана Келдибекова',  6, null, '996555310002', false, null),
+  ('Бектур Алиев',        6, null, '996555310003', false, null),
+  ('Мээрим Турдубаева',   6, null, '996555310004', false, null),
+  ('Эрлан Шамшиев',       6, null, '996555310005', false, null),
+  ('Асема Ниязова',       6, null, '996555310006', false, null),
+  ('Алина Исакова',       8, null, '996555320001', false, null),
+  ('Арсен Дуйшеев',       8, null, '996555320002', false, null),
+  ('Бегимай Осмонова',    8, null, '996555320003', false, null),
+  ('Даниэль Курманов',    8, null, '996555320004', false, null),
+  ('Жибек Абдраева',      8, null, '996555320005', false, null),
+  ('Нурсултан Бакиров',   8, null, '996555320006', false, null),
+  ('Сабина Темирова',     8, null, '996555320007', false, null),
+  ('Улан Жээнбеков',      8, null, '996555320008', false, null),
+  ('Аделя Мусаева',       5, null, '996555330001', false, null),
+  ('Байэл Токтогулов',    5, null, '996555330002', false, null),
+  ('Гулина Эсенова',      5, null, '996555330003', false, null),
+  ('Илияс Абдыкадыров',   5, null, '996555330004', false, null),
+  ('Нурай Жолдошева',     5, null, '996555330005', false, null),
+  ('Тилек Орозбаев',      5, null, '996555330006', false, null);
+
+insert into public.students (full_name, grade, parent_name, parent_phone, is_returning, notes)
+select full_name, grade, parent_name, parent_phone, is_returning, notes from seed_students;
+
+-- Тимур brought Нурлан (А4: «привёл Тимур М. → 5 % Тимуру»)
+update public.students set referred_by_student_id = (select id from public.students where full_name = 'Тимур Мамбетов')
+where full_name = 'Нурлан Асанов';
+
+-- Enrollments: (group, student, start date, discount on the subscription — В5)
+with roster (group_id, full_name, start_date, discount) as (
   values
-    ('00000000-0000-4000-b000-000000000001'::uuid, 'Айжан Бекова',        8, '996555111222', date '2026-09-15', false),
-    ('00000000-0000-4000-b000-000000000001'::uuid, 'Бакыт Токтосунов',    8, '996700333444', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000001'::uuid, 'Данияр Кадыров',      8, '996555777888', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000001'::uuid, 'Элина Сыдыкова',      8, '996555123456', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000001'::uuid, 'Камила Орозова',      8, '996770555666', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000001'::uuid, 'Нурлан Асанов',       8, '996555999000', date '2026-10-01', false),
-    ('00000000-0000-4000-b000-000000000001'::uuid, 'Сезим Жумабекова',    8, '996555222333', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000001'::uuid, 'Тимур Мамбетов',      8, '996555444555', date '2026-09-01', true),
+    ('00000000-0000-4000-b000-000000000001'::uuid, 'Айжан Бекова',        date '2026-09-15', 15),
+    ('00000000-0000-4000-b000-000000000001'::uuid, 'Бакыт Токтосунов',    date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000001'::uuid, 'Данияр Кадыров',      date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000001'::uuid, 'Элина Сыдыкова',      date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000001'::uuid, 'Камила Орозова',      date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000001'::uuid, 'Нурлан Асанов',       date '2026-10-01', 0),
+    ('00000000-0000-4000-b000-000000000001'::uuid, 'Сезим Жумабекова',    date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000001'::uuid, 'Тимур Мамбетов',      date '2026-09-01', 5),
 
-    ('00000000-0000-4000-b000-000000000002'::uuid, 'Адилет Сапаров',      6, '996555310001', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000002'::uuid, 'Айдана Келдибекова',  6, '996555310002', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000002'::uuid, 'Бектур Алиев',        6, '996555310003', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000002'::uuid, 'Мээрим Турдубаева',   6, '996555310004', date '2026-09-08', false),
-    ('00000000-0000-4000-b000-000000000002'::uuid, 'Эрлан Шамшиев',       6, '996555310005', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000002'::uuid, 'Асема Ниязова',       6, '996555310006', date '2026-09-15', false),
+    ('00000000-0000-4000-b000-000000000002'::uuid, 'Адилет Сапаров',      date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000002'::uuid, 'Айдана Келдибекова',  date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000002'::uuid, 'Бектур Алиев',        date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000002'::uuid, 'Мээрим Турдубаева',   date '2026-09-08', 0),
+    ('00000000-0000-4000-b000-000000000002'::uuid, 'Эрлан Шамшиев',       date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000002'::uuid, 'Асема Ниязова',       date '2026-09-15', 0),
 
-    ('00000000-0000-4000-b000-000000000003'::uuid, 'Алина Исакова',       8, '996555320001', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000003'::uuid, 'Арсен Дуйшеев',       8, '996555320002', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000003'::uuid, 'Бегимай Осмонова',    8, '996555320003', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000003'::uuid, 'Даниэль Курманов',    8, '996555320004', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000003'::uuid, 'Жибек Абдраева',      8, '996555320005', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000003'::uuid, 'Нурсултан Бакиров',   8, '996555320006', date '2026-09-10', false),
-    ('00000000-0000-4000-b000-000000000003'::uuid, 'Сабина Темирова',     8, '996555320007', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000003'::uuid, 'Улан Жээнбеков',      8, '996555320008', date '2026-09-01', false),
+    ('00000000-0000-4000-b000-000000000003'::uuid, 'Алина Исакова',       date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000003'::uuid, 'Арсен Дуйшеев',       date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000003'::uuid, 'Бегимай Осмонова',    date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000003'::uuid, 'Даниэль Курманов',    date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000003'::uuid, 'Жибек Абдраева',      date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000003'::uuid, 'Нурсултан Бакиров',   date '2026-09-10', 0),
+    ('00000000-0000-4000-b000-000000000003'::uuid, 'Сабина Темирова',     date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000003'::uuid, 'Улан Жээнбеков',      date '2026-09-01', 0),
 
-    ('00000000-0000-4000-b000-000000000004'::uuid, 'Аделя Мусаева',       5, '996555330001', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000004'::uuid, 'Байэл Токтогулов',    5, '996555330002', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000004'::uuid, 'Гулина Эсенова',      5, '996555330003', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000004'::uuid, 'Илияс Абдыкадыров',   5, '996555330004', date '2026-09-01', false),
-    ('00000000-0000-4000-b000-000000000004'::uuid, 'Нурай Жолдошева',     5, '996555330005', date '2026-09-21', false),
-    ('00000000-0000-4000-b000-000000000004'::uuid, 'Тилек Орозбаев',      5, '996555330006', date '2026-09-01', false)
+    ('00000000-0000-4000-b000-000000000004'::uuid, 'Аделя Мусаева',       date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000004'::uuid, 'Байэл Токтогулов',    date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000004'::uuid, 'Гулина Эсенова',      date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000004'::uuid, 'Илияс Абдыкадыров',   date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000004'::uuid, 'Нурай Жолдошева',     date '2026-09-21', 0),
+    ('00000000-0000-4000-b000-000000000004'::uuid, 'Тилек Орозбаев',      date '2026-09-01', 0),
+
+    ('00000000-0000-4000-b000-000000000005'::uuid, 'Азамат Уулу',         date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000006'::uuid, 'Алина Токтогулова',   date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000007'::uuid, 'Асель Кубанычбекова', date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000008'::uuid, 'Камила Орозова',      date '2026-09-01', 0)
 ),
-new_students as (
-  insert into public.students (full_name, grade, parent_phone, is_returning)
-  select full_name, grade, parent_phone, is_returning from roster
-  returning id, full_name
+new_enrollments as (
+  insert into public.enrollments (student_id, group_id, start_date)
+  select s.id, r.group_id, r.start_date
+  from roster r
+  join public.students s on s.full_name = r.full_name
+  returning id, student_id, group_id
 )
-insert into public.enrollments (student_id, group_id, start_date)
-select s.id, r.group_id, r.start_date
-from roster r
-join new_students s on s.full_name = r.full_name;
-
--- One subscription per enrollment at the group tariff; returning students get 15 % on the first one (В5)
+-- One subscription per enrollment at the group tariff on its start date (same rule as enroll_student, 0007)
 insert into public.subscriptions (enrollment_id, tariff_id, lessons_total, price_full, discount_percent, discount_reason, price_final, started_at)
 select
   e.id,
   t.id,
   t.lessons_in_package,
   t.package_price,
-  case when st.is_returning then 15 else 0 end,
-  case when st.is_returning then 'returning' else 'none' end::public.discount_reason,
-  round(t.package_price * (100 - case when st.is_returning then 15 else 0 end) / 100.0)::integer,
-  e.start_date
-from public.enrollments e
+  r.discount,
+  case r.discount when 15 then 'returning' when 5 then 'referral' else 'none' end::public.discount_reason,
+  round(t.package_price * (100 - r.discount) / 100.0)::integer,
+  r.start_date
+from new_enrollments e
 join public.students st on st.id = e.student_id
+join roster r on r.full_name = st.full_name and r.group_id = e.group_id
 join public.groups g on g.id = e.group_id
 cross join lateral (
   select * from public.tariffs t
-  where t.group_type = g.group_type and t.valid_from <= e.start_date
+  where t.group_type = g.group_type and t.valid_from <= r.start_date
   order by t.valid_from desc
   limit 1
 ) t;
+
+drop table seed_students;
