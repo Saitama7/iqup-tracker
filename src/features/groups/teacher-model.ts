@@ -7,14 +7,10 @@ import {
   type EnrollmentSource,
 } from '@/features/lessons/attendance'
 import { lessonState, lessonsWord, pluralRu, type LessonTiming } from '@/features/lessons/select'
+import { calcMonth } from '@/features/payroll/calc'
 import { initials } from '@/features/students/model'
-import {
-  tariffFor,
-  teacherShare,
-  type GroupType,
-  type TariffTerms,
-} from '@/features/tariffs/current'
-import { currentRules, percentOn, weekdaysCaption, type ScheduleRule } from './model'
+import { tariffFor, type GroupType, type TariffTerms } from '@/features/tariffs/current'
+import { currentRules, weekdaysCaption, type ScheduleRule } from './model'
 import { formatSom } from '@/features/tariffs/model'
 
 export interface MonthLesson extends LessonTiming {
@@ -96,7 +92,7 @@ export interface GroupSummary {
   held: number
   /** present + absent_burned marks of held lessons this month (А1.3). */
   studentLessons: number
-  /** Teacher's pay for those, by the tariff and percent on each lesson date (preliminary, R1-9). */
+  /** Teacher's pay for those — payroll/calc.ts, preliminary until the period is closed (И18). */
   accrued: number
   debtors: number
   /** Students with ≤ 2 lessons left (not in debt). */
@@ -114,29 +110,24 @@ export function groupSummary(
   now: number,
 ): GroupSummary {
   const members = memberRows(group, today)
-  let held = 0
-  let studentLessons = 0
-  let accrued = 0
   let unconfirmed = 0
   let isNow = false
   for (const l of group.lessons) {
     const state = lessonState(l, now)
     if (state === 'current') isNow = true
     if (state === 'ended_unconfirmed') unconfirmed++
-    if (l.status !== 'held') continue
-    held++
-    const paid = l.attendance.filter((a) => a.status !== 'absent_frozen').length
-    studentLessons += paid
-    const tariff = tariffFor(group.group_type, l.lesson_date, source.tariffs)
-    const percent = percentOn({ rates: source.rates }, l.lesson_date)
-    if (tariff && percent !== null) accrued += paid * teacherShare(tariff, percent)
   }
+  const pay = calcMonth(
+    group.lessons.map((l) => ({ ...l, group_id: group.id, group_type: group.group_type })),
+    source.rates,
+    source.tariffs,
+  )
   return {
     students: members.length,
     maxStudents: tariffFor(group.group_type, today, source.tariffs)?.max_students ?? null,
-    held,
-    studentLessons,
-    accrued,
+    held: pay.lessonsHeld,
+    studentLessons: pay.studentLessons,
+    accrued: pay.amount,
     debtors: members.filter((m) => m.pay === 'debt').length,
     ending: members.filter((m) => m.pay === 'soon').length,
     unconfirmed,

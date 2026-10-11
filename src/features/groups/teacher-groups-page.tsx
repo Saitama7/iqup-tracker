@@ -416,7 +416,7 @@ function MobileDetail({
       `${pluralRu(summary.held, ['занятие', 'занятия', 'занятий'])} в ${monthShort(today)}`,
     ],
     [String(summary.studentLessons), 'ученико-уроков'],
-    [formatSom(summary.accrued), 'начислено', true],
+    [formatSom(summary.accrued), 'начислено · предв.', true],
   ]
 
   return (
@@ -653,7 +653,7 @@ function DesktopDetail({
   const kpi: [string, string, boolean?][] = [
     [inMonth(today), lessonsWord(summary.held)],
     ['Ученико-уроков', String(summary.studentLessons)],
-    ['Начислено', `${formatSom(summary.accrued)} сом`, true],
+    ['Начислено · предварительно', `${formatSom(summary.accrued)} сом`, true],
     [
       'Долги',
       summary.debtors ? `${summary.debtors} ${pluralRu(summary.debtors, STUDENTS)}` : 'нет',

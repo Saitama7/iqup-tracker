@@ -7,9 +7,9 @@ import { Check, ChevronLeft } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useId, useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
-import { percentOn } from '@/features/groups/model'
+import { calcLessonPay, roundSom, termsOn, type PayTerms } from '@/features/payroll/calc'
+import { PRELIMINARY_NOTE } from '@/features/payroll/model'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
-import { tariffFor, teacherShare } from '@/features/tariffs/current'
 import { useNow } from '@/lib/now'
 import { formatDayLong } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -75,7 +75,8 @@ interface SheetModel {
   editable: boolean
   canConfirm: boolean
   /** Teacher's pay per student-lesson, null — no tariff / percent on that date. */
-  share: number | null
+  /** Tariff and percent on the lesson date — payroll/calc.ts; null without them. */
+  terms: Omit<PayTerms, 'consumedCount'> | null
   setMark: (studentId: string, mark: Mark) => void
   allPresent: () => void
   confirm: () => void
@@ -95,9 +96,7 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
   const marks: ReadonlyMap<string, Mark> = editable ? (draft ?? sheet.marks) : sheet.marks
   const counts = tally(roster, marks)
 
-  const tariff = tariffFor(sheet.group.group_type, sheet.lesson_date, sheet.tariffs)
-  const percent = percentOn({ rates: sheet.rates }, sheet.lesson_date)
-  const share = tariff && percent !== null ? teacherShare(tariff, percent) : null
+  const terms = termsOn(sheet.group.group_type, sheet.lesson_date, sheet.rates, sheet.tariffs)
 
   const model: SheetModel = {
     sheet,
@@ -107,7 +106,7 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
     counts,
     editable,
     canConfirm: editable && counts.unmarked === 0 && !mutation.isPending,
-    share,
+    terms,
     setMark: (studentId, mark) => {
       const row = roster.find((r) => r.studentId === studentId)
       if (!editable || !row) return
@@ -149,6 +148,10 @@ function lockedReason({ sheet, state, editable }: SheetModel): string | null {
 }
 
 const som = (n: number) => `${formatSom(n)} сом`
+
+/** «Начислено / Начислится» of one lesson, whole som (payroll/calc.ts, И18). */
+const lessonPay = (terms: Omit<PayTerms, 'consumedCount'>, consumedCount: number) =>
+  roundSom(calcLessonPay({ ...terms, consumedCount }))
 
 function BackButton() {
   const router = useRouter()
@@ -426,7 +429,7 @@ function DesktopSheet({ m, now }: { m: SheetModel; now: number }) {
     GROUP_TYPE_LABEL[sheet.group.group_type].toLowerCase(),
     studentsWord(m.roster.length),
     sheet.group.room ? `каб. ${sheet.group.room}` : null,
-    m.share !== null ? `${som(m.share)} за ученико-урок` : null,
+    m.terms ? `${som(lessonPay(m.terms, 1))} за ученико-урок` : null,
   ]
     .filter(Boolean)
     .join(' · ')
@@ -553,12 +556,13 @@ function Summary({ m }: { m: SheetModel }) {
             <dt>Ученико-уроков</dt>
             <dd>{counts.studentLessons}</dd>
           </div>
-          {m.share !== null && (
+          {m.terms && (
             <div className="flex justify-between">
               <dt>{m.sheet.status === 'held' ? 'Начислено' : 'Начислится'}</dt>
-              <dd className="font-display">{som(counts.studentLessons * m.share)}</dd>
+              <dd className="font-display">{som(lessonPay(m.terms, counts.studentLessons))}</dd>
             </div>
           )}
+          {m.terms && <p className="text-[11px] font-bold text-ink-muted">{PRELIMINARY_NOTE}</p>}
         </dl>
         <ConfirmAction m={m} desktop />
       </div>
