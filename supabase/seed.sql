@@ -1,6 +1,6 @@
 -- Dev seed. Names and groups match the design canvas (docs/06-design.md): У4/У5/УД3, А3, А8, А9.
 -- Auth users and profiles are NOT created here — see scripts/seed-users.ts (R0-3); it links teachers.user_id by phone.
--- Lessons are not seeded: the schedule generator comes in R1.
+-- Lessons are generated from schedule_rules at the end (generate_lessons, 0008): from the group start to 8 weeks ahead.
 
 -- Tariffs — docs/01-domain-model.md §3; in effect since September 2026, earlier versions for А9а
 insert into public.tariffs (group_type, lessons_in_package, package_price, max_students, lesson_duration_min, freeze_limit, valid_from, created_at) values
@@ -78,6 +78,10 @@ from (values
   ('00000000-0000-4000-b000-000000000008'::uuid, '16:00', array[2, 4, 6])
 ) as g (id, t, days)
 cross join lateral unnest(g.days) as d (weekday);
+
+-- Rooms — А4 «каб. 1»
+update public.groups set room = '1' where id in ('00000000-0000-4000-b000-000000000001', '00000000-0000-4000-b000-000000000002');
+update public.groups set room = '2' where id in ('00000000-0000-4000-b000-000000000003', '00000000-0000-4000-b000-000000000004');
 
 -- Students — А5 / А4 / А6 (8А exactly as the artboards; other groups — dev placeholders of the same size as У4)
 create temp table seed_students (full_name text primary key, grade integer, parent_name text, parent_phone text, is_returning boolean, notes text);
@@ -192,3 +196,7 @@ cross join lateral (
 ) t;
 
 drop table seed_students;
+
+-- Lessons: every running group from its start to 8 weeks ahead, holidays skipped (А4 «Занятия», У2 «Сегодня»).
+-- Past ones stay planned (= «не подтверждено») until attendance comes with R1-8.
+select public.ensure_lessons(public.bishkek_today() + 56);
