@@ -42,6 +42,9 @@ Vite + React 19 + TypeScript (strict) · TanStack Router + Query · Tailwind v4 
 - Экраны за входом — `src/routes/_app/*` (сессия обязательна); роль — `requireRole(context.auth, '…')` в `beforeLoad` → страница 403. Пункты меню по ролям — `src/components/shell/nav.ts`, сессия — `useSession()` из `src/lib/auth.tsx`, время — только `useNow()` из `src/lib/now.ts`.
 - Интерфейс на русском. Тестовые данные — из `supabase/seed.sql` (имена и группы совпадают с макетом: Гульзат, 8 класс А, Айжан Б. и т. д.).
 - Перед коммитом: `pnpm lint && pnpm typecheck && pnpm test`.
+- После `shadcn add` проверь импорты: генератор может переписать `@/lib/utils` на пакет `cn` — лишний пакет в `package.json` не оставлять.
+- Триггерные функции — по одной на таблицу (`lessons_guard`, `attendance_guard`…), не одна общая.
+- Решения, принятые при ревью без Каныкей, — `docs/05-decisions.md` блок И; они обязательны так же, как ✅.
 
 ## Команды
 ```
