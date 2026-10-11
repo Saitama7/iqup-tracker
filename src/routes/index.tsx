@@ -1,6 +1,10 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { HomePage } from '@/features/home/home-page'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { getAuth } from '@/lib/auth'
+import { homePath } from '@/lib/roles'
 
 export const Route = createFileRoute('/')({
-  component: HomePage,
+  beforeLoad: async () => {
+    const auth = await getAuth()
+    throw redirect({ to: auth ? homePath(auth.roles) : '/login', replace: true })
+  },
 })

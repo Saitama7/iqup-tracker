@@ -17,7 +17,7 @@ interface Person {
 
 // Staff from artboard А8 (not in public.teachers).
 const STAFF: Person[] = [
-  { phone: '996552775771', full_name: 'Каныкей', roles: ['admin'] },
+  { phone: '996552775771', full_name: 'Каныкей', roles: ['admin', 'teacher'] }, // ведёт занятия сама (05-decisions З1)
   { phone: '996555775772', full_name: 'Алишка', roles: ['admin'] },
   { phone: '996555300300', full_name: 'Айгерим Маматова', roles: ['accountant'] },
 ]
