@@ -1,6 +1,7 @@
 // А3 / А4 view model: pure functions of (rows, today) — no fetching, no clock.
 // Lesson dates mirror generate_lessons (0008): the database is the authority, this is the preview.
 import { firstName, formatLessonWhen, groupLabel } from '@/features/students/model'
+import { rateOn } from '@/features/payroll/calc'
 import { tariffFor, type GroupType } from '@/features/tariffs/current'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import type { Database } from '@/lib/supabase/types.gen'
@@ -175,14 +176,9 @@ export function scheduleLong(rules: readonly ScheduleRule[], durationMin: number
 
 // ─── Teachers ───────────────────────────────────────────────────────────────
 
-/** Teacher's percent on `day` (latest valid_from ≤ day). */
+/** Teacher's percent on `day` (latest valid_from ≤ day) — payroll/calc.ts rateOn. */
 export function percentOn(t: Pick<TeacherRow, 'rates'>, day: string): number | null {
-  let found: { percent: number; valid_from: string } | null = null
-  for (const r of t.rates) {
-    if (r.valid_from > day) continue
-    if (!found || r.valid_from > found.valid_from) found = r
-  }
-  return found?.percent ?? null
+  return rateOn(t.rates, day)
 }
 
 /** «Гульзат · 45 %» — teacher select in «Новая группа». */
