@@ -8,7 +8,9 @@ import { PageHeader } from '@/components/page'
 import { firstName, useDisplayName } from '@/components/shell/shell-parts'
 import { monthName } from '@/features/groups/model'
 import { useEnsureLessons } from '@/features/groups/use-ensure-lessons'
+import { monthTotalQuery } from '@/features/payroll/api'
 import { lessonState, lessonsWord } from '@/features/lessons/select'
+import { formatSom } from '@/features/tariffs/model'
 import { useNow } from '@/lib/now'
 import { bishkekDate, formatDayLong } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -314,15 +316,27 @@ function UnconfirmedWidget({ unconfirmed, today }: { unconfirmed: AdminLesson[];
   )
 }
 
+/** А1 «Сентябрь · ЗП»: the month being paid (И15) and everyone's accrual from v_payroll_preview. */
 function PayrollCard({ today }: { today: string }) {
   const { month, closeBy } = payrollMonth(today)
+  // TODO(R3): «пока период не закрыт» — with payroll_periods the card follows the open period.
+  const total = useQuery(monthTotalQuery(month))
   return (
     <section className="flex flex-col gap-2 rounded-[20px] bg-ink px-5 py-4 text-paper">
       <h2 className="text-xs font-extrabold tracking-[0.06em] text-brand uppercase">
         {monthName(`${month}-01`)} · ЗП
       </h2>
-      <p className="text-[13px] font-bold opacity-80">Бухгалтер закроет до {closeBy}.</p>
-      <p className="text-[13px] font-extrabold text-brand">Сумма ЗП — появится в R1-9</p>
+      <p className="text-[13px] font-bold opacity-80">
+        Период открыт. Бухгалтер закроет до {closeBy}.
+      </p>
+      <Link
+        to="/payroll"
+        search={{ month }}
+        className="text-[13px] font-extrabold text-brand"
+        data-testid="payroll-card-link"
+      >
+        Расчёт ЗП → {total.data !== undefined ? `${formatSom(total.data)} сом` : '…'}
+      </Link>
     </section>
   )
 }

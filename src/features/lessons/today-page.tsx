@@ -11,6 +11,9 @@ import { useNow } from '@/lib/now'
 import { bishkekDate, formatDayLong, formatMonthNom, formatWeekdayLower } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
+import { myPreviewQuery } from '@/features/payroll/api'
+import { monthOf } from '@/features/payroll/model'
+import { formatSom } from '@/features/tariffs/model'
 import { myTeacherQuery, useLessonsRealtime, useTodayLessons, type TeacherLesson } from './api'
 import { CurrentLessonCard, Deck } from './deck'
 import { lessonTitle, pastLessonWhen, rowCaption, StatusChip, UnconfirmedBanner } from './parts'
@@ -299,11 +302,20 @@ function DesktopToday({ days, unconfirmed, today, now }: DayProps) {
   )
 }
 
+/** УД1 «Октябрь · предварительно»: the teacher's row of v_payroll_preview for the running month. */
 function MonthCard({ now }: { now: number }) {
-  // Sum and counts come with R1-8 (payroll); until then — «—».
+  const { userId } = useSession()
+  const teacher = useQuery(myTeacherQuery(userId))
+  const preview = useQuery({
+    ...myPreviewQuery(teacher.data?.id ?? '', monthOf(bishkekDate(now))),
+    enabled: !!teacher.data,
+  })
+  const row = preview.data
+  const ready = preview.isSuccess
   const stats = [
-    ['—', 'занятий'],
-    ['—', 'ученико-уроков'],
+    [ready ? String(row?.lessonsHeld ?? 0) : '—', 'занятий'],
+    [ready ? String(row?.studentLessons ?? 0) : '—', 'ученико-уроков'],
+    // TODO(R3): advances (payroll_adjustments)
     ['—', 'аванс'],
   ] as const
   return (
@@ -316,8 +328,12 @@ function MonthCard({ now }: { now: number }) {
           Подробнее →
         </Link>
       </div>
-      <p className="font-display text-[40px] leading-none font-extrabold text-brand">
-        — <span className="text-lg font-medium text-paper">сом</span>
+      <p
+        className="font-display text-[40px] leading-none font-extrabold text-brand"
+        data-testid="month-card-sum"
+      >
+        {ready ? formatSom(row?.amount ?? 0) : '—'}{' '}
+        <span className="text-lg font-medium text-paper">сом</span>
       </p>
       <div className="grid grid-cols-3 gap-2.5">
         {stats.map(([value, label]) => (

@@ -4,6 +4,7 @@
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { z } from 'zod'
+import { PAYROLL_KEY } from '@/features/payroll/api'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { supabase } from '@/lib/supabase/client'
 import type { LessonStatus } from '@/features/lessons/select'
@@ -176,7 +177,10 @@ export const useTeacherOptions = () => useQuery(teacherOptionsQuery())
 export function useAdminLessonsRealtime() {
   const queryClient = useQueryClient()
   useEffect(() => {
-    const invalidate = () => void queryClient.invalidateQueries({ queryKey: [ADMIN_LESSONS_KEY] })
+    const invalidate = () => {
+      void queryClient.invalidateQueries({ queryKey: [ADMIN_LESSONS_KEY] })
+      void queryClient.invalidateQueries({ queryKey: [PAYROLL_KEY] })
+    }
     const channel = supabase
       .channel('lessons:admin')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lessons' }, invalidate)

@@ -4,6 +4,7 @@ import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { z } from 'zod'
 import { GROUP_TYPES, type GroupType, type TariffTerms } from '@/features/tariffs/current'
+import { PAYROLL_KEY } from '@/features/payroll/api'
 import { supabase } from '@/lib/supabase/client'
 import { addDays } from '@/features/groups/model'
 import type { EnrollmentSource, Mark } from './attendance'
@@ -140,7 +141,10 @@ export function useLessonsRealtime(teacher: MyTeacher | null | undefined) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'lessons', filter: `group_id=in.(${groups})` },
-        () => void queryClient.invalidateQueries({ queryKey: [TODAY_KEY] }),
+        () => {
+          void queryClient.invalidateQueries({ queryKey: [TODAY_KEY] })
+          void queryClient.invalidateQueries({ queryKey: [PAYROLL_KEY] })
+        },
       )
       .subscribe()
     return () => {
