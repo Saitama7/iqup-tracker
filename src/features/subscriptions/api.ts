@@ -36,7 +36,7 @@ export const tariffsQuery = () =>
 /** «Зачислить в группу»: group, start date (ДД.ММ.ГГГГ), discount 0 / 5 / 15. */
 export const enrollForm = (groupStart: string | null) =>
   z.object({
-    studentId: z.uuid(),
+    studentId: z.uuid({ error: 'Выберите ученика' }),
     groupId: z.uuid({ error: 'Выберите группу' }),
     startDate: z.string().transform((v, ctx) => {
       const iso = parseDateRu(v)

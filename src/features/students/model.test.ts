@@ -149,6 +149,28 @@ describe('studentListRows (А5)', () => {
     expect(by('elina')?.status).toBe('exhausted')
   })
 
+  it('status: only finished enrollments (archived group) — not enrolled', () => {
+    const [row] = studentListRows({
+      ...source,
+      students: [
+        student({
+          id: 'gone',
+          enrollments: [
+            {
+              id: 'eg1',
+              group_id: 'g8a',
+              start_date: '2026-09-01',
+              end_date: '2026-10-11',
+              status: 'finished',
+              subscriptions: [sub('n1')],
+            },
+          ],
+        }),
+      ],
+    })
+    expect(row).toMatchObject({ status: 'not_enrolled', groups: '', remaining: '', groupIds: [] })
+  })
+
   it('sorted by name', () => {
     expect(rows.map((r) => r.fullName)).toEqual([
       'Ёлка Новая',

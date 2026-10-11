@@ -11,6 +11,7 @@ export type AppPath =
   | '/my-month'
   | '/admin'
   | '/admin/users'
+  | '/admin/groups'
   | '/admin/students'
   | '/admin/settings'
   | '/payroll'
@@ -40,7 +41,7 @@ export const NAV: Record<View, NavItem[]> = {
   admin: [
     { label: 'Дашборд', to: '/admin', exact: true },
     { label: 'Расписание', to: null },
-    { label: 'Группы', to: null },
+    { label: 'Группы', to: '/admin/groups' },
     { label: 'Ученики', to: '/admin/students' },
     { label: 'Пробные занятия', to: null },
     { label: 'Оплаты', to: null },
@@ -71,7 +72,7 @@ export const TABS: Record<View, TabItem[]> = {
     { label: 'Сегодня', icon: Calendar, to: '/admin', exact: true },
     { label: 'Ученики', icon: User, to: '/admin/students' },
     { label: 'Оплата', icon: CreditCard, to: null },
-    { label: 'Группы', icon: Users, to: null },
+    { label: 'Группы', icon: Users, to: '/admin/groups' },
     { label: 'Ещё', icon: Menu, to: null, more: true },
   ],
   accountant: [],
@@ -82,7 +83,7 @@ export const MORE: Record<View, NavItem[]> = {
   teacher: [],
   admin: [
     { label: 'Расписание', to: null },
-    { label: 'Группы', to: null },
+    { label: 'Группы', to: '/admin/groups' },
     { label: 'Пробные', to: null },
     { label: 'Учителя и доступ', to: '/admin/users' },
     { label: 'Тарифы и праздники', to: '/admin/settings' },
@@ -118,10 +119,10 @@ export function viewsFor(roles: readonly Role[]): View[] {
 
 /**
  * Pushed screens with their own back button and bottom actions: no tab bar
- * (У7 Профиль, АМ2 Ученик).
+ * (У7 Профиль, АМ2 Ученик, А4 Группа).
  */
 export function isPushedScreen(pathname: string): boolean {
-  return pathname === '/profile' || /^\/admin\/students\/[^/]+\/?$/.test(pathname)
+  return pathname === '/profile' || /^\/admin\/(students|groups)\/[^/]+\/?$/.test(pathname)
 }
 
 function viewOfPath(pathname: string): View | null {

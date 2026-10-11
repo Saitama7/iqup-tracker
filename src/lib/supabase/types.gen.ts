@@ -191,6 +191,7 @@ export type Database = {
           group_type: Database['public']['Enums']['group_type']
           id: string
           name: string
+          room: string | null
           start_date: string
           status: Database['public']['Enums']['group_status']
           subject: string
@@ -204,6 +205,7 @@ export type Database = {
           group_type: Database['public']['Enums']['group_type']
           id?: string
           name: string
+          room?: string | null
           start_date: string
           status?: Database['public']['Enums']['group_status']
           subject: string
@@ -216,6 +218,7 @@ export type Database = {
           group_type?: Database['public']['Enums']['group_type']
           id?: string
           name?: string
+          room?: string | null
           start_date?: string
           status?: Database['public']['Enums']['group_status']
           subject?: string
@@ -759,7 +762,39 @@ export type Database = {
       }
     }
     Functions: {
+      archive_group: { Args: { p_group_id: string }; Returns: number }
+      assert_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
       bishkek_today: { Args: Record<PropertyKey, never>; Returns: string }
+      cancel_lesson: {
+        Args: {
+          p_comment?: string
+          p_lesson_id: string
+          p_reason: Database['public']['Enums']['cancel_reason']
+        }
+        Returns: undefined
+      }
+      create_extra_lesson: {
+        Args: { p_date: string; p_group_id: string; p_makes_up_for?: string; p_start: string }
+        Returns: string
+      }
+      create_group: {
+        Args: {
+          p_grade: number
+          p_group_type: Database['public']['Enums']['group_type']
+          p_name: string
+          p_room: string
+          p_start_date: string
+          p_start_time: string
+          p_subject: string
+          p_teacher_id: string
+          p_until: string
+          p_weekdays: number[]
+        }
+        Returns: {
+          group_id: string
+          lessons_created: number
+        }[]
+      }
       current_roles: {
         Args: Record<PropertyKey, never>
         Returns: Database['public']['Enums']['role'][]
@@ -778,10 +813,30 @@ export type Database = {
           subscription_id: string
         }[]
       }
+      ensure_lessons: { Args: { p_until: string }; Returns: number }
+      generate_lessons: { Args: { p_group_id: string; p_until: string }; Returns: number }
       is_accountant: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean }
+      lesson_starts_at: { Args: { p_date: string; p_start: string }; Returns: string }
+      reschedule_group: {
+        Args: {
+          p_group_id: string
+          p_start_time: string
+          p_until: string
+          p_valid_from: string
+          p_weekdays: number[]
+        }
+        Returns: {
+          lessons_created: number
+          lessons_deleted: number
+        }[]
+      }
       server_now: { Args: Record<PropertyKey, never>; Returns: string }
+      tariff_duration: {
+        Args: { p_date: string; p_group_type: Database['public']['Enums']['group_type'] }
+        Returns: number
+      }
       teaches_enrollment: { Args: { p_enrollment_id: string }; Returns: boolean }
       teaches_group: { Args: { p_group_id: string }; Returns: boolean }
       teaches_lesson: { Args: { p_lesson_id: string }; Returns: boolean }

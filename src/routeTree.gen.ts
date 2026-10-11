@@ -21,6 +21,8 @@ import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
+import { Route as AppAdminGroupsIndexRouteImport } from './routes/_app/admin/groups/index'
+import { Route as AppAdminGroupsGroupIdRouteImport } from './routes/_app/admin/groups/$groupId'
 import { Route as AppAdminStudentsIndexRouteImport } from './routes/_app/admin/students/index'
 import { Route as AppAdminStudentsStudentIdRouteImport } from './routes/_app/admin/students/$studentId'
 
@@ -83,6 +85,16 @@ const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AppAdminRouteRoute,
 } as any)
+const AppAdminGroupsIndexRoute = AppAdminGroupsIndexRouteImport.update({
+  id: '/groups/',
+  path: '/groups/',
+  getParentRoute: () => AppAdminRouteRoute,
+} as any)
+const AppAdminGroupsGroupIdRoute = AppAdminGroupsGroupIdRouteImport.update({
+  id: '/groups/$groupId',
+  path: '/groups/$groupId',
+  getParentRoute: () => AppAdminRouteRoute,
+} as any)
 const AppAdminStudentsIndexRoute = AppAdminStudentsIndexRouteImport.update({
   id: '/students/',
   path: '/students/',
@@ -107,7 +119,9 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/admin/': typeof AppAdminIndexRoute
+  '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
+  '/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/admin/students/': typeof AppAdminStudentsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -121,7 +135,9 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/admin': typeof AppAdminIndexRoute
+  '/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
+  '/admin/groups': typeof AppAdminGroupsIndexRoute
   '/admin/students': typeof AppAdminStudentsIndexRoute
 }
 export interface FileRoutesById {
@@ -138,7 +154,9 @@ export interface FileRoutesById {
   '/_app/admin/settings': typeof AppAdminSettingsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/admin/': typeof AppAdminIndexRoute
+  '/_app/admin/groups/$groupId': typeof AppAdminGroupsGroupIdRoute
   '/_app/admin/students/$studentId': typeof AppAdminStudentsStudentIdRoute
+  '/_app/admin/groups/': typeof AppAdminGroupsIndexRoute
   '/_app/admin/students/': typeof AppAdminStudentsIndexRoute
 }
 export interface FileRouteTypes {
@@ -155,7 +173,9 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/admin/'
+    | '/admin/groups/$groupId'
     | '/admin/students/$studentId'
+    | '/admin/groups/'
     | '/admin/students/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -169,7 +189,9 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/users'
     | '/admin'
+    | '/admin/groups/$groupId'
     | '/admin/students/$studentId'
+    | '/admin/groups'
     | '/admin/students'
   id:
     | '__root__'
@@ -185,7 +207,9 @@ export interface FileRouteTypes {
     | '/_app/admin/settings'
     | '/_app/admin/users'
     | '/_app/admin/'
+    | '/_app/admin/groups/$groupId'
     | '/_app/admin/students/$studentId'
+    | '/_app/admin/groups/'
     | '/_app/admin/students/'
   fileRoutesById: FileRoutesById
 }
@@ -281,6 +305,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminUsersRouteImport
       parentRoute: typeof AppAdminRouteRoute
     }
+    '/_app/admin/groups/': {
+      id: '/_app/admin/groups/'
+      path: '/groups'
+      fullPath: '/admin/groups/'
+      preLoaderRoute: typeof AppAdminGroupsIndexRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
+    '/_app/admin/groups/$groupId': {
+      id: '/_app/admin/groups/$groupId'
+      path: '/groups/$groupId'
+      fullPath: '/admin/groups/$groupId'
+      preLoaderRoute: typeof AppAdminGroupsGroupIdRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
     '/_app/admin/students/': {
       id: '/_app/admin/students/'
       path: '/students'
@@ -302,7 +340,9 @@ interface AppAdminRouteRouteChildren {
   AppAdminSettingsRoute: typeof AppAdminSettingsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
+  AppAdminGroupsGroupIdRoute: typeof AppAdminGroupsGroupIdRoute
   AppAdminStudentsStudentIdRoute: typeof AppAdminStudentsStudentIdRoute
+  AppAdminGroupsIndexRoute: typeof AppAdminGroupsIndexRoute
   AppAdminStudentsIndexRoute: typeof AppAdminStudentsIndexRoute
 }
 
@@ -310,7 +350,9 @@ const AppAdminRouteRouteChildren: AppAdminRouteRouteChildren = {
   AppAdminSettingsRoute: AppAdminSettingsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
+  AppAdminGroupsGroupIdRoute: AppAdminGroupsGroupIdRoute,
   AppAdminStudentsStudentIdRoute: AppAdminStudentsStudentIdRoute,
+  AppAdminGroupsIndexRoute: AppAdminGroupsIndexRoute,
   AppAdminStudentsIndexRoute: AppAdminStudentsIndexRoute,
 }
 
