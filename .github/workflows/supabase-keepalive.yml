@@ -8,8 +8,9 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping prod
+      # Корень Data API отвечает 200 на любой схеме (даже без таблиц) — этого достаточно, чтобы проект считался активным.
+      - name: Ping Supabase
         run: |
-          curl -fsS "${{ secrets.SUPABASE_URL }}/rest/v1/holidays?select=day&limit=1" \
+          curl -fsS "${{ secrets.SUPABASE_URL }}/rest/v1/" \
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" > /dev/null
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" -o /dev/null -w "HTTP %{http_code}\n"
