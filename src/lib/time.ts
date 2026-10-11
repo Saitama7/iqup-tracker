@@ -39,3 +39,25 @@ export function formatMonthYearGen(ms: number): string {
   const d = bishkekParts(ms)
   return `${MONTHS_GEN[d.getUTCMonth()]} ${d.getUTCFullYear()}`
 }
+
+/** '2026-10-12' → '12.10.2026' */
+export function formatDateRu(isoDate: string): string {
+  const [y, m, d] = isoDate.split('-')
+  return `${d}.${m}.${y}`
+}
+
+/** '12.10.2026' (also 12/10/2026, 12-10-2026) → '2026-10-12'; null if not a real date. */
+export function parseDateRu(input: string): string | null {
+  const m = /^\s*(\d{1,2})[./-](\d{1,2})[./-](\d{4})\s*$/.exec(input)
+  const [, d = '', mo = '', y = ''] = m ?? []
+  if (!m) return null
+  const iso = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`
+  const date = new Date(`${iso}T00:00:00Z`)
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(iso) ? iso : null
+}
+
+/** Whole Bishkek calendar days from `fromMs` to `toMs` (0 = same day). */
+export function bishkekDaysBetween(fromMs: number, toMs: number): number {
+  const day = (ms: number) => Date.parse(`${bishkekDate(ms)}T00:00:00Z`)
+  return Math.round((day(toMs) - day(fromMs)) / 86_400_000)
+}

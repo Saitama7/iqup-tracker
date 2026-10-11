@@ -47,6 +47,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
                   {tab.to ? (
                     <Link
                       to={tab.to}
+                      activeOptions={{ exact: tab.exact ?? false }}
                       className={cn(
                         itemClass(dense),
                         'group text-ink-muted data-[status=active]:font-extrabold data-[status=active]:text-ink',

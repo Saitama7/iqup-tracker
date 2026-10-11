@@ -45,6 +45,11 @@
   --color-placeholder: var(--placeholder);
   --color-sand: var(--sand);
   --color-burned-strong: var(--burned-strong);
+  --color-present-soft: var(--present-soft);
+  --color-present-strong: var(--present-strong);
+  --color-teal-soft: var(--teal-soft);
+  --color-teal-strong: var(--teal-strong);
+  --color-stone: var(--stone);
 
   /* Artboard shadows, tinted with brand tokens */
   --shadow-float: 0 16px 32px color-mix(in srgb, var(--ink) 18%, transparent);
