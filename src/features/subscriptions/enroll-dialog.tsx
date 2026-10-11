@@ -24,14 +24,16 @@ export interface EnrollStudent extends DiscountHistory {
 }
 
 /**
- * «+ Зачислить в группу» (А6; А4 «+ Зачислить ученика» reuses it with `groupId`).
+ * «+ Зачислить в группу» (А6) — one `student`, the group is picked; А4 «+ Зачислить ученика» —
+ * fixed `groupId`, the student is picked from `students`.
  * The subscription is created with the enrollment: tariff of the group on the start date,
  * discount 0 / 5 / 15 % (В5) — enroll_student RPC, one transaction.
  */
 export function EnrollDialog({
   open,
   onOpenChange,
-  student,
+  student: fixedStudent,
+  students = [],
   groups,
   groupId: fixedGroupId,
   today,
@@ -39,24 +41,36 @@ export function EnrollDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  student: EnrollStudent
+  student?: EnrollStudent
+  /** Students to pick from when `student` is not given (not yet in the group). */
+  students?: readonly EnrollStudent[]
   /** Groups the student may join (not archived, not already enrolled). */
   groups: readonly GroupBrief[]
   groupId?: string
   today: string
   onEnrolled?: () => void
 }) {
-  const ids = { group: useId(), date: useId() }
+  const ids = { student: useId(), group: useId(), date: useId() }
   const queryClient = useQueryClient()
   const tariffs = useQuery(tariffsQuery())
+  const [studentId, setStudentId] = useState(fixedStudent?.id ?? '')
   const [groupId, setGroupId] = useState(fixedGroupId ?? '')
-  const [date, setDate] = useState(formatDateRu(today))
-  const [discount, setDiscount] = useState<DiscountPct>(() => defaultDiscount(student))
+  const fixedGroup = groups.find((g) => g.id === fixedGroupId)
+  // a group that starts later: its first day, not today (enroll_student rejects earlier dates)
+  const [date, setDate] = useState(
+    formatDateRu(fixedGroup && fixedGroup.start_date > today ? fixedGroup.start_date : today),
+  )
+  const student = fixedStudent ?? students.find((s) => s.id === studentId) ?? null
+  const [discount, setDiscount] = useState<DiscountPct>(() =>
+    student ? defaultDiscount(student) : 0,
+  )
   const [error, setError] = useState<string | null>(null)
 
   const group = groups.find((g) => g.id === groupId) ?? null
   const startIso = parseDateRu(date)
-  const options = discountAvailability(student)
+  const options = discountAvailability(
+    student ?? { isReturning: false, subscriptions: [], friendsBrought: 0 },
+  )
   const quote =
     group && startIso && tariffs.data
       ? quoteSubscription(group.group_type, startIso, tariffs.data, discount)
@@ -66,7 +80,7 @@ export function EnrollDialog({
     mutationFn: enrollStudent,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: STUDENTS_KEY })
-      toast.success(`${student.fullName} зачислен(а) в группу`)
+      toast.success(`${student?.fullName ?? 'Ученик'} зачислен(а) в группу`)
       onOpenChange(false)
       onEnrolled?.()
     },
@@ -78,7 +92,7 @@ export function EnrollDialog({
   function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const parsed = enrollForm(group?.start_date ?? null).safeParse({
-      studentId: student.id,
+      studentId: student?.id ?? '',
       groupId,
       startDate: date,
       discount,
@@ -103,7 +117,11 @@ export function EnrollDialog({
         onOpenChange(o)
       }}
       title="Зачислить в группу"
-      description={`${student.fullName} · абонемент создаётся сразу по тарифу группы на дату начала`}
+      description={
+        fixedStudent
+          ? `${fixedStudent.fullName} · абонемент создаётся сразу по тарифу группы на дату начала`
+          : 'Абонемент создаётся сразу по тарифу группы на дату начала'
+      }
     >
       <form
         onSubmit={onSubmit}
@@ -111,6 +129,27 @@ export function EnrollDialog({
         aria-label="Зачислить в группу"
         className="flex flex-col gap-3.5"
       >
+        {!fixedStudent && (
+          <Field id={ids.student} label="Ученик">
+            <NativeSelect
+              id={ids.student}
+              value={studentId}
+              onChange={(e) => {
+                const next = students.find((s) => s.id === e.target.value)
+                setStudentId(e.target.value)
+                setDiscount(next ? defaultDiscount(next) : 0)
+                setError(null)
+              }}
+            >
+              <option value="">Выберите ученика</option>
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.fullName}
+                </option>
+              ))}
+            </NativeSelect>
+          </Field>
+        )}
         <Field id={ids.group} label="Группа">
           <NativeSelect
             id={ids.group}

@@ -55,6 +55,7 @@ describe('NAV / TABS', () => {
       'Профиль',
     ])
     expect(MORE.admin.filter((i) => i.to).map((i) => i.to)).toEqual([
+      '/admin/groups',
       '/admin/users',
       '/admin/settings',
       '/profile',
@@ -89,6 +90,8 @@ describe('isPushedScreen', () => {
     expect(isPushedScreen('/profile')).toBe(true)
     expect(isPushedScreen('/admin/students/1f0c')).toBe(true)
     expect(isPushedScreen('/admin/students')).toBe(false)
+    expect(isPushedScreen('/admin/groups/1f0c')).toBe(true)
+    expect(isPushedScreen('/admin/groups')).toBe(false)
     expect(isPushedScreen('/admin')).toBe(false)
   })
 })
