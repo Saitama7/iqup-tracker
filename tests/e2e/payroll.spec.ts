@@ -1,16 +1,17 @@
 /// <reference lib="dom" />
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
+import { AIGERIM, GULZAT, KANYKEI, login } from './support/auth'
+import { lockSeed } from './support/seed-lock'
 
 // Needs the local stack + `pnpm seed:users`. Seed: September 2026 is held for every group
 // (Гульзат: 52 lessons, 318 student-lessons = 38 160 сом; all five teachers — 47 546 сом),
 // October is not confirmed. The browser clock is pinned to Thursday 8 October (the artboards' date)
 // and server_now() answers the same instant (docs/02-architecture.md §7.1).
-const GULZAT = { phone: '555 123 456', password: 'iqup-demo' }
-const KANYKEI = { phone: '552 775 771', password: 'iqup-demo' } // admin + teacher
-const AIGERIM = { phone: '555 300 300', password: 'iqup-demo' } // accountant
 const NOW = '2026-10-08T14:24:00+06:00'
 
 test.use({ serviceWorkers: 'block' })
+// Other specs hold lessons in these months for a while — wait for them (#27).
+lockSeed('read')
 
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900
 
@@ -21,20 +22,6 @@ async function pinClock(page: Page, iso: string) {
   )
 }
 
-async function login(page: Page, user: { phone: string; password: string }) {
-  await page.goto('/login')
-  await page.getByLabel('Номер телефона').fill(user.phone)
-  await page.getByLabel('Пароль', { exact: true }).fill(user.password)
-  await page.getByRole('button', { name: 'Войти' }).click()
-}
-
-/** Гульзат lands on «Сегодня»; settle the post-login redirect before page.goto (#27). */
-async function loginTeacher(page: Page) {
-  await login(page, GULZAT)
-  await expect(page).toHaveURL(/\/today$/)
-  await expect(page.getByRole('heading', { name: /^Сегодня/ })).toBeVisible()
-}
-
 const noTabBar = 'nav[aria-label="Основное меню"] { visibility: hidden !important; }'
 const shot = (testInfo: TestInfo, name: string) => testInfo.outputPath(`${name}.png`)
 
@@ -42,7 +29,7 @@ test('Гульзат: «Мой месяц» — октябрь не подтве
   page,
 }, testInfo) => {
   await pinClock(page, NOW)
-  await loginTeacher(page)
+  await login(page, GULZAT)
   await page.goto('/my-month')
 
   // October: nothing confirmed yet — 0 in the sum, the lessons that are over wait for «Провести».
@@ -104,7 +91,7 @@ test('Гульзат: «Мой месяц» — октябрь не подтве
 test('«Мой месяц» with reduced motion: no tilt, the sum without count-up', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await pinClock(page, NOW)
-  await loginTeacher(page)
+  await login(page, GULZAT)
   await page.goto('/my-month?month=2026-09')
   await expect(page.getByTestId('pay-sum')).toHaveText('38 160', { timeout: 1_000 })
   await expect(page.getByTestId('pay-card-tilt')).toHaveCount(0)
@@ -167,14 +154,14 @@ test('admin: А1 card «Расчёт ЗП → 47 546 сом» opens Б1 read-onl
 test('УД1: month card from v_payroll_preview', async ({ page }) => {
   test.skip(!isDesktop(page), 'the month card is on УД1 (desktop)')
   await pinClock(page, NOW)
-  await loginTeacher(page)
+  await login(page, GULZAT)
   // October: nothing confirmed in the seed yet.
   await expect(page.getByTestId('month-card-sum')).toHaveText('0 сом')
 })
 
 test('teacher opening /payroll sees 403', async ({ page }) => {
   await pinClock(page, NOW)
-  await loginTeacher(page)
+  await login(page, GULZAT)
   await page.goto('/payroll')
   await expect(page.getByRole('heading', { name: 'Нет доступа' })).toBeVisible()
 })
