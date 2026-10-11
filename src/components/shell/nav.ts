@@ -18,6 +18,8 @@ export interface NavItem {
 
 export interface TabItem extends NavItem {
   icon: LucideIcon
+  /** Opens the «Ещё» bottom sheet with MORE[view] instead of navigating. */
+  more?: true
 }
 
 // Desktop sidebar, texts and order as on artboards УД1–УД4, А1–А11, Б1–Б3.
@@ -62,7 +64,22 @@ export const TABS: Record<View, TabItem[]> = {
     { label: 'Ученики', icon: User, to: null },
     { label: 'Оплата', icon: CreditCard, to: null },
     { label: 'Группы', icon: Users, to: null },
-    { label: 'Ещё', icon: Menu, to: null },
+    { label: 'Ещё', icon: Menu, to: null, more: true },
+  ],
+  accountant: [],
+}
+
+// Phone «Ещё» sheet: the sections that do not fit the tab bar.
+export const MORE: Record<View, NavItem[]> = {
+  teacher: [],
+  admin: [
+    { label: 'Расписание', to: null },
+    { label: 'Группы', to: null },
+    { label: 'Пробные', to: null },
+    { label: 'Учителя и доступ', to: '/admin/users' },
+    { label: 'Тарифы и праздники', to: null },
+    { label: 'Журнал изменений', to: null },
+    { label: 'Профиль', to: '/profile' },
   ],
   accountant: [],
 }
