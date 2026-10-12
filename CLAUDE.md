@@ -39,7 +39,7 @@ Vite + React 19 + TypeScript (strict) · TanStack Router + Query · Tailwind v4 
 - Логика расчёта ЗП и баланса — чистые функции `src/features/payroll/calc.ts`, `src/features/payments/balance.ts` с тестами. Та же логика в SQL-view — при изменении менять оба места и тест, сверяющий их на одном сиде.
 - Доступ к БД — `supabase-js` из `src/features/*/api.ts`, вход валидируется `zod`. Каждая новая таблица создаётся сразу с RLS-политиками и pgTAP-тестом «учитель не видит чужое».
 - Миграции только вперёд, имена `NNNN_slug.sql`; никаких правок уже применённых миграций. После миграции — `supabase gen types` и коммит `types.gen.ts`.
-- Экраны за входом — `src/routes/_app/*` (сессия обязательна); роль — `requireRole(context.auth, '…')` в `beforeLoad` → страница 403. Пункты меню по ролям — `src/components/shell/nav.ts`, сессия — `useSession()` из `src/lib/auth.tsx`, время — только `useNow()` из `src/lib/now.ts`.
+- Экраны за входом — `src/routes/_app/*` (сессия обязательна); роль — `requireRole(context.auth, '…'[, '…'])` (любая из ролей) в `beforeLoad` → страница 403. Пункты меню по ролям — `src/components/shell/nav.ts`, сессия — `useSession()` из `src/lib/auth.tsx`, время — только `useNow()` из `src/lib/now.ts`.
 - Интерфейс на русском. Тестовые данные — из `supabase/seed.sql` (имена и группы совпадают с макетом: Гульзат, 8 класс А, Айжан Б. и т. д.).
 - Перед коммитом: `pnpm lint && pnpm typecheck && pnpm test`. Если в шелле выставлен `NODE_ENV=production`, vitest падает на `React.act` — запускай `NODE_ENV=test pnpm test`. Node ≥ 22 (`nvm use 22`).
 - После `shadcn add` проверь импорты: генератор может переписать `@/lib/utils` на пакет `cn` — лишний пакет в `package.json` не оставлять.
