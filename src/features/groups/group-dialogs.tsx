@@ -22,6 +22,7 @@ import {
 import {
   CANCEL_REASON_LABEL,
   currentRules,
+  extraLessonDateError,
   horizon,
   MANUAL_CANCEL_REASONS,
   planLessonDates,
@@ -171,6 +172,7 @@ export function ExtraLessonDialog({
   lessons,
   makesUpFor,
   today,
+  minDate,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -178,14 +180,17 @@ export function ExtraLessonDialog({
   lessons: readonly LessonRow[]
   makesUpFor?: string
   today: string
+  /** Earliest date allowed — a teacher's dialog passes today (И16); the admin has no limit. */
+  minDate?: string
 }) {
-  const ids = { link: useId(), date: useId(), time: useId() }
+  const ids = { link: useId(), date: useId(), time: useId(), hint: useId() }
   const madeUp = new Set(lessons.flatMap((l) => l.makes_up_for_lesson_id ?? []))
   const cancelled = lessons.filter((l) => l.status === 'cancelled' && !madeUp.has(l.id))
   const defaultTime = currentRules(group.schedule_rules, today)[0]?.start_time.slice(0, 5) ?? ''
   const [link, setLink] = useState(makesUpFor ?? '')
   const [date, setDate] = useState(formatDateRu(today))
   const [time, setTime] = useState(defaultTime)
+  const tooEarly = extraLessonDateError(parseDateRu(date), minDate) !== null
   const { mutation, error, setError } = useGroupMutation(
     group.id,
     (input: Parameters<typeof createExtraLesson>[1]) => createExtraLesson(group.id, input),
@@ -197,6 +202,11 @@ export function ExtraLessonDialog({
     const parsed = extraLessonForm.safeParse({ date, time, makesUpFor: link })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Проверьте поля формы')
+      return
+    }
+    const dateError = extraLessonDateError(parsed.data.date, minDate)
+    if (dateError) {
+      setError(dateError)
       return
     }
     setError(null)
@@ -241,6 +251,8 @@ export function ExtraLessonDialog({
               placeholder="ДД.ММ.ГГГГ"
               autoComplete="off"
               value={date}
+              aria-invalid={tooEarly || undefined}
+              aria-describedby={minDate ? ids.hint : undefined}
               onChange={(e) => {
                 setDate(e.target.value)
               }}
@@ -260,6 +272,14 @@ export function ExtraLessonDialog({
             />
           </Field>
         </div>
+        {minDate && (
+          <p
+            id={ids.hint}
+            className={cn('text-xs font-bold', tooEarly ? 'text-burned' : 'text-ink-muted')}
+          >
+            Не раньше сегодняшнего дня — {formatDateRu(minDate)}
+          </p>
+        )}
         {error && <ErrorText>{error}</ErrorText>}
         <SubmitButton pending={mutation.isPending}>Добавить доп. урок</SubmitButton>
       </form>

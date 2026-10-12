@@ -557,6 +557,7 @@ function ExtraLesson({
       group={group}
       lessons={lessons.data ?? []}
       today={today}
+      minDate={today}
     />
   )
 }

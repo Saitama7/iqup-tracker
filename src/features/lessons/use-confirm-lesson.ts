@@ -15,6 +15,7 @@ import {
   type TeacherLesson,
 } from './api'
 import type { Mark } from './attendance'
+import { clearDraft } from './draft'
 import { bishkekTime } from './select'
 
 interface Variables {
@@ -87,11 +88,13 @@ export function useConfirmLesson(lessonId: string, groupId: string) {
       return snapshot
     },
     onSuccess: (confirmedAt) => {
+      clearDraft(lessonId)
       toast.success(`Занятие проведено · ${bishkekTime(confirmedAt)}`)
     },
     onError: (error, _v, snapshot) => {
       // A retry after a lost response: the first call went through.
       if (error instanceof LessonsApiError && error.kind === 'already_confirmed') {
+        clearDraft(lessonId)
         toast.success('Занятие проведено')
         return
       }

@@ -482,3 +482,12 @@ const MONTHS_NOM = [
   'Декабрь',
 ]
 export const monthName = (iso: string) => MONTHS_NOM[Number(iso.slice(5, 7)) - 1] ?? ''
+
+/**
+ * A teacher adds an extra lesson only for today or later (И16) — the same rule the RPC checks,
+ * shown before the round trip. `date` is ISO or null while the input is incomplete.
+ */
+export function extraLessonDateError(date: string | null, minDate: string | undefined) {
+  if (!date || !minDate || date >= minDate) return null
+  return 'Доп. урок можно добавить только на сегодня или позже'
+}

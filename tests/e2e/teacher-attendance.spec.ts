@@ -317,3 +317,82 @@ test('мои группы и группа (У4 / У5 / УД3)', async ({ page },
     await expect(page).toHaveURL(/\/lessons\/[0-9a-f-]{36}$/)
   }
 })
+
+test('черновик отметок переживает перезагрузку и уход со страницы (#29)', async ({
+  page,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'webkit-desktop'
+  const day = desktop ? '2026-09-10' : '2026-09-12'
+  const group = desktop ? GROUP_8A : GROUP_8B
+  const db = service()
+  const lessonId = await extraLesson(db, group, day)
+
+  try {
+    await pinClock(page, `${day}T19:10:00+06:00`)
+    await login(page, GULZAT)
+    await page.goto(`/lessons/${lessonId}`)
+    // Rows by name: the seed's September may have used up someone's freezes.
+    const free = page
+      .getByRole('list', { name: 'Ученики' })
+      .getByRole('listitem')
+      .filter({ hasNotText: 'Заморозка недоступна' })
+    const names = await Promise.all(
+      [0, 1, 2].map(async (i) => (await free.nth(i).getAttribute('aria-label')) ?? ''),
+    )
+    const marks = ['Был', 'Заморозка', 'Не был'] as const
+    const button = (i: number) =>
+      page.getByRole('listitem', { name: names[i] }).getByRole('button', {
+        name: marks[i],
+        exact: true,
+      })
+    for (const i of [0, 1, 2]) await button(i).click()
+
+    await page.reload()
+    for (const i of [0, 1, 2]) await expect(button(i)).toHaveAttribute('aria-pressed', 'true')
+
+    await page.goto('/today')
+    await page.goto(`/lessons/${lessonId}`)
+    await expect(button(1)).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByText(/^(Отмечено )?3 из \d+$/)).toBeVisible()
+    await page.waitForTimeout(600) // the avatar flip settles
+    await page.screenshot({ path: shot(testInfo, desktop ? 'draft-1280' : 'draft-390') })
+
+    // Held — the draft is gone from the device.
+    await page.getByRole('button', { name: 'Все были' }).click()
+    await page.getByRole('button', { name: 'Провести занятие' }).click()
+    await expect(page).toHaveURL(/\/today$/)
+    await expect(page.getByText(/^Занятие проведено · \d\d:\d\d$/)).toBeVisible()
+    const left = await page.evaluate(
+      (id) => window.localStorage.getItem(`iqup:lesson-draft:${id}`),
+      lessonId,
+    )
+    expect(left).toBeNull()
+  } finally {
+    await removeLesson(db, group, day)
+  }
+})
+
+test('учитель: доп. урок задним числом не отправляется (И16, #29)', async ({ page }, testInfo) => {
+  const desktop = testInfo.project.name === 'webkit-desktop'
+  await pinClock(page, '2026-10-08T14:24:00+06:00')
+  await login(page, GULZAT)
+  await page.goto(`/groups/${GROUP_8A}`)
+  await page.getByRole('button', { name: 'Доп. урок', exact: true }).click()
+  const form = page.getByRole('form', { name: 'Доп. урок' })
+  await expect(form.getByText('Не раньше сегодняшнего дня — 08.10.2026')).toBeVisible()
+  await expect(form.getByLabel('Дата')).toHaveValue('08.10.2026')
+
+  await form.getByLabel('Дата').fill('07.10.2026')
+  await expect(form.getByLabel('Дата')).toHaveAttribute('aria-invalid', 'true')
+  let rpc = false
+  page.on('request', (r) => {
+    if (r.url().includes('/rpc/') && r.url().includes('extra')) rpc = true
+  })
+  await form.getByRole('button', { name: 'Добавить доп. урок' }).click()
+  await expect(form.getByRole('alert')).toHaveText(
+    'Доп. урок можно добавить только на сегодня или позже',
+  )
+  await expect(form).toBeVisible()
+  expect(rpc).toBe(false)
+  await page.screenshot({ path: shot(testInfo, desktop ? 'extra-past-1280' : 'extra-past-390') })
+})
