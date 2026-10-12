@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { LoaderCircle, LogOut } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { teacherSummaryQuery } from '@/features/profile/api'
 import { useSession } from '@/lib/auth'
@@ -7,6 +8,7 @@ import { useNow } from '@/lib/now'
 import { cn } from '@/lib/utils'
 import { NAV, viewCaption } from './nav'
 import { Avatar, Brand, firstName, useDisplayName, ViewSwitch } from './shell-parts'
+import { useSignOut } from './use-sign-out'
 import { useView } from './use-view'
 
 const itemClass = 'flex min-h-11 items-center rounded-xl px-3 py-2.5 text-sm'
@@ -19,6 +21,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
   const now = useNow()
   const summary = useQuery({ ...teacherSummaryQuery(userId, now), enabled: view === 'teacher' })
   const items = view ? NAV[view] : []
+  const { signingOut, signOut } = useSignOut()
 
   return (
     <div className="flex min-h-dvh bg-paper">
@@ -72,6 +75,20 @@ export function DesktopShell({ children }: { children: ReactNode }) {
             )}
           </span>
         </Link>
+        {/* Sign out without opening the profile (#43) */}
+        <button
+          type="button"
+          disabled={signingOut}
+          onClick={signOut}
+          className="flex min-h-11 items-center gap-2.5 rounded-xl px-3 text-sm font-bold text-sand hover:bg-paper/6 hover:text-paper disabled:opacity-60"
+        >
+          {signingOut ? (
+            <LoaderCircle className="size-4 animate-spin" aria-hidden />
+          ) : (
+            <LogOut className="size-4" aria-hidden />
+          )}
+          Выйти
+        </button>
       </aside>
 
       <main className="min-w-0 flex-1 px-9 py-8">{children}</main>

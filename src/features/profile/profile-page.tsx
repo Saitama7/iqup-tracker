@@ -1,13 +1,14 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react'
 import { useId, useState, type ReactNode, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/page'
 import { VIEW_HOME, VIEW_LABEL, viewsFor } from '@/components/shell/nav'
 import { Avatar, ViewSwitch } from '@/components/shell/shell-parts'
+import { useSignOut } from '@/components/shell/use-sign-out'
 import { useView } from '@/components/shell/use-view'
-import { signOut, useSession } from '@/lib/auth'
+import { useSession } from '@/lib/auth'
 import { useNow } from '@/lib/now'
 import { formatPhoneIntl } from '@/lib/phone'
 import { hasRole } from '@/lib/roles'
@@ -35,19 +36,7 @@ export function ProfilePage() {
   const now = useNow()
   const profile = useQuery(profileQuery(userId))
   const summary = useQuery({ ...teacherSummaryQuery(userId, now), enabled: isTeacher })
-  const navigate = useNavigate()
-  const [signingOut, setSigningOut] = useState(false)
-
-  async function onSignOut() {
-    setSigningOut(true)
-    try {
-      await signOut()
-      await navigate({ to: '/login', replace: true })
-    } catch {
-      toast.error('Не удалось выйти. Попробуйте ещё раз.')
-      setSigningOut(false)
-    }
-  }
+  const { signingOut, signOut } = useSignOut()
 
   const subtitle = [
     viewsFor(roles)
@@ -92,7 +81,7 @@ export function ProfilePage() {
     <button
       type="button"
       disabled={signingOut}
-      onClick={() => void onSignOut()}
+      onClick={signOut}
       className="flex min-h-[52px] items-center justify-center gap-2 rounded-2xl border-[1.5px] border-line-strong bg-card px-6 text-sm font-extrabold text-burned-strong disabled:opacity-60"
     >
       {signingOut && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
