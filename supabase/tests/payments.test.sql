@@ -1,9 +1,9 @@
--- #47 · payments (0016): RLS (admin writes, accountant reads, a teacher reads only own students'
+-- #47 · payments (0016): RLS (admin writes only through the RPCs, payments immutable — И41, accountant reads, a teacher reads only own students'
 -- payments — Д3), the checks, v_student_balance (В7.1 partial payment, В7 debt, И37 carry to the next
 -- subscription, В8 refund), record_payment / buy_subscription / refund_subscription, audit_log,
 -- trials.referred_by_student_id → students (В5). Self-contained fixtures in 2002, rolled back.
 begin;
-select plan(43);
+select plan(52);
 
 -- ─── Fixtures (as postgres, triggers off) ───────────────────────────────────
 -- users: …1 teacher A, …2 teacher B, …3 admin, …4 accountant
@@ -32,21 +32,25 @@ insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, 
 -- S1 (A): partial 1 600 of 3 200 → 6 lessons, 7 used → debt 1 lesson.
 -- S2 (A): paid in full, 15 used → 3 «в долг», then a new subscription takes them over (И37).
 -- S3 (B): teacher B's student. S4 (A): paid in full, 4 used → refund 8 lessons. Friend F brought S1.
+-- S5 (B): 1 000 of 3 200 → 3 lessons, 5 used → the «закрыть долг» amount must really close it (И37, ceil).
 insert into public.students (id, full_name) values
   ('e4700000-0000-4000-8000-000000000001', 'S1'),
   ('e4700000-0000-4000-8000-000000000002', 'S2'),
   ('e4700000-0000-4000-8000-000000000003', 'S3'),
-  ('e4700000-0000-4000-8000-000000000004', 'S4');
+  ('e4700000-0000-4000-8000-000000000004', 'S4'),
+  ('e4700000-0000-4000-8000-000000000005', 'S5');
 insert into public.enrollments (id, student_id, group_id, start_date) values
   ('c4700000-0000-4000-8000-000000000001', 'e4700000-0000-4000-8000-000000000001', 'd4700000-0000-4000-8000-000000000001', '2002-01-01'),
   ('c4700000-0000-4000-8000-000000000002', 'e4700000-0000-4000-8000-000000000002', 'd4700000-0000-4000-8000-000000000001', '2002-01-01'),
   ('c4700000-0000-4000-8000-000000000003', 'e4700000-0000-4000-8000-000000000003', 'd4700000-0000-4000-8000-000000000002', '2002-01-01'),
-  ('c4700000-0000-4000-8000-000000000004', 'e4700000-0000-4000-8000-000000000004', 'd4700000-0000-4000-8000-000000000001', '2002-01-01');
+  ('c4700000-0000-4000-8000-000000000004', 'e4700000-0000-4000-8000-000000000004', 'd4700000-0000-4000-8000-000000000001', '2002-01-01'),
+  ('c4700000-0000-4000-8000-000000000005', 'e4700000-0000-4000-8000-000000000005', 'd4700000-0000-4000-8000-000000000002', '2002-01-01');
 insert into public.subscriptions (id, enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at) values
   ('54700000-0000-4000-8000-000000000001', 'c4700000-0000-4000-8000-000000000001', 'f4700000-0000-4000-8000-000000000001', 12, 3200, 3200, '2002-01-01'),
   ('54700000-0000-4000-8000-000000000002', 'c4700000-0000-4000-8000-000000000002', 'f4700000-0000-4000-8000-000000000001', 12, 3200, 3200, '2002-01-01'),
   ('54700000-0000-4000-8000-000000000003', 'c4700000-0000-4000-8000-000000000003', 'f4700000-0000-4000-8000-000000000001', 12, 3200, 3200, '2002-01-01'),
-  ('54700000-0000-4000-8000-000000000004', 'c4700000-0000-4000-8000-000000000004', 'f4700000-0000-4000-8000-000000000001', 12, 3200, 3200, '2002-01-01');
+  ('54700000-0000-4000-8000-000000000004', 'c4700000-0000-4000-8000-000000000004', 'f4700000-0000-4000-8000-000000000001', 12, 3200, 3200, '2002-01-01'),
+  ('54700000-0000-4000-8000-000000000005', 'c4700000-0000-4000-8000-000000000005', 'f4700000-0000-4000-8000-000000000001', 12, 3200, 3200, '2002-01-01');
 
 set session_replication_role = replica;
 -- 15 held lessons of group A in 2002
@@ -67,6 +71,15 @@ insert into public.attendance (lesson_id, student_id, subscription_id, status)
 select ('34700000-0000-4000-8000-0000000000' || lpad(n::text, 2, '0'))::uuid,
        'e4700000-0000-4000-8000-000000000004', '54700000-0000-4000-8000-000000000004', 'present'
 from generate_series(1, 4) n;
+-- 5 held lessons of group B, S5 present on all
+insert into public.lessons (id, group_id, lesson_date, planned_start, duration_min, status, confirmed_at)
+select ('34700000-0000-4000-8000-0000000000' || (20 + n)::text)::uuid,
+       'd4700000-0000-4000-8000-000000000002', date '2002-01-01' + n, '09:00', 60, 'held', now()
+from generate_series(1, 5) n;
+insert into public.attendance (lesson_id, student_id, subscription_id, status)
+select ('34700000-0000-4000-8000-0000000000' || (20 + n)::text)::uuid,
+       'e4700000-0000-4000-8000-000000000005', '54700000-0000-4000-8000-000000000005', 'present'
+from generate_series(1, 5) n;
 set session_replication_role = origin;
 
 create function pg_temp.bal(p_sub uuid)
@@ -117,14 +130,9 @@ select throws_ok(
   'amount must be positive'
 );
 select throws_ok(
-  $$ insert into public.payments (subscription_id, amount, method, kind) values ('54700000-0000-4000-8000-000000000002', -100, 'cash', 'refund') $$,
-  '23514', null,
-  'a refund without a reason is rejected'
-);
-select throws_ok(
-  $$ insert into public.payments (subscription_id, amount, method) values ('54700000-0000-4000-8000-000000000002', -100, 'cash') $$,
-  '23514', null,
-  'a negative payment that is not a refund is rejected'
+  $$ insert into public.payments (subscription_id, amount, method) values ('54700000-0000-4000-8000-000000000002', 100, 'cash') $$,
+  '42501', null,
+  'И41: no write policy — even the admin writes only through the RPCs'
 );
 select lives_ok(
   $$ select public.record_payment('54700000-0000-4000-8000-000000000003', 3200, 'mbank') $$,
@@ -155,6 +163,26 @@ select is(
   (select freezes_used from public.v_student_balance where subscription_id = '54700000-0000-4000-8000-000000000001'),
   1,
   'a freeze is counted but not used'
+);
+
+-- И37 ceil: 3 200 / 12, paid 1 000 (→ 3 lessons), 5 used → 333,33 owed → 334; paying it closes the debt
+select lives_ok(
+  $$ select public.record_payment('54700000-0000-4000-8000-000000000005', 1000, 'cash') $$,
+  'admin records 1 000 for S5'
+);
+select results_eq(
+  $$ select * from pg_temp.bal('54700000-0000-4000-8000-000000000005') $$,
+  $$ values (3, 0, 5, 2, 334, 0) $$,
+  'И37: debt 2 lessons, 333,33 rounded UP to 334'
+);
+select lives_ok(
+  $$ select public.record_payment('54700000-0000-4000-8000-000000000005', 334, 'cash') $$,
+  'admin records the «закрыть долг» amount'
+);
+select results_eq(
+  $$ select * from pg_temp.bal('54700000-0000-4000-8000-000000000005') $$,
+  $$ values (5, 0, 5, 0, 0, 0) $$,
+  'И37: paying debt_som opens every debt lesson — no debt left'
 );
 
 -- buy_subscription: S2's next package takes over the 3 lessons «в долг» (И37)
@@ -227,8 +255,8 @@ select is(
 );
 select results_eq(
   $$ select status::text, end_date from public.enrollments where id = 'c4700000-0000-4000-8000-000000000004' $$,
-  $$ values ('finished', public.bishkek_today()) $$,
-  'И38: no live subscription left → the student leaves the group today'
+  $$ values ('active', null::date) $$,
+  'И42: a refund is only about the money — the enrollment stays active'
 );
 select results_eq(
   $$ select * from pg_temp.bal('54700000-0000-4000-8000-000000000004') $$,
@@ -251,7 +279,7 @@ set local request.jwt.claims = '{"sub":"a4700000-0000-4000-8000-000000000004","r
 select is(
   (select count(*)::integer from public.payments where subscription_id in
      (select id from public.subscriptions where enrollment_id::text like 'c4700000%')),
-  7,
+  9,
   'accountant reads every payment'
 );
 select throws_ok(
@@ -292,6 +320,39 @@ select throws_ok(
   $$ select public.record_payment('54700000-0000-4000-8000-000000000001', 100, 'cash') $$,
   '42501', null,
   'teacher cannot record a payment'
+);
+
+-- ─── Payments are immutable (И41) ────────────────────────────────────────────
+set local request.jwt.claims = '{"sub":"a4700000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"roles":["admin"]}}';
+select lives_ok(
+  $$ update public.payments set amount = 1 where subscription_id = '54700000-0000-4000-8000-000000000003' $$,
+  'admin UPDATE goes through no policy'
+);
+reset role;
+select is(
+  (select amount from public.payments where subscription_id = '54700000-0000-4000-8000-000000000003'),
+  3200,
+  'И41: the admin cannot change a payment'
+);
+select throws_ok(
+  $$ update public.payments set amount = 1 where subscription_id = '54700000-0000-4000-8000-000000000003' $$,
+  '42501', null,
+  'И41: payments_guard rejects UPDATE even past RLS'
+);
+select throws_ok(
+  $$ delete from public.payments where subscription_id = '54700000-0000-4000-8000-000000000003' $$,
+  '42501', null,
+  'И41: payments_guard rejects DELETE even past RLS'
+);
+select throws_ok(
+  $$ insert into public.payments (subscription_id, amount, method, kind) values ('54700000-0000-4000-8000-000000000002', -100, 'cash', 'refund') $$,
+  '23514', null,
+  'a refund without a reason is rejected'
+);
+select throws_ok(
+  $$ insert into public.payments (subscription_id, amount, method) values ('54700000-0000-4000-8000-000000000002', -100, 'cash') $$,
+  '23514', null,
+  'a negative payment that is not a refund is rejected'
 );
 
 -- ─── Trials: «привёл друг» → referred_by_student_id (В5) ────────────────────

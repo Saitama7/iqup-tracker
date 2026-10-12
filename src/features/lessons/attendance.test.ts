@@ -224,7 +224,7 @@ describe('captions', () => {
     })
     expect(mobileMeta(meta(times(11, 'present'))).text).toBe('Осталось 1 ур. · пора оплачивать')
     expect(mobileMeta(meta(times(14, 'present')))).toEqual({
-      text: 'Долг 2 ур. · 533 сом',
+      text: 'Долг 2 ур. · 534 сом',
       tone: 'warn',
     })
   })
@@ -243,9 +243,9 @@ describe('captions', () => {
     expect(mobileMeta(meta(times(5, 'present'), half)).text).toBe(
       'Оплачено ещё 1 ур. · пора оплачивать',
     )
-    // 8 used, 6 paid: 2 lessons «в долг» = 8 × 266.67 − 1 600 = 533 сом
+    // 8 used, 6 paid: 2 lessons «в долг» = 8 × 266.67 − 1 600 = 533,33 → 534 сом (ceil, И37)
     expect(desktopMeta(meta(times(8, 'present'), half))).toEqual({
-      text: 'долг 2 урока · 533 сом',
+      text: 'долг 2 урока · 534 сом',
       tone: 'warn',
     })
     expect(desktopMeta(meta(times(2, 'present'), half)).text).toBe(
@@ -261,8 +261,8 @@ describe('captions', () => {
       '7 из 12 · заморозок 2/2 — лимит',
     )
     expect(desktopMeta(meta(times(11, 'present'))).text).toBe('1 из 12 · пора оплачивать')
-    // 3 200 / 12 × 2 = 533 сом
-    expect(desktopMeta(meta(times(14, 'present'))).text).toBe('долг 2 урока · 533 сом')
+    // 3 200 / 12 × 2 = 533,33 → 534 сом (ceil, И37)
+    expect(desktopMeta(meta(times(14, 'present'))).text).toBe('долг 2 урока · 534 сом')
   })
 
   it('no subscription', () => {

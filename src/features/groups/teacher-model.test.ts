@@ -122,7 +122,7 @@ describe('memberRows', () => {
 
   it('debt in lessons and som (price with the discount)', () => {
     const debtor = rows[3]
-    expect(debtor).toMatchObject({ debt: 2, debtSom: 533 })
+    expect(debtor).toMatchObject({ debt: 2, debtSom: 534 })
     expect(memberDebtTone({ balance: debtor?.balance ?? null, debt: 2 })).toBe('warn')
   })
 
@@ -137,7 +137,7 @@ describe('memberRows', () => {
     expect(memberCaption(a, null)).toBe('с 1 сент · заморозок 1 / 2')
     expect(memberCaption(d, null)).toBe('пора оплачивать · заморозок 0 / 2')
     expect(memberCaption(p, null)).toBe('частично · оплачено 6 ур · заморозок 0 / 2')
-    expect(memberCaption(e, '0555 123 456')).toBe('долг 2 урока · 533 сом · родитель 0555 123 456')
+    expect(memberCaption(e, '0555 123 456')).toBe('долг 2 урока · 534 сом · родитель 0555 123 456')
   })
 })
 

@@ -5,7 +5,8 @@ import { requireRole } from '@/lib/guards'
 // accountant's too, read-only (#45).
 export const Route = createFileRoute('/_app/admin')({
   beforeLoad: ({ context, location }) => {
-    if (/^\/admin\/audit\/?$/.test(location.pathname)) {
+    // The accountant reads А10 and А7 (Г1, И43); writing payments is admin-only in the page and the RPCs.
+    if (/^\/admin\/(audit|payments)\/?$/.test(location.pathname)) {
       requireRole(context.auth, 'admin', 'accountant')
     } else {
       requireRole(context.auth, 'admin')

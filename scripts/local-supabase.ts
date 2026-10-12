@@ -6,6 +6,8 @@ export interface LocalSupabase {
   functionsUrl: string
   anonKey: string
   serviceRoleKey: string
+  /** Postgres superuser URL — only for test cleanup that has to bypass guards (immutable payments). */
+  dbUrl: string
 }
 
 export function localSupabase(): LocalSupabase {
@@ -26,7 +28,7 @@ export function localSupabase(): LocalSupabase {
       .map((m) => [m[1], m[2]]),
   ) as Record<string, string | undefined>
 
-  const { API_URL, FUNCTIONS_URL, ANON_KEY, SERVICE_ROLE_KEY } = env
+  const { API_URL, FUNCTIONS_URL, ANON_KEY, SERVICE_ROLE_KEY, DB_URL } = env
   if (!API_URL || !ANON_KEY || !SERVICE_ROLE_KEY) {
     throw new Error('`supabase status -o env` did not return API_URL / ANON_KEY / SERVICE_ROLE_KEY')
   }
@@ -35,5 +37,6 @@ export function localSupabase(): LocalSupabase {
     functionsUrl: FUNCTIONS_URL ?? `${API_URL}/functions/v1`,
     anonKey: ANON_KEY,
     serviceRoleKey: SERVICE_ROLE_KEY,
+    dbUrl: DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:54322/postgres',
   }
 }

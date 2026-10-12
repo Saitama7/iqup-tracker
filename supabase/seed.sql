@@ -293,7 +293,8 @@ drop table seed_marks;
 -- Payments — А7 / А6 / А5 (#47). Every subscription is paid in full on its start day, cash and Mbank in
 -- turn, except: Нурлан Асанов paid half (1 600 of 3 200 → 6 lessons, А6), Сезим Жумабекова paid half of
 -- the renewal, Азамат Уулу has not paid the renewal (2 lessons «в долг», 740 сом), Асема Ниязова left
--- 6 класс — refund of the 5 remaining lessons (В8), the subscription refunded, the enrollment finished.
+-- 6 класс — refund of the 5 remaining lessons (В8), the subscription refunded; the enrollment is finished
+-- explicitly (a refund alone does not finish it, И42).
 -- Written as history with triggers off (no admin to be created_by; created_at = paid_at).
 set session_replication_role = replica;
 

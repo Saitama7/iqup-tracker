@@ -3,7 +3,9 @@
 --
 -- payments: N payments per subscription (Г3), cash | mbank (Г2). A refund is a negative payment with
 -- a reason (В8); refund_subscription() writes it and marks the subscription refunded in one call.
--- The admin writes, the accountant reads (Г1), a teacher reads payments of own students (Д3).
+-- The admin writes through the RPCs below, the accountant reads (Г1), a teacher reads payments of own
+-- students (Д3). Payments are immutable: no write policy, payments_guard rejects UPDATE/DELETE — a
+-- mistake is fixed by a reversing entry (И41).
 -- Every change goes to audit_log (invariant 4); v_audit_feed (0014) already files them as 'payment'.
 --
 -- v_student_balance — one row per subscription, the same numbers as balance.ts
@@ -14,7 +16,8 @@
 --   capacity of a subscription that is not the last one is max(lessons_total, paid_lessons), the rest
 --   is carried (И37). The last one keeps everything.
 --   debt_lessons = max(0, lessons_used − paid_lessons); debt_som = what those lessons cost beyond the
---   money paid, lessons_used × price_final / lessons_total − paid_som, rounded, at least 1 сом.
+--   money paid, lessons_used × price_final / lessons_total − paid_som, rounded UP (ceil) — paying it
+--   opens every debt lesson again, since paid_lessons floors (И37).
 --   refund_suggested = (min(paid_lessons, lessons_total) − lessons_used) × price_final / lessons_total
 --   (В8: remaining lessons at the discounted price; the admin may correct it).
 --   A refunded subscription is closed: it carries nothing and owes nothing.
@@ -45,7 +48,8 @@ create index on public.payments (paid_at);
 
 -- ─── payments_guard ─────────────────────────────────────────────────────────
 
--- created_by is the signed-in user; created_at is DB time; a payment is never dated in the future.
+-- A payment is never changed or deleted (И41); created_by is the signed-in user; created_at is DB time;
+-- a payment is never dated in the future.
 create function public.payments_guard()
 returns trigger
 language plpgsql
@@ -53,14 +57,12 @@ security definer
 set search_path = ''
 as $$
 begin
-  if tg_op = 'INSERT' then
-    new.created_at := now();
-    if auth.uid() is not null then
-      new.created_by := auth.uid();
-    end if;
-  else
-    new.created_at := old.created_at;
-    new.created_by := old.created_by;
+  if tg_op in ('UPDATE', 'DELETE') then
+    raise exception 'payments are immutable — record a reversing entry' using errcode = 'insufficient_privilege';
+  end if;
+  new.created_at := now();
+  if auth.uid() is not null then
+    new.created_by := auth.uid();
   end if;
   if new.paid_at > now() + interval '1 minute' then
     raise exception 'payment date is in the future' using errcode = 'check_violation';
@@ -70,7 +72,7 @@ end;
 $$;
 
 create trigger payments_guard
-before insert or update on public.payments
+before insert or update or delete on public.payments
 for each row execute function public.payments_guard();
 
 create trigger audit_log after insert or update or delete on public.payments
@@ -97,8 +99,7 @@ alter table public.payments enable row level security;
 
 create policy payments_select on public.payments for select to authenticated
   using (public.teaches_subscription(subscription_id) or public.is_staff());
-create policy payments_admin_write on public.payments for all to authenticated
-  using (public.is_admin()) with check (public.is_admin());
+-- No write policy: payments are written only by the security definer RPCs below (И41).
 
 alter publication supabase_realtime add table public.payments;
 
@@ -201,7 +202,7 @@ select
     as debt_lessons,
   case
     when status = 'refunded' or lessons_used <= paid_lessons then 0
-    else greatest(1, round(
+    else greatest(0, ceil(
       (lessons_used::numeric * price_final - paid_som::numeric * lessons_total) / lessons_total
     ))::integer
   end as debt_som,
@@ -398,8 +399,8 @@ $$;
 
 -- «Возврат» (В8): a negative payment with a reason, the subscription → refunded. The amount comes from
 -- the form (suggested from v_student_balance.refund_suggested, the admin may correct it), at most what
--- was paid. If no other live subscription is left in the enrollment, the student leaves the group
--- today (И38) — otherwise the next mark would have no subscription (И29).
+-- was paid. The enrollment stays as it is (И42): В8 is only about the money — if the student leaves,
+-- the admin finishes the enrollment on А6.
 create function public.refund_subscription(
   p_subscription_id uuid,
   p_amount integer,
@@ -441,15 +442,6 @@ begin
   end if;
 
   update public.subscriptions set status = 'refunded' where id = p_subscription_id;
-
-  if not exists (
-    select 1 from public.subscriptions s
-    where s.enrollment_id = v_sub.enrollment_id and s.status <> 'refunded'
-  ) then
-    update public.enrollments e
-    set status = 'finished', end_date = greatest(e.start_date, public.bishkek_today())
-    where e.id = v_sub.enrollment_id and e.status = 'active';
-  end if;
 
   return v_id;
 end;

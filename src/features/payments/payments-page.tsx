@@ -37,6 +37,7 @@ import {
   thClass,
 } from '@/features/tariffs/parts'
 import { formatSom } from '@/features/tariffs/model'
+import { useSession } from '@/lib/auth'
 import { useNow } from '@/lib/now'
 import { bishkekDate, formatDateRu } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -97,7 +98,7 @@ const denseTable =
 
 const segment = (on: boolean) =>
   cn(
-    'min-h-10 shrink-0 rounded-[9px] px-3 text-[13px] whitespace-nowrap',
+    'min-h-11 shrink-0 rounded-[9px] px-3 text-[13px] whitespace-nowrap',
     on ? 'bg-ink font-extrabold text-brand' : 'font-bold text-ink-muted',
   )
 const segmentBar =
@@ -111,6 +112,8 @@ export function PaymentsPage({
   onSearchChange: (next: PaymentsSearch) => void
 }) {
   const isDesktop = useIsDesktop()
+  // The accountant reads А7 (Г1): no «Записать» / «Возврат» panel (И43); RLS + RPCs enforce it anyway.
+  const canWrite = useSession().roles.includes('admin')
   const now = useNow()
   const today = bishkekDate(now)
   const month = search.month ?? monthOf(today)
@@ -140,7 +143,8 @@ export function PaymentsPage({
   const sum = totals(filtered)
 
   // Phone: «Записать» first (АМ3); desktop: the panel is always on, «record» means the journal.
-  const tab: PaymentTab = search.tab ?? (isDesktop ? 'journal' : 'record')
+  const requested: PaymentTab = search.tab ?? (isDesktop || !canWrite ? 'journal' : 'record')
+  const tab: PaymentTab = !canWrite && requested === 'record' ? 'journal' : requested
   const set = (patch: Partial<PaymentsSearch>) => {
     onSearchChange({ ...search, ...patch })
   }
@@ -152,7 +156,7 @@ export function PaymentsPage({
         { id: 'teachers', label: 'По учителям' },
       ]
     : [
-        { id: 'record', label: 'Записать' },
+        ...(canWrite ? [{ id: 'record' as const, label: 'Записать' }] : []),
         { id: 'journal', label: 'Журнал' },
         { id: 'groups', label: 'Итоги' },
       ]
@@ -269,7 +273,11 @@ export function PaymentsPage({
       Не удалось загрузить оплаты. Проверьте интернет и обновите страницу.
     </p>
   ) : shownTab === 'journal' ? (
-    <Journal rows={filtered.map((p) => journalRow(p, lookups))} isDesktop={isDesktop} />
+    <Journal
+      rows={filtered.map((p) => journalRow(p, lookups))}
+      isDesktop={isDesktop}
+      linkStudents={canWrite}
+    />
   ) : (
     <TotalsTable
       by={shownTab === 'teachers' ? 'teachers' : 'groups'}
@@ -289,7 +297,7 @@ export function PaymentsPage({
     />
   )
 
-  const panel = (
+  const panel = canWrite && (
     <RecordPanel
       key={search.student ?? 'none'}
       source={students.data}
@@ -336,7 +344,12 @@ export function PaymentsPage({
         {monthBar}
       </header>
       <Kpis monthName={monthLabel(month, today)} sum={sum} isDesktop />
-      <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6">
+      <div
+        className={cn(
+          'grid items-start gap-6',
+          canWrite ? 'grid-cols-[minmax(0,1fr)_360px]' : 'grid-cols-1',
+        )}
+      >
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {tabBar}
@@ -344,7 +357,7 @@ export function PaymentsPage({
           </div>
           {content}
         </div>
-        <aside className="sticky top-6">{panel}</aside>
+        {panel && <aside className="sticky top-6">{panel}</aside>}
       </div>
     </div>
   )
@@ -392,7 +405,28 @@ function Kpis({
 
 // ─── Journal ────────────────────────────────────────────────────────────────
 
-function Journal({ rows, isDesktop }: { rows: JournalRow[]; isDesktop: boolean }) {
+function Journal({
+  rows,
+  isDesktop,
+  linkStudents,
+}: {
+  rows: JournalRow[]
+  isDesktop: boolean
+  /** А6 is admin-only: the accountant gets plain names (И43). */
+  linkStudents: boolean
+}) {
+  const name = (r: JournalRow, className: string) =>
+    linkStudents ? (
+      <Link
+        to="/admin/students/$studentId"
+        params={{ studentId: r.studentId }}
+        className={className}
+      >
+        {r.student}
+      </Link>
+    ) : (
+      <span className={className}>{r.student}</span>
+    )
   if (rows.length === 0) {
     return (
       <p className={cn(cardClass, 'p-5 text-center font-bold text-ink-muted')}>
@@ -413,13 +447,7 @@ function Journal({ rows, isDesktop }: { rows: JournalRow[]; isDesktop: boolean }
             )}
           >
             <div className="flex min-w-0 flex-col gap-0.5">
-              <Link
-                to="/admin/students/$studentId"
-                params={{ studentId: r.studentId }}
-                className="font-extrabold text-ink"
-              >
-                {r.student}
-              </Link>
+              {name(r, 'font-extrabold text-ink')}
               <span className="text-[13px] font-bold text-ink-muted">{r.caption}</span>
               <span className="text-xs font-bold text-ink-muted">
                 {r.date} · {r.package} · {r.method} · {r.author}
@@ -459,13 +487,7 @@ function Journal({ rows, isDesktop }: { rows: JournalRow[]; isDesktop: boolean }
             >
               <td className={cn(tdClass, 'whitespace-nowrap')}>{r.date}</td>
               <td className={tdClass}>
-                <Link
-                  to="/admin/students/$studentId"
-                  params={{ studentId: r.studentId }}
-                  className="font-extrabold whitespace-nowrap text-ink"
-                >
-                  {r.student}
-                </Link>
+                {name(r, 'font-extrabold whitespace-nowrap text-ink')}
                 <div className="font-bold text-ink-muted">{r.caption}</div>
               </td>
               <td className={cn(tdClass, 'whitespace-nowrap')}>{r.package}</td>
@@ -1101,7 +1123,16 @@ function RecordPanel({
           )}
           {refund && (
             <p className="rounded-xl bg-burned-soft px-3 py-2.5 text-xs font-bold text-burned-deep">
-              Абонемент закроется; если других нет — ученик выбывает из группы с сегодняшнего дня.
+              Абонемент закроется, зачисление в группе останется (И42). Ученик продолжает? Завершить
+              зачисление —{' '}
+              <Link
+                to="/admin/students/$studentId"
+                params={{ studentId: student.id }}
+                className="underline underline-offset-2"
+              >
+                на А6
+              </Link>
+              .
             </p>
           )}
         </>

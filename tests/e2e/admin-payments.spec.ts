@@ -1,12 +1,14 @@
+import { execFileSync } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
-import { KANYKEI, login } from './support/auth'
+import { AIGERIM, KANYKEI, login } from './support/auth'
 
 // #47 · А7 Оплаты on the phone and on the desktop: a pupil with an unpaid 3 200 subscription →
 // «Записать оплату» 1 600 (В7.1: 6 lessons open) → А6 shows «Оплачено 6 из 12» → «Возврат» of the
-// remaining 6 lessons (В8) → the journal has both rows, the subscription is closed.
+// remaining 6 lessons (В8) → the journal has both rows, the subscription is closed, the enrollment
+// stays active (И42).
 // Needs the local stack + `pnpm seed:users`. Each project makes its own pupil in «ОРТ · математика»
 // (no lessons are held or marked, nobody else counts that group), removed again at the end.
 
@@ -27,6 +29,23 @@ function service() {
 const pupilName = (testInfo: TestInfo) =>
   `${testInfo.project.name === 'webkit-desktop' ? 'Деска' : 'Мобиля'} Оплатова ${testInfo.repeatEachIndex + 1}`
 
+// Payments are immutable (И41): the test pupil's rows are removed as superuser with triggers off.
+function deletePayments(subIds: string[]) {
+  execFileSync(
+    'psql',
+    [
+      localSupabase().dbUrl,
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-c',
+      'set session_replication_role = replica',
+      '-c',
+      `delete from public.payments where subscription_id in (${subIds.map((id) => `'${id}'::uuid`).join(', ')})`,
+    ],
+    { stdio: 'ignore' },
+  )
+}
+
 async function cleanup(fullName: string) {
   const db = service()
   const { data: students } = await db.from('students').select('id').eq('full_name', fullName)
@@ -37,7 +56,7 @@ async function cleanup(fullName: string) {
       const { data: subs } = await db.from('subscriptions').select('id').in('enrollment_id', ids)
       const subIds = (subs ?? []).map((s) => s.id)
       if (subIds.length > 0) {
-        await db.from('payments').delete().in('subscription_id', subIds)
+        deletePayments(subIds)
         await db.from('subscriptions').delete().in('id', subIds)
       }
       await db.from('enrollments').delete().in('id', ids)
@@ -155,7 +174,7 @@ test('А7: частичная оплата открывает 6 уроков, в
     await refund.getByRole('button', { name: /^Оформить возврат 1\s600 сом/ }).click()
     await expect(page.getByText(`Возврат оформлен: ${name} · 1\u00a0600 сом`)).toBeVisible()
 
-    // the subscription is closed: the pupil left the group, the journal has the refund
+    // the subscription is closed, the journal has the refund
     if (!isDesktop(page)) await page.getByRole('tab', { name: 'Журнал' }).click()
     const refundRow = journal
       .locator(isDesktop(page) ? 'tr' : 'li')
@@ -164,6 +183,8 @@ test('А7: частичная оплата открывает 6 уроков, в
     await expect(refundRow).toContainText('− 1\u00a0600')
     await expect(refundRow).toContainText('остаток 6 ур')
 
+    // the refund is only about the money (И42): the pupil stays in the group until the admin finishes
+    // the enrollment on А6
     const db = service()
     const { data: enrollment } = await db
       .from('enrollments')
@@ -171,7 +192,7 @@ test('А7: частичная оплата открывает 6 уроков, в
       .eq('student_id', studentId)
       .single()
     expect(enrollment).toMatchObject({
-      status: 'finished',
+      status: 'active',
       subscriptions: [{ status: 'refunded' }],
     })
   } finally {
@@ -213,4 +234,20 @@ test('учитель видит долг из реального баланса 
     : page.getByRole('listitem').filter({ hasText: 'Азамат Уулу' })
   await expect(azamat.first()).toContainText(/[Дд]олг\s2\s(ур\.|урока)\s·\s740\sсом/)
   await page.screenshot({ path: shot(testInfo, 'teacher-debt'), fullPage: true })
+})
+
+test('А7: бухгалтер только читает (Г1, И43)', async ({ page }, testInfo) => {
+  await login(page, AIGERIM)
+  await page.goto('/admin/payments?month=2026-09')
+  await expect(page.getByRole('heading', { name: 'Оплаты' })).toBeVisible()
+  const journal = isDesktop(page)
+    ? page.getByRole('table', { name: 'Журнал оплат' })
+    : page.getByRole('list', { name: 'Журнал оплат' })
+  await expect(journal).toContainText('Асема Ниязова')
+  // no panel, no «Записать» tab, names are not links to А6 (admin-only)
+  await expect(page.getByRole('form', { name: 'Записать оплату' })).toHaveCount(0)
+  await expect(page.getByRole('tab', { name: 'Записать' })).toHaveCount(0)
+  await expect(journal.getByRole('link')).toHaveCount(0)
+  if (isDesktop(page)) await expect(page.getByRole('link', { name: 'Оплаты' })).toBeVisible()
+  await page.screenshot({ path: shot(testInfo, 'payments-accountant'), fullPage: true })
 })

@@ -15,8 +15,8 @@ const searchSchema = z.object({
   student: z.uuid().optional().catch(undefined),
 })
 
-// А7 Оплаты (docs/design/AdminPayments.dc.html, АМ3 AdminMobilePayment.dc.html); role guard (admin) —
-// admin/route.tsx.
+// А7 Оплаты (docs/design/AdminPayments.dc.html, АМ3 AdminMobilePayment.dc.html); role guard (admin;
+// accountant read-only, И43) — admin/route.tsx.
 export const Route = createFileRoute('/_app/admin/payments')({
   validateSearch: searchSchema,
   component: PaymentsRoute,

@@ -60,9 +60,9 @@ describe('subscriptionBalances', () => {
     expect(b).toMatchObject({ debtLessons: 1, debtSom: 167 })
   })
 
-  it('beyond the package «в долг» (В7): 14 used of 12 → 2 lessons, 533 сом', () => {
+  it('beyond the package «в долг» (В7): 14 used of 12 → 2 lessons, 533,33 → 534 сом (ceil)', () => {
     const [b] = subscriptionBalances([sub({ used: 14 })])
-    expect(b).toMatchObject({ lessonsLeft: -2, debtLessons: 2, debtSom: 533 })
+    expect(b).toMatchObject({ lessonsLeft: -2, debtLessons: 2, debtSom: 534 })
   })
 
   it('after-school 7 400 / 20: 3 lessons «в долг» = 1 110 сом (АМ3)', () => {
@@ -70,6 +70,17 @@ describe('subscriptionBalances', () => {
       sub({ lessons_total: 20, price_final: 7400, used: 23, paid: 7400 }),
     ])
     expect(b).toMatchObject({ debtLessons: 3, debtSom: 1110 })
+  })
+
+  it('И37: debt is rounded up — paying it closes the debt (1 000 of 3 200, 5 used → 334)', () => {
+    const [b] = subscriptionBalances([sub({ paid: 1000, used: 5 })])
+    expect(b).toMatchObject({ paidLessons: 3, debtLessons: 2, debtSom: 334 })
+    // 333 would leave 1 lesson in debt; 334 opens all 5
+    expect(subscriptionBalances([sub({ paid: 1333, used: 5 })])[0]?.debtLessons).toBe(1)
+    expect(subscriptionBalances([sub({ paid: 1334, used: 5 })])[0]).toMatchObject({
+      debtLessons: 0,
+      debtSom: 0,
+    })
   })
 
   it('a tiny debt is at least 1 сом', () => {

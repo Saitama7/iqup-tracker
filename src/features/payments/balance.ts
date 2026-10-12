@@ -37,7 +37,7 @@ export interface SubscriptionBalance {
   /** lessons_total − used; negative — beyond the package. */
   lessonsLeft: number
   debtLessons: number
-  /** What the debt lessons cost beyond the money paid, whole som, at least 1. */
+  /** What the debt lessons cost beyond the money paid, rounded up to whole som (И37) — paying it closes the debt. */
   debtSom: number
   /** Remaining paid lessons × price_final / lessons_total (В8); the admin may correct it. */
   refundSuggested: number
@@ -65,7 +65,8 @@ function finish(
 ): SubscriptionBalance {
   const refunded = s.status === 'refunded'
   const debtLessons = refunded ? 0 : Math.max(0, used - paid)
-  const owed = (used * s.price_final - s.paid * s.lessons_total) / s.lessons_total
+  // Ceil, not round: paying debtSom must open every debt lesson (paidLessons floors).
+  const owed = Math.ceil((used * s.price_final - s.paid * s.lessons_total) / s.lessons_total)
   const remaining = Math.max(0, Math.min(paid, s.lessons_total) - used)
   return {
     subscriptionId: s.id,
@@ -78,7 +79,7 @@ function finish(
     lessonsUsed: used,
     lessonsLeft: s.lessons_total - used,
     debtLessons,
-    debtSom: debtLessons > 0 ? Math.max(1, roundSom(owed)) : 0,
+    debtSom: debtLessons > 0 ? Math.max(0, owed) : 0,
     refundSuggested: refunded ? 0 : roundSom((remaining * s.price_final) / s.lessons_total),
     isCurrent,
   }
