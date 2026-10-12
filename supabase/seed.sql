@@ -290,6 +290,53 @@ set session_replication_role = origin;
 drop table seed_september;
 drop table seed_marks;
 
+-- Payments — А7 / А6 / А5 (#47). Every subscription is paid in full on its start day, cash and Mbank in
+-- turn, except: Нурлан Асанов paid half (1 600 of 3 200 → 6 lessons, А6), Сезим Жумабекова paid half of
+-- the renewal, Азамат Уулу has not paid the renewal (2 lessons «в долг», 740 сом), Асема Ниязова left
+-- 6 класс — refund of the 5 remaining lessons (В8), the subscription refunded, the enrollment finished.
+-- Written as history with triggers off (no admin to be created_by; created_at = paid_at).
+set session_replication_role = replica;
+
+create temp table seed_subs as
+select
+  s.id, s.started_at, s.price_final, st.full_name, e.group_id, e.id as enrollment_id,
+  row_number() over (partition by e.id order by s.started_at, s.created_at) as n,
+  row_number() over (order by s.started_at, st.full_name, e.group_id) as k
+from public.subscriptions s
+join public.enrollments e on e.id = s.enrollment_id
+join public.students st on st.id = e.student_id;
+
+insert into public.payments (subscription_id, amount, method, paid_at, kind, reason, created_at)
+select
+  ss.id,
+  case
+    when ss.full_name in ('Нурлан Асанов', 'Сезим Жумабекова') and (ss.full_name = 'Нурлан Асанов' or ss.n = 2)
+      then ss.price_final / 2
+    else ss.price_final
+  end,
+  (case when ss.k % 2 = 0 then 'cash' else 'mbank' end)::public.payment_method,
+  (ss.started_at + time '12:00' + make_interval(mins => (ss.k * 37 % 300)::integer)) at time zone 'Asia/Bishkek',
+  'payment',
+  case when ss.full_name = 'Нурлан Асанов' then 'половина абонемента, доплата через неделю' end,
+  (ss.started_at + time '12:00' + make_interval(mins => (ss.k * 37 % 300)::integer)) at time zone 'Asia/Bishkek'
+from seed_subs ss
+where not (ss.full_name = 'Азамат Уулу' and ss.n = 2);
+
+insert into public.payments (subscription_id, amount, method, paid_at, kind, reason, created_at)
+select ss.id, -1333, 'cash', timestamptz '2026-10-02 16:00+06', 'refund', 'Переезд, ушла из центра',
+       timestamptz '2026-10-02 16:00+06'
+from seed_subs ss
+where ss.full_name = 'Асема Ниязова';
+
+update public.subscriptions s set status = 'refunded'
+from seed_subs ss where ss.id = s.id and ss.full_name = 'Асема Ниязова';
+update public.enrollments e set status = 'finished', end_date = '2026-09-30'
+from seed_subs ss where ss.enrollment_id = e.id and ss.full_name = 'Асема Ниязова';
+
+drop table seed_subs;
+
+set session_replication_role = origin;
+
 -- Trials — А11 / У2 / УД2 / А1 / А4 (names from the artboards). Dates follow bishkek_today(): Розаина on
 -- Гульзат's next lesson (today if she teaches today), Адема and Амина from tomorrow on; Бермет was on a
 -- past lesson and waits for the decision, Бакай did not come — «Позвонить» (Ж8). Written with triggers

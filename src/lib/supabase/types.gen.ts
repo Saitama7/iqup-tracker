@@ -95,6 +95,13 @@ export type Database = {
             foreignKeyName: 'attendance_subscription_id_fkey'
             columns: ['subscription_id']
             isOneToOne: false
+            referencedRelation: 'v_student_balance'
+            referencedColumns: ['subscription_id']
+          },
+          {
+            foreignKeyName: 'attendance_subscription_id_fkey'
+            columns: ['subscription_id']
+            isOneToOne: false
             referencedRelation: 'v_subscription_balances'
             referencedColumns: ['subscription_id']
           },
@@ -351,6 +358,72 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'teachers'
             referencedColumns: ['id']
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: Database['public']['Enums']['payment_kind']
+          method: Database['public']['Enums']['payment_method']
+          paid_at: string
+          reason: string | null
+          subscription_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: Database['public']['Enums']['payment_kind']
+          method: Database['public']['Enums']['payment_method']
+          paid_at?: string
+          reason?: string | null
+          subscription_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: Database['public']['Enums']['payment_kind']
+          method?: Database['public']['Enums']['payment_method']
+          paid_at?: string
+          reason?: string | null
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'payments_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'payments_subscription_id_fkey'
+            columns: ['subscription_id']
+            isOneToOne: false
+            referencedRelation: 'subscriptions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'payments_subscription_id_fkey'
+            columns: ['subscription_id']
+            isOneToOne: false
+            referencedRelation: 'v_student_balance'
+            referencedColumns: ['subscription_id']
+          },
+          {
+            foreignKeyName: 'payments_subscription_id_fkey'
+            columns: ['subscription_id']
+            isOneToOne: false
+            referencedRelation: 'v_subscription_balances'
+            referencedColumns: ['subscription_id']
           },
         ]
       }
@@ -670,6 +743,7 @@ export type Database = {
           marked_by: string | null
           note: string | null
           parent_phone: string | null
+          referred_by_student_id: string | null
           source: Database['public']['Enums']['trial_source'] | null
           status: Database['public']['Enums']['trial_status']
           student_id: string | null
@@ -689,6 +763,7 @@ export type Database = {
           marked_by?: string | null
           note?: string | null
           parent_phone?: string | null
+          referred_by_student_id?: string | null
           source?: Database['public']['Enums']['trial_source'] | null
           status?: Database['public']['Enums']['trial_status']
           student_id?: string | null
@@ -707,6 +782,7 @@ export type Database = {
           marked_by?: string | null
           note?: string | null
           parent_phone?: string | null
+          referred_by_student_id?: string | null
           source?: Database['public']['Enums']['trial_source'] | null
           status?: Database['public']['Enums']['trial_status']
           student_id?: string | null
@@ -752,6 +828,13 @@ export type Database = {
             columns: ['marked_by']
             isOneToOne: false
             referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'trials_referred_by_student_id_fkey'
+            columns: ['referred_by_student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
             referencedColumns: ['id']
           },
           {
@@ -926,6 +1009,55 @@ export type Database = {
           },
         ]
       }
+      v_student_balance: {
+        Row: {
+          carried_in: number | null
+          debt_lessons: number | null
+          debt_som: number | null
+          enrollment_id: string | null
+          freeze_limit: number | null
+          freezes_used: number | null
+          group_id: string | null
+          is_current: boolean | null
+          lessons_left: number | null
+          lessons_total: number | null
+          lessons_used: number | null
+          paid_lessons: number | null
+          paid_som: number | null
+          price_final: number | null
+          price_full: number | null
+          refund_suggested: number | null
+          started_at: string | null
+          status: Database['public']['Enums']['subscription_status'] | null
+          student_id: string | null
+          subscription_id: string | null
+          used_own: number | null
+        }
+        ComputedFields: never
+        Relationships: [
+          {
+            foreignKeyName: 'enrollments_group_id_fkey'
+            columns: ['group_id']
+            isOneToOne: false
+            referencedRelation: 'groups'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'enrollments_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'subscriptions_enrollment_id_fkey'
+            columns: ['enrollment_id']
+            isOneToOne: false
+            referencedRelation: 'enrollments'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       v_subscription_balances: {
         Row: {
           enrollment_id: string | null
@@ -968,11 +1100,27 @@ export type Database = {
     Functions: {
       archive_group: { Args: { p_group_id: string }; Returns: number }
       assert_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
+      assert_payment_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
       attendance_subscription: {
         Args: { p_lesson_id: string; p_student_id: string }
         Returns: string
       }
       bishkek_today: { Args: Record<PropertyKey, never>; Returns: string }
+      buy_subscription: {
+        Args: {
+          p_amount: number
+          p_comment?: string
+          p_discount_pct?: number
+          p_discount_reason?: Database['public']['Enums']['discount_reason']
+          p_enrollment_id: string
+          p_method: Database['public']['Enums']['payment_method']
+          p_paid_on?: string
+        }
+        Returns: {
+          payment_id: string
+          subscription_id: string
+        }[]
+      }
       cancel_lesson: {
         Args: {
           p_comment?: string
@@ -1041,6 +1189,27 @@ export type Database = {
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean }
       lesson_starts_at: { Args: { p_date: string; p_start: string }; Returns: string }
+      payment_time: { Args: { p_paid_on: string }; Returns: string }
+      record_payment: {
+        Args: {
+          p_amount: number
+          p_comment?: string
+          p_method: Database['public']['Enums']['payment_method']
+          p_paid_on?: string
+          p_subscription_id: string
+        }
+        Returns: string
+      }
+      refund_subscription: {
+        Args: {
+          p_amount: number
+          p_method: Database['public']['Enums']['payment_method']
+          p_paid_on?: string
+          p_reason: string
+          p_subscription_id: string
+        }
+        Returns: string
+      }
       reschedule_group: {
         Args: {
           p_group_id: string
@@ -1067,6 +1236,7 @@ export type Database = {
       teaches_group: { Args: { p_group_id: string }; Returns: boolean }
       teaches_lesson: { Args: { p_lesson_id: string }; Returns: boolean }
       teaches_student: { Args: { p_student_id: string }; Returns: boolean }
+      teaches_subscription: { Args: { p_subscription_id: string }; Returns: boolean }
       user_last_sign_in: {
         Args: Record<PropertyKey, never>
         Returns: {
@@ -1083,6 +1253,8 @@ export type Database = {
       group_status: 'forming' | 'active' | 'archived'
       group_type: 'group' | 'mini' | 'pair' | 'individual' | 'afterschool'
       lesson_status: 'planned' | 'held' | 'cancelled'
+      payment_kind: 'payment' | 'refund'
+      payment_method: 'cash' | 'mbank'
       role: 'teacher' | 'admin' | 'accountant'
       subscription_status: 'active' | 'exhausted' | 'refunded'
       trial_source: 'instagram' | 'referral' | '2gis' | 'other'
@@ -1208,6 +1380,8 @@ export const Constants = {
       group_status: ['forming', 'active', 'archived'],
       group_type: ['group', 'mini', 'pair', 'individual', 'afterschool'],
       lesson_status: ['planned', 'held', 'cancelled'],
+      payment_kind: ['payment', 'refund'],
+      payment_method: ['cash', 'mbank'],
       role: ['teacher', 'admin', 'accountant'],
       subscription_status: ['active', 'exhausted', 'refunded'],
       trial_source: ['instagram', 'referral', '2gis', 'other'],
