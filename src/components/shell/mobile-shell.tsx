@@ -1,5 +1,5 @@
 import { Link, useLocation } from '@tanstack/react-router'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, LoaderCircle, LogOut } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import {
   Sheet,
@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
 import { isPushedScreen, MORE, TABS, type NavItem, type TabItem } from './nav'
+import { useSignOut } from './use-sign-out'
 import { useView } from './use-view'
 
 // Phone layout: no app bar — each screen draws its own header (У2, У4, У7);
@@ -111,6 +112,7 @@ function MoreSheet({
   dense: boolean
 }) {
   const [open, setOpen] = useState(false)
+  const { signingOut, signOut } = useSignOut()
   const active = items.some((i) => i.to === pathname)
   const close = () => {
     setOpen(false)
@@ -162,6 +164,21 @@ function MoreSheet({
                 )}
               </li>
             ))}
+            <li>
+              <button
+                type="button"
+                disabled={signingOut}
+                onClick={signOut}
+                className="flex min-h-12 w-full items-center justify-between gap-3 px-2 text-[15px] font-extrabold text-burned-strong disabled:opacity-60"
+              >
+                Выйти
+                {signingOut ? (
+                  <LoaderCircle className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <LogOut className="size-4" aria-hidden />
+                )}
+              </button>
+            </li>
           </ul>
         </nav>
       </SheetContent>
