@@ -396,3 +396,115 @@ test('учитель: доп. урок задним числом не отпра
   expect(rpc).toBe(false)
   await page.screenshot({ path: shot(testInfo, desktop ? 'extra-past-1280' : 'extra-past-390') })
 })
+
+const sum = async (page: Page) =>
+  Number(((await page.getByTestId('pay-sum').textContent()) ?? '').replace(/\D/g, ''))
+
+test('вчерашнее занятие: «Подтвердить занятие» → ушло из «Требует внимания», «Мой месяц» вырос (#41)', async ({
+  page,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'webkit-desktop'
+  const day = '2026-10-07'
+  const group = desktop ? GROUP_8A : GROUP_8B
+  const db = service()
+  const lessonId = await extraLesson(db, group, day)
+  const menu = page.getByRole('navigation', { name: 'Основное меню' })
+  const attention = page.locator(`main a[href="/lessons/${lessonId}"]`)
+
+  try {
+    await pinClock(page, '2026-10-08T14:24:00+06:00')
+    await login(page, GULZAT)
+    await page.goto('/my-month')
+    await expect(page.getByTestId('pay-sum')).toBeVisible()
+    const before = await sum(page)
+
+    // from here on — client navigation only, no reload
+    await menu.getByRole('link', { name: 'Сегодня' }).click()
+    await expect(page).toHaveURL(/\/today$/)
+    await expect(attention).toHaveCount(1)
+    await attention.click()
+    await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}$`))
+    await expect(page.getByText('Не подтверждено · 19:00–20:00')).toBeVisible()
+    await expect(page.getByText('Отметьте всех, чтобы подтвердить')).toBeVisible()
+    await page.getByRole('button', { name: 'Все были' }).click()
+    const action = page.getByRole('button', { name: 'Подтвердить занятие' })
+    await expect(action).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Провести занятие' })).toHaveCount(0)
+    await page.waitForTimeout(600) // the avatar flip settles
+    await page.screenshot({
+      path: shot(testInfo, desktop ? 'confirm-past-1280' : 'confirm-past-390'),
+    })
+    await action.click()
+
+    await expect(page).toHaveURL(/\/today$/)
+    await expect(page.getByText(/^Занятие подтверждено · \d\d:\d\d$/)).toBeVisible()
+    await expect(attention).toHaveCount(0)
+
+    await menu.getByRole('link', { name: 'Мой месяц' }).click()
+    await expect(page).toHaveURL(/\/my-month$/)
+    await expect.poll(() => sum(page)).toBeGreaterThan(before)
+
+    const { data: lesson } = await db.from('lessons').select('status').eq('id', lessonId).single()
+    expect(lesson?.status).toBe('held')
+  } finally {
+    await removeLesson(db, group, day)
+  }
+})
+
+test('отказ confirm_lesson: тост с причиной, лист и черновик на месте, статус не изменился (#41)', async ({
+  page,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'webkit-desktop'
+  const day = '2026-10-07'
+  const group = desktop ? GROUP_8A : GROUP_8B
+  const db = service()
+  const lessonId = await extraLesson(db, group, day)
+  // dev 12.10: the migration with confirm_lesson was not applied — PostgREST answers 404
+  await page.route('**/rest/v1/rpc/confirm_lesson', (route) =>
+    route.fulfill({
+      status: 404,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        code: 'PGRST202',
+        details: null,
+        hint: null,
+        message: 'Could not find the function public.confirm_lesson(p_lesson_id, p_marks)',
+      }),
+    }),
+  )
+
+  try {
+    await pinClock(page, '2026-10-08T14:24:00+06:00')
+    await login(page, GULZAT)
+    await page.goto(`/lessons/${lessonId}`)
+    const students = page.getByRole('list', { name: 'Ученики' }).getByRole('listitem')
+    const absent = students.nth(0).getByRole('button', { name: 'Не был' })
+    await absent.click()
+    await page.getByRole('button', { name: 'Все были' }).click()
+    await page.getByRole('button', { name: 'Подтвердить занятие' }).click()
+
+    await expect(
+      page.getByText(
+        'Не удалось подтвердить занятие: сервер не обновлён — сообщите администратору',
+      ),
+    ).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}$`))
+    await expect(page.getByText('Не подтверждено · 19:00–20:00')).toBeVisible()
+    await expect(absent).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: 'Подтвердить занятие' })).toBeEnabled()
+    await page.waitForTimeout(600)
+    await page.screenshot({
+      path: shot(testInfo, desktop ? 'confirm-error-1280' : 'confirm-error-390'),
+    })
+
+    const { data: lesson } = await db.from('lessons').select('status').eq('id', lessonId).single()
+    expect(lesson?.status).toBe('planned')
+    const { data: marks } = await db.from('attendance').select('id').eq('lesson_id', lessonId)
+    expect(marks).toHaveLength(0)
+
+    await page.reload()
+    await expect(absent).toHaveAttribute('aria-pressed', 'true')
+  } finally {
+    await removeLesson(db, group, day)
+  }
+})

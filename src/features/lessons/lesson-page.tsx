@@ -37,10 +37,12 @@ import { clearDraft, loadDraft, saveDraft } from './draft'
 import { studentsWord } from './parts'
 import {
   bishkekTime,
+  confirmCopy,
   lessonStartMs,
   lessonState,
   timeRange,
   untilLabel,
+  type ConfirmCopy,
   type LessonState,
 } from './select'
 import { useConfirmLesson } from './use-confirm-lesson'
@@ -76,13 +78,17 @@ interface SheetModel {
   counts: Tally
   /** Marks can be changed and the lesson held now (Б1: from the start; held — admin only, И4). */
   editable: boolean
+  /** The marks are being sent — buttons wait for the database. */
+  busy: boolean
+  /** Offline: the confirm waits for the network (TanStack paused mutation). */
+  paused: boolean
   canConfirm: boolean
+  copy: ConfirmCopy
   /** Teacher's pay of the lesson by the students' subscriptions (К6); null — no percent on that date. */
   accrual: LessonAccrual | null
   setMark: (studentId: string, mark: Mark) => void
   allPresent: () => void
   confirm: () => void
-  pending: boolean
 }
 
 function Sheet({ sheet }: { sheet: LessonSheet }) {
@@ -106,6 +112,7 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
     if (settled && sheet.status !== 'planned') clearDraft(sheet.id)
   }, [settled, sheet.id, sheet.status])
   const state = lessonState(sheet, now)
+  const copy = confirmCopy(state)
   const editable = sheet.status === 'planned' && state !== 'upcoming'
   const marks: ReadonlyMap<string, Mark> = editable ? (draft ?? sheet.marks) : sheet.marks
   const counts = tally(roster, marks)
@@ -120,22 +127,32 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
     marks,
     counts,
     editable,
+    busy: mutation.isPending,
+    paused: mutation.isPaused,
     canConfirm: editable && counts.unmarked === 0 && !mutation.isPending,
+    copy,
     accrual,
     setMark: (studentId, mark) => {
       const row = roster.find((r) => r.studentId === studentId)
-      if (!editable || !row) return
+      if (!editable || mutation.isPending || !row) return
       if (mark === 'absent_frozen' && freezeBlocked(row, marks.get(studentId))) return
       setDraft(new Map(marks).set(studentId, mark))
     },
     allPresent: () => {
-      if (editable) setDraft(markAllPresent(roster, marks))
+      if (editable && !mutation.isPending) setDraft(markAllPresent(roster, marks))
     },
+    // «Сегодня» only after the database said held (#41, И27); a refusal leaves the sheet and the
+    // draft as they are, the toast says why.
     confirm: () => {
-      mutation.mutate({ marks: marksPayload(roster, marks), now })
-      void navigate({ to: '/today' })
+      mutation.mutate(
+        { marks: marksPayload(roster, marks), copy },
+        {
+          onSuccess: () => {
+            void navigate({ to: '/today' })
+          },
+        },
+      )
     },
-    pending: mutation.isPending,
   }
 
   return isDesktop ? <DesktopSheet m={model} now={now} /> : <MobileSheet m={model} now={now} />
@@ -262,7 +279,7 @@ function MarkButtons({
             key={k}
             type="button"
             aria-pressed={active}
-            disabled={!m.editable || limit}
+            disabled={!m.editable || m.busy || limit}
             aria-describedby={limit ? hintId : undefined}
             onClick={() => {
               m.setMark(row.studentId, k)
@@ -339,6 +356,7 @@ function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
         {m.editable && (
           <button
             type="button"
+            disabled={m.busy}
             onClick={m.allPresent}
             className="min-h-11 rounded-full border border-line bg-card px-3.5 text-xs font-extrabold"
           >
@@ -409,7 +427,7 @@ function ConfirmAction({ m, desktop = false }: { m: SheetModel; desktop?: boolea
           size,
         )}
       >
-        {reason ?? (m.pending ? 'Проводим…' : 'Отметьте всех, чтобы провести')}
+        {reason ?? (m.busy ? (m.paused ? m.copy.waiting : m.copy.busy) : m.copy.hint)}
       </p>
     )
   }
@@ -424,7 +442,7 @@ function ConfirmAction({ m, desktop = false }: { m: SheetModel; desktop?: boolea
       )}
     >
       <Check className="size-5" strokeWidth={3} aria-hidden />
-      Провести занятие
+      {m.copy.action}
     </button>
   )
 }
@@ -472,6 +490,7 @@ function DesktopSheet({ m, now }: { m: SheetModel; now: number }) {
         {m.editable && (
           <button
             type="button"
+            disabled={m.busy}
             onClick={m.allPresent}
             className="min-h-11 rounded-xl border-[1.5px] border-line-strong bg-card px-4 text-[13px] font-extrabold"
           >

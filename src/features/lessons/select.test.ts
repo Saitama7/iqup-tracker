@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { createNowStore, useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 import {
+  confirmCopy,
   countsCaption,
   dayCounts,
   deckOrder,
@@ -61,6 +62,42 @@ describe('lessonState', () => {
     const late = lesson('l', '23:30')
     expect(lessonState(late, at('2026-10-09', '00:29'))).toBe('current')
     expect(lessonState(late, at('2026-10-09', '00:30'))).toBe('ended_unconfirmed')
+  })
+})
+
+describe('confirmCopy (#41)', () => {
+  const l = lesson('a', '14:00')
+  const action = (now: number, over: Partial<LessonTiming> = {}) =>
+    confirmCopy(lessonState({ ...l, ...over }, now)).action
+
+  it('today, from the start until the end — «Провести занятие»', () => {
+    expect(action(at(DAY, '13:45'))).toBe('Провести занятие')
+    expect(action(at(DAY, '14:59'))).toBe('Провести занятие')
+  })
+
+  it('past the end today or an earlier day — «Подтвердить занятие»', () => {
+    expect(action(at(DAY, '15:00'))).toBe('Подтвердить занятие')
+    expect(action(at(DAY, '10:00'), { lesson_date: '2026-10-07' })).toBe('Подтвердить занятие')
+  })
+
+  it('texts follow the verb', () => {
+    expect(confirmCopy('ended_unconfirmed')).toMatchObject({
+      hint: 'Отметьте всех, чтобы подтвердить',
+      done: 'Занятие подтверждено',
+      failed: 'Не удалось подтвердить занятие',
+    })
+    expect(confirmCopy('current')).toMatchObject({
+      hint: 'Отметьте всех, чтобы провести',
+      done: 'Занятие проведено',
+      failed: 'Не удалось провести занятие',
+    })
+  })
+
+  it('offline the sheet waits for the network, not «Проводим…»', () => {
+    for (const state of ['current', 'ended_unconfirmed'] as const) {
+      expect(confirmCopy(state).waiting).toBe('Ждём связь… отметки сохранены')
+    }
+    expect(confirmCopy('current').busy).toBe('Проводим…')
   })
 })
 
