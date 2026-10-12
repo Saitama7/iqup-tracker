@@ -17,6 +17,7 @@ export type AppPath =
   | '/admin/settings'
   | '/admin/audit'
   | '/admin/trials'
+  | '/admin/payments'
   | '/payroll'
   | '/profile'
 
@@ -47,7 +48,7 @@ export const NAV: Record<View, NavItem[]> = {
     { label: 'Группы', to: '/admin/groups' },
     { label: 'Ученики', to: '/admin/students' },
     { label: 'Пробные занятия', to: '/admin/trials' },
-    { label: 'Оплаты', to: null },
+    { label: 'Оплаты', to: '/admin/payments' },
     { label: 'Расчёт ЗП', to: '/payroll' },
     { label: 'Учителя и доступ', to: '/admin/users' },
     { label: 'Тарифы и праздники', to: '/admin/settings' },
@@ -74,7 +75,7 @@ export const TABS: Record<View, TabItem[]> = {
   admin: [
     { label: 'Сегодня', icon: Calendar, to: '/admin', exact: true },
     { label: 'Ученики', icon: User, to: '/admin/students' },
-    { label: 'Оплата', icon: CreditCard, to: null },
+    { label: 'Оплата', icon: CreditCard, to: '/admin/payments' },
     { label: 'Группы', icon: Users, to: '/admin/groups' },
     { label: 'Ещё', icon: Menu, to: null, more: true },
   ],

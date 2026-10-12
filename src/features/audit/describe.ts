@@ -36,6 +36,8 @@ export interface AuditLookups {
   groups: Record<string, { name: string; subject: string }>
   lessons: Record<string, { groupId: string; date: string; start: string }>
   enrollments: Record<string, { studentId: string; groupId: string }>
+  /** Subscriptions behind payments: enrollment and package. */
+  subscriptions: Record<string, { enrollmentId: string; lessons: number; price: number }>
   tariffs: { id: string; groupType: GroupType; validFrom: string; price: number; lessons: number }[]
 }
 
@@ -46,6 +48,7 @@ export const EMPTY_LOOKUPS: AuditLookups = {
   groups: {},
   lessons: {},
   enrollments: {},
+  subscriptions: {},
   tariffs: [],
 }
 
@@ -83,11 +86,12 @@ export const KIND_LABEL: Record<AuditKind, string> = {
   other: 'Остальное',
 }
 
-/** Tables with the audit trigger, for «Все таблицы ▾». payments come in R2. */
+/** Tables with the audit trigger, for «Все таблицы ▾». */
 export const ENTITY_LABEL: Record<string, string> = {
   lessons: 'Занятия',
   attendance: 'Посещаемость',
   subscriptions: 'Абонементы',
+  payments: 'Платежи',
   enrollments: 'Зачисления',
   teacher_rates: 'Ставки учителей',
   tariffs: 'Тарифы',
@@ -429,6 +433,59 @@ function describeSubscription(row: AuditRow, l: AuditLookups): Described {
   }
 }
 
+const METHOD: Record<string, string> = { cash: 'наличные', mbank: 'Mbank' }
+
+/** «Нурлан Асанов · Математика · 8 класс А — оплата 1 600 сом (Mbank), абонемент 12 уроков». */
+function describePayment(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const sub = l.subscriptions[str(s, 'subscription_id') ?? '']
+  const e = sub ? l.enrollments[sub.enrollmentId] : undefined
+  const who = whoIn(e?.studentId ?? null, e?.groupId ?? null, l)
+  const link = studentLink(e?.studentId ?? null)
+  const amount = num(s, 'amount') ?? 0
+  const method = METHOD[str(s, 'method') ?? ''] ?? ''
+  const refund = str(s, 'kind') === 'refund'
+  const package_ = sub
+    ? `, абонемент ${sub.lessons} ${pluralRu(sub.lessons, ['урок', 'урока', 'уроков'])}`
+    : ''
+  const money = strong(`${formatSom(Math.abs(amount))} сом`)
+  const comment = str(s, 'reason')
+
+  if (row.action === 'delete') {
+    return {
+      badge: { label: 'Платёж', tone: 'stone' },
+      link,
+      parts: [...who, refund ? 'возврат ' : 'платёж ', money, ` (${method}) удалён`],
+    }
+  }
+  if (row.action === 'update') {
+    return {
+      badge: { label: 'Платёж', tone: 'stone' },
+      link,
+      parts: [...who, refund ? 'возврат ' : 'платёж ', money, ` (${method}) изменён`],
+    }
+  }
+  return refund
+    ? {
+        badge: { label: 'Возврат', tone: 'burned' },
+        link,
+        parts: [...who, 'возврат ', money, ` (${method})${package_}`],
+        note: comment ? `Причина: «${comment}»` : null,
+      }
+    : {
+        badge: { label: 'Оплата', tone: 'present' },
+        link,
+        parts: [...who, 'оплата ', money, ` (${method})${package_}`],
+        note:
+          [
+            sub && amount < sub.price ? `частично, из ${formatSom(sub.price)} сом` : null,
+            comment ? `«${comment}»` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ') || null,
+      }
+}
+
 function describeEnrollment(row: AuditRow, l: AuditLookups): Described {
   const s = current(row)
   const studentId = str(s, 'student_id')
@@ -652,6 +709,7 @@ const DESCRIBERS: Record<string, (row: AuditRow, l: AuditLookups) => Described> 
   attendance: describeAttendance,
   lessons: describeLesson,
   subscriptions: describeSubscription,
+  payments: describePayment,
   enrollments: describeEnrollment,
   teacher_rates: describeRate,
   tariffs: describeTariff,
