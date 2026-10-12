@@ -29,7 +29,7 @@ Vite + React 19 + TypeScript (strict) · TanStack Router + Query · Tailwind v4 
 1. `lessons.confirmed_at` ставится один раз временем БД и никогда не редактируется.
 2. Записи в закрытом периоде (`is_locked = true`) не меняются никем. Исправления — только `payroll_adjustments`. Смена тарифа тоже не меняет уже начисленное: ЗП считается по цене абонемента, а новый тариф для типа с абонементами действует не раньше 1-го числа следующего месяца (`tariffs_guard`, К6).
 3. Баланс ученика и сумма ЗП **вычисляются** из первичных данных (views / чистые функции), не хранятся как редактируемые числа.
-4. Любое изменение `lessons`, `attendance`, `subscriptions`, `payments`, `teacher_rates`, `enrollments`, `trials` попадает в `audit_log` триггером.
+4. Любое изменение `lessons`, `attendance`, `subscriptions`, `payments`, `teacher_rates`, `enrollments`, `trials`, `tariffs`, `subjects` попадает в `audit_log` триггером (`write_audit_log`). Экран — А10 `/admin/audit` из `v_audit_feed` (0014), описания строк — `describeAuditRow` в `src/features/audit/describe.ts`; новая таблица с аудитом → добавить её описание и тест.
 5. `attendance.consumes_credit` ⇔ `status ∈ {present, absent_burned}`; `absent_frozen` на одном абонементе — не больше `tariff.freeze_limit` (2).
 6. ЗП начисляется `group.teacher_id`, никогда `substitute_teacher_id`. Отменённые занятия не оплачиваются и не списывают уроки. Пробные (`trials`) не списывают урок, не начисляются и не входят в заполненность.
 7. Все правила доступа — в RLS. Клиент дублирует проверку роли для UI, но не заменяет RLS.

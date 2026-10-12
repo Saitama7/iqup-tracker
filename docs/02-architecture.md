@@ -171,7 +171,7 @@ sequenceDiagram
 | `payroll_adjustments` | read свои | CRUD (авансы) | CRUD |
 | `audit_log` | — | read | read |
 
-Запись в `audit_log` — триггером `AFTER INSERT OR UPDATE OR DELETE`.
+Запись в `audit_log` — триггером `AFTER INSERT OR UPDATE OR DELETE`. Экран А10 читает `v_audit_feed` (0014, `security_invoker`): та же RLS, плюс `kind` для фильтра (`late` — подтверждено не в день занятия; `retro` — отметка изменена вне «Провести», проведённое занятие отменено/удалено, ставка исправлена с уже наступившей даты; `payment` — абонементы/оплаты; `attendance` — проведено в срок; `other`) и отметки «Провести», свёрнутые в строку занятия (`marks`).
 
 ## 6. Ключевые вычисления — где живут
 
