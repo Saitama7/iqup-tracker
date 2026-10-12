@@ -246,23 +246,28 @@ export type CardTone =
 
 /**
  * Card colour on А2: the lesson state; a coming extra lesson is teal, a coming lesson of a group
- * still in «набор» — violet dashed («группа на пробном»).
+ * still in «набор» with nobody enrolled yet but trial pupils booked — violet dashed («группа на пробном»).
+ * `trialCount` is the open trials on this lesson (closed ones are not passed in).
  */
-export function cardTone(l: AdminLesson, now: number): CardTone {
+export function cardTone(l: AdminLesson, now: number, trialCount = 0): CardTone {
   const state = lessonState(l, now)
   if (state === 'held') return 'held'
   if (state === 'cancelled') return 'cancelled'
   if (state === 'ended_unconfirmed') return 'unconfirmed'
-  if (l.group.status === 'forming') return 'forming'
+  if (l.group.status === 'forming' && l.students === 0 && trialCount > 0) return 'forming'
   if (state === 'current') return 'current'
   return l.is_extra ? 'extra' : 'upcoming'
 }
 
 /** Title and caption of an А2 card: «Математика · 8 класс Б · идёт» / «Гульзат · 8 уч». */
-export function cardText(l: AdminLesson, now: number): { title: string; caption: string } {
+export function cardText(
+  l: AdminLesson,
+  now: number,
+  trialCount = 0,
+): { title: string; caption: string } {
   const label = lessonLabel(l)
   const who = teacherName(l)
-  switch (cardTone(l, now)) {
+  switch (cardTone(l, now, trialCount)) {
     case 'held':
       return { title: label, caption: `${who} · ${attendanceSummary(l.attendance)}` }
     case 'current':
@@ -282,7 +287,7 @@ export function cardText(l: AdminLesson, now: number): { title: string; caption:
         caption: l.makesUpFor ? `${who} · за ${dayShort(l.makesUpFor)}` : who,
       }
     case 'forming':
-      return { title: `${label} · набор`, caption: who }
+      return { title: `${label} · набор`, caption: `${who} · ${trialCount} на пробном` }
     default:
       return { title: label, caption: who }
   }

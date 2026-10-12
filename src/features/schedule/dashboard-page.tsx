@@ -37,6 +37,12 @@ import {
   WIDGET_SHOWN,
   type DayKpi,
 } from './model'
+import {
+  CaptionWithTrials,
+  TrialsWidget,
+  useDashboardTrials,
+  type DashboardTrials,
+} from './dashboard-trials'
 import { CHIP, DOT, Notice, R2_STUB } from './parts'
 
 /** А1 shows this many of today's lessons, the rest behind «ещё N занятий». */
@@ -61,6 +67,7 @@ export function DashboardPage() {
   useAdminLessonsRealtime()
   const day = useQuery(adminLessonsQuery(today, today))
   const pending = useQuery(adminUnconfirmedQuery(today))
+  const trials = useDashboardTrials(today)
 
   let body: ReactNode
   if (day.isError || pending.isError) {
@@ -74,6 +81,7 @@ export function DashboardPage() {
       unconfirmed: adminUnconfirmed(pending.data, now),
       today,
       now,
+      trials,
     }
     body = isDesktop ? <DesktopDashboard {...data} /> : <MobileDashboard {...data} />
   }
@@ -124,6 +132,7 @@ interface DashboardData {
   unconfirmed: AdminLesson[]
   today: string
   now: number
+  trials: DashboardTrials
 }
 
 // ─── А1 · desktop ───────────────────────────────────────────────────────────
@@ -133,7 +142,7 @@ const tileLabel = 'text-xs font-extrabold'
 const tileValue = 'font-display text-[26px] font-bold'
 const tileCaption = 'text-xs font-bold'
 
-function DesktopDashboard({ lessons, kpi, unconfirmed, today, now }: DashboardData) {
+function DesktopDashboard({ lessons, kpi, unconfirmed, today, now, trials }: DashboardData) {
   const [expanded, setExpanded] = useState(false)
   const spread = unconfirmedSpread(unconfirmed)
   const shown = expanded ? lessons : lessons.slice(0, TODAY_SHOWN)
@@ -186,7 +195,7 @@ function DesktopDashboard({ lessons, kpi, unconfirmed, today, now }: DashboardDa
           ) : (
             <ul aria-label="Занятия сегодня">
               {shown.map((l) => (
-                <DesktopRow key={l.id} lesson={l} now={now} />
+                <DesktopRow key={l.id} lesson={l} now={now} trials={trials.byLesson} />
               ))}
             </ul>
           )}
@@ -211,10 +220,7 @@ function DesktopDashboard({ lessons, kpi, unconfirmed, today, now }: DashboardDa
               Долги и «пора оплачивать» — {R2_STUB}
             </p>
           </section>
-          <section className="flex flex-col gap-2.5 rounded-[20px] border-[1.5px] border-dashed border-trial bg-card px-5 py-4">
-            <h2 className="text-[15px] font-extrabold text-trial-strong">Пробные</h2>
-            <p className="text-[13px] font-bold text-ink-muted">Пробные занятия — {R2_STUB}</p>
-          </section>
+          <TrialsWidget trials={trials} today={today} />
           <PayrollCard today={today} />
         </aside>
       </div>
@@ -222,7 +228,15 @@ function DesktopDashboard({ lessons, kpi, unconfirmed, today, now }: DashboardDa
   )
 }
 
-function DesktopRow({ lesson, now }: { lesson: AdminLesson; now: number }) {
+function DesktopRow({
+  lesson,
+  now,
+  trials,
+}: {
+  lesson: AdminLesson
+  now: number
+  trials: DashboardTrials['byLesson']
+}) {
   const { state, label } = dashboardChip(lesson, now)
   return (
     <li className="border-b border-line last:border-b-0">
@@ -242,7 +256,9 @@ function DesktopRow({ lesson, now }: { lesson: AdminLesson; now: number }) {
           <span className={cn('text-sm font-extrabold', state === 'cancelled' && 'line-through')}>
             {lessonLabel(lesson)}
           </span>
-          <span className="text-xs font-bold text-ink-muted">{dashboardCaption(lesson)}</span>
+          <span className="text-xs font-bold text-ink-muted">
+            <CaptionWithTrials lesson={lesson} caption={dashboardCaption(lesson)} trials={trials} />
+          </span>
         </span>
         <span
           className={cn(
@@ -348,7 +364,7 @@ const mLabel = 'text-[11px] font-extrabold tracking-[0.04em] uppercase'
 const mValue = 'font-display text-[22px] font-bold'
 const mCaption = 'text-[11px] font-bold'
 
-function MobileDashboard({ lessons, kpi, unconfirmed, today, now }: DashboardData) {
+function MobileDashboard({ lessons, kpi, unconfirmed, today, now, trials }: DashboardData) {
   const spread = unconfirmedSpread(unconfirmed)
   const more = unconfirmed.length - WIDGET_SHOWN
   return (
@@ -397,10 +413,12 @@ function MobileDashboard({ lessons, kpi, unconfirmed, today, now }: DashboardDat
         ) : (
           <ul aria-label="Занятия сегодня" className="flex flex-col gap-2">
             {lessons.map((l) => (
-              <MobileRow key={l.id} lesson={l} now={now} />
+              <MobileRow key={l.id} lesson={l} now={now} trials={trials.byLesson} />
             ))}
           </ul>
         )}
+
+        <TrialsWidget trials={trials} today={today} compact />
 
         {unconfirmed.length > 0 && (
           <>
@@ -445,7 +463,15 @@ const STATE_WORD = {
   cancelled: 'отменено',
 } as const
 
-function MobileRow({ lesson, now }: { lesson: AdminLesson; now: number }) {
+function MobileRow({
+  lesson,
+  now,
+  trials,
+}: {
+  lesson: AdminLesson
+  now: number
+  trials: DashboardTrials['byLesson']
+}) {
   const state = lessonState(lesson, now)
   const dot = DOT[state]
   return (
@@ -467,7 +493,13 @@ function MobileRow({ lesson, now }: { lesson: AdminLesson; now: number }) {
           <span className={cn('text-sm font-extrabold', state === 'cancelled' && 'line-through')}>
             {lessonLabel(lesson)}
           </span>
-          <span className="text-xs font-bold text-ink-muted">{mobileCaption(lesson, now)}</span>
+          <span className="text-xs font-bold text-ink-muted">
+            <CaptionWithTrials
+              lesson={lesson}
+              caption={mobileCaption(lesson, now)}
+              trials={trials}
+            />
+          </span>
         </span>
         {state === 'current' && (
           <span className="rounded-full bg-brand px-2 py-1 text-[11px] font-extrabold whitespace-nowrap">

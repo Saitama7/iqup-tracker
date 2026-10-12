@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import type { LessonState } from '@/features/lessons/select'
 import { cn } from '@/lib/utils'
+import { trialsCaption, type Trial } from '@/features/trials/model'
 import type { AdminLesson } from './api'
 import { cardText, cardTone, type CardTone } from './model'
 
@@ -43,9 +44,18 @@ const CAPTION: Record<CardTone, string> = {
 }
 
 /** А2 card: group · teacher · status by colour and words; opens the group (lesson screen — #12). */
-export function LessonCard({ lesson, now }: { lesson: AdminLesson; now: number }) {
-  const tone = cardTone(lesson, now)
-  const { title, caption } = cardText(lesson, now)
+export function LessonCard({
+  lesson,
+  now,
+  trials = [],
+}: {
+  lesson: AdminLesson
+  now: number
+  /** Open trials of this lesson: «+1 пробный · Адема» under the caption (never in the «N уч» count). */
+  trials?: readonly Trial[]
+}) {
+  const tone = cardTone(lesson, now, trials.length)
+  const { title, caption } = cardText(lesson, now, trials.length)
   return (
     <Link
       to="/admin/groups/$groupId"
@@ -55,6 +65,16 @@ export function LessonCard({ lesson, now }: { lesson: AdminLesson; now: number }
     >
       {title}
       <span className={cn('block font-bold', CAPTION[tone])}>{caption}</span>
+      {trials.length > 0 && tone !== 'forming' && tone !== 'cancelled' && (
+        <span
+          className={cn(
+            'mt-1 inline-block rounded-full border-[1.5px] border-dashed px-[7px] py-px text-[11px] leading-[1.3] font-extrabold whitespace-nowrap',
+            tone === 'current' ? 'border-ink text-ink' : 'border-trial text-trial-strong',
+          )}
+        >
+          {trialsCaption(trials)}
+        </span>
+      )}
     </Link>
   )
 }
@@ -83,7 +103,6 @@ export function Legend() {
           {i.label}
         </li>
       ))}
-      <li className="text-trial-strong">пробные — появится в R2</li>
     </ul>
   )
 }
