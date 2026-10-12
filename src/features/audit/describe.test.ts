@@ -26,6 +26,7 @@ const lookups: AuditLookups = {
   groups: { [GROUP]: { name: '8 класс Б', subject: 'Математика' } },
   lessons: { [LESSON]: { groupId: GROUP, date: '2026-10-10', start: '09:00:00' } },
   enrollments: { [ENROLLMENT]: { studentId: ALINA, groupId: GROUP } },
+  subscriptions: { [SUB]: { enrollmentId: ENROLLMENT, lessons: 12, price: 3200 } },
   tariffs: [
     { id: 't1', groupType: 'group', validFrom: '2025-09-01', price: 3000, lessons: 12 },
     { id: 't2', groupType: 'group', validFrom: '2026-09-01', price: 3200, lessons: 12 },
@@ -417,10 +418,10 @@ describe('trials', () => {
   })
 })
 
-describe('tables without a describer (payments — R2)', () => {
+describe('tables without a describer', () => {
   it('fall back to the table and the action', () => {
-    const e = describeAuditRow(row({ entity: 'payments', action: 'insert', after: {} }), lookups)
-    expect(plain(e.parts)).toBe('payments: запись добавлена')
+    const e = describeAuditRow(row({ entity: 'holidays', action: 'insert', after: {} }), lookups)
+    expect(plain(e.parts)).toBe('holidays: запись добавлена')
     expect(e.link).toBeNull()
   })
 })
@@ -449,5 +450,52 @@ describe('authors and time', () => {
     expect(marksSummary(['present', 'absent_frozen', 'absent_burned'])).toBe(
       'был 1, заморозка 1, не был 1',
     )
+  })
+})
+
+describe('payments (#47)', () => {
+  const payment = {
+    id: '30000000-0000-4000-8000-000000000001',
+    subscription_id: SUB,
+    amount: 1600,
+    method: 'mbank',
+    kind: 'payment',
+    reason: 'доплата через неделю',
+  }
+  it('a partial payment: who, group, amount, method, package; note — partial and the comment', () => {
+    const e = describeAuditRow(
+      row({ entity: 'payments', action: 'insert', after: payment, kind: 'payment' }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Алина Исакова · Математика · 8 класс Б — оплата 1 600 сом (Mbank), абонемент 12 уроков',
+    )
+    expect(e.badge).toEqual({ label: 'Оплата', tone: 'present' })
+    expect(e.link).toMatchObject({ to: '/admin/students/$studentId', params: { studentId: ALINA } })
+    expect(e.note?.replace(/\u00a0/g, ' ')).toBe('частично, из 3 200 сом · «доплата через неделю»')
+  })
+  it('a refund: negative amount shown as a sum, the reason in the note', () => {
+    const e = describeAuditRow(
+      row({
+        entity: 'payments',
+        action: 'insert',
+        after: { ...payment, amount: -1333, method: 'cash', kind: 'refund', reason: 'Переезд' },
+        kind: 'payment',
+      }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Алина Исакова · Математика · 8 класс Б — возврат 1 333 сом (наличные), абонемент 12 уроков',
+    )
+    expect(e.badge).toEqual({ label: 'Возврат', tone: 'burned' })
+    expect(e.note).toBe('Причина: «Переезд»')
+  })
+  it('without lookups: «Ученик», still readable', () => {
+    expect(
+      text(
+        row({ entity: 'payments', action: 'delete', before: payment, kind: 'payment' }),
+        EMPTY_LOOKUPS,
+      ),
+    ).toBe('Ученик — платёж 1 600 сом (Mbank) удалён')
   })
 })

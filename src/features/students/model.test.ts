@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   currentSubscription,
   filterRows,
+  needsPayment,
+  payCounts,
   formatDayMonth,
   formatLessonWhen,
   formatMarkedAt,
@@ -13,6 +15,7 @@ import {
   scheduleCaption,
   shortName,
   studentListRows,
+  type Balance,
   type GroupBrief,
   type StudentRow,
   type StudentsSource,
@@ -64,14 +67,41 @@ const student = (over: Partial<StudentRow>): StudentRow => ({
   ...over,
 })
 
+/** A v_student_balance row; fully paid 12 lessons of 3 200 unless told otherwise. */
+const bal = (subscriptionId: string, over: Partial<Balance> = {}): Balance => ({
+  subscriptionId,
+  studentId: 's',
+  groupId: 'g8a',
+  refunded: false,
+  lessonsTotal: 12,
+  priceFinal: 3200,
+  paidSom: 3200,
+  paidLessons: 12,
+  carriedIn: 0,
+  lessonsUsed: 0,
+  lessonsLeft: 12,
+  debtLessons: 0,
+  debtSom: 0,
+  refundSuggested: 0,
+  isCurrent: true,
+  freezesUsed: 0,
+  freezeLimit: 2,
+  ...over,
+})
+
+const balances: Balance[] = [
+  bal('k1', { lessonsUsed: 6, lessonsLeft: 6 }),
+  bal('k2', { lessonsUsed: 10, lessonsLeft: 2 }),
+  // half paid: 6 lessons open, nothing used yet
+  bal('n1', { paidSom: 1600, paidLessons: 6 }),
+  // used 14 of 12 paid: 2 lessons «в долг»
+  bal('e1', { lessonsUsed: 14, lessonsLeft: -2, debtLessons: 2, debtSom: 533 }),
+  // an older subscription that still owes 1 lesson
+  bal('e0', { lessonsUsed: 13, lessonsLeft: -1, debtLessons: 1, debtSom: 267, isCurrent: false }),
+]
+
 const source: StudentsSource = {
   groups: [G8A, CHEM],
-  balances: [
-    { subscription_id: 'k1', lessons_used: 6, lessons_left: 6, freezes_used: 1, freeze_limit: 2 },
-    { subscription_id: 'k2', lessons_used: 10, lessons_left: 2, freezes_used: 0, freeze_limit: 2 },
-    { subscription_id: 'n1', lessons_used: 0, lessons_left: 12, freezes_used: 0, freeze_limit: 2 },
-    { subscription_id: 'e1', lessons_used: 12, lessons_left: 0, freezes_used: 0, freeze_limit: 2 },
-  ],
   students: [
     student({
       id: 'kamila',
@@ -121,7 +151,7 @@ const source: StudentsSource = {
           start_date: '2026-09-01',
           end_date: null,
           status: 'active',
-          subscriptions: [sub('e1')],
+          subscriptions: [sub('e0', { started_at: '2026-08-01' }), sub('e1')],
         },
       ],
     }),
@@ -130,10 +160,10 @@ const source: StudentsSource = {
 }
 
 describe('studentListRows (А5)', () => {
-  const rows = studentListRows(source)
+  const rows = studentListRows(source, balances)
   const by = (id: string) => rows.find((r) => r.id === id)
 
-  it('left / total of the current subscription per active group', () => {
+  it('left / total of the current subscription per active group, −N for a debt', () => {
     expect(by('kamila')).toMatchObject({
       groups: 'Математика · 8 класс А · Химия · 9 класс',
       remaining: '6 / 12 · 2 / 12',
@@ -141,33 +171,65 @@ describe('studentListRows (А5)', () => {
       groupIds: ['g8a', 'chem'],
     })
     expect(by('nurlan')?.remaining).toBe('12 / 12')
-    expect(by('elina')?.remaining).toBe('0 / 12')
+    expect(by('elina')?.remaining).toBe('−2')
   })
 
-  it('status: not enrolled, lessons over', () => {
-    expect(by('new')).toMatchObject({ status: 'not_enrolled', groups: '', remaining: '' })
-    expect(by('elina')?.status).toBe('exhausted')
+  it('pay state and label: the worst of the groups', () => {
+    expect(by('kamila')).toMatchObject({ payState: 'soon', payLabel: 'Пора оплачивать' })
+    expect(by('nurlan')).toMatchObject({ payState: 'partial', payLabel: 'Частично · 6 ур' })
+    expect(by('elina')).toMatchObject({ payState: 'debt', payLabel: 'Долг' })
+  })
+
+  it('debt sums over all subscriptions, old ones too', () => {
+    expect(by('elina')).toMatchObject({ debtLessons: 3, debtSom: 800 })
+    expect(by('nurlan')).toMatchObject({ debtLessons: 0, debtSom: 0 })
+  })
+
+  it('a fully paid student is «Оплачено» and needs no payment', () => {
+    const [row] = studentListRows(
+      { ...source, students: source.students.filter((s) => s.id === 'kamila') },
+      [
+        bal('k1', { lessonsUsed: 2, lessonsLeft: 10 }),
+        bal('k2', { lessonsUsed: 1, lessonsLeft: 11 }),
+      ],
+    )
+    expect(row).toMatchObject({ payState: 'paid', payLabel: 'Оплачено' })
+    expect(needsPayment({ payState: row?.payState ?? null })).toBe(false)
+    expect(needsPayment({ payState: by('nurlan')?.payState ?? null })).toBe(true)
+  })
+
+  it('not enrolled: no pay state', () => {
+    expect(by('new')).toMatchObject({
+      status: 'not_enrolled',
+      groups: '',
+      remaining: '',
+      payState: null,
+      payLabel: null,
+    })
   })
 
   it('status: only finished enrollments (archived group) — not enrolled', () => {
-    const [row] = studentListRows({
-      ...source,
-      students: [
-        student({
-          id: 'gone',
-          enrollments: [
-            {
-              id: 'eg1',
-              group_id: 'g8a',
-              start_date: '2026-09-01',
-              end_date: '2026-10-11',
-              status: 'finished',
-              subscriptions: [sub('n1')],
-            },
-          ],
-        }),
-      ],
-    })
+    const [row] = studentListRows(
+      {
+        ...source,
+        students: [
+          student({
+            id: 'gone',
+            enrollments: [
+              {
+                id: 'eg1',
+                group_id: 'g8a',
+                start_date: '2026-09-01',
+                end_date: '2026-10-11',
+                status: 'finished',
+                subscriptions: [sub('n1')],
+              },
+            ],
+          }),
+        ],
+      },
+      balances,
+    )
     expect(row).toMatchObject({ status: 'not_enrolled', groups: '', remaining: '', groupIds: [] })
   })
 
@@ -180,14 +242,18 @@ describe('studentListRows (А5)', () => {
     ])
   })
 
-  it('caption counts active and idle students', () => {
-    expect(listCaption(rows)).toBe('3 активных · 1 без группы')
+  it('caption counts active, debtors and idle students', () => {
+    expect(listCaption(rows)).toBe('3 активных · 1 с долгом · 1 без группы')
     expect(listCaption(rows.slice(1, 2))).toBe('1 активный')
+  })
+
+  it('chip counters', () => {
+    expect(payCounts(rows)).toEqual({ debt: 1, soon: 1, partial: 1 })
   })
 })
 
 describe('search and group filter', () => {
-  const rows = studentListRows(source)
+  const rows = studentListRows(source, balances)
 
   it('by name, case- and ё-insensitive', () => {
     expect(matchesQuery({ fullName: 'Нурлан Асанов', parentPhone: null }, 'асан')).toBe(true)
@@ -208,6 +274,11 @@ describe('search and group filter', () => {
     expect(filterRows(rows, { group: 'chem' }).map((r) => r.id)).toEqual(['kamila'])
     expect(filterRows(rows, { group: 'g8a', q: 'нур' }).map((r) => r.id)).toEqual(['nurlan'])
     expect(filterRows(rows, {})).toHaveLength(4)
+  })
+
+  it('pay filter keeps one state', () => {
+    expect(filterRows(rows, { pay: 'debt' }).map((r) => r.id)).toEqual(['elina'])
+    expect(filterRows(rows, { pay: 'partial', group: 'g8a' }).map((r) => r.id)).toEqual(['nurlan'])
   })
 })
 

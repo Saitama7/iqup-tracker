@@ -1,11 +1,12 @@
 // У4 / У5 / УД3 — the teacher's own groups. Pure functions of (rows, today, now).
 import {
-  debtLessons,
   enrolledOn,
   pickSubscription,
   type Balance,
+  studentPay,
   type EnrollmentSource,
 } from '@/features/lessons/attendance'
+import { DEBT_LIMIT } from '@/features/payments/balance'
 import { lessonState, lessonsWord, pluralRu, type LessonTiming } from '@/features/lessons/select'
 import { calcMonth, type PayAttendance } from '@/features/payroll/calc'
 import { initials } from '@/features/students/model'
@@ -43,7 +44,8 @@ export interface TeacherGroupsSource {
 
 // ─── Students ───────────────────────────────────────────────────────────────
 
-export type PayState = 'debt' | 'soon' | 'ok'
+/** debt — lessons «в долг»; soon — ≤ 2 paid lessons left; partial — not all paid; ok — all paid. */
+export type PayState = 'debt' | 'soon' | 'partial' | 'ok'
 
 export interface MemberRow {
   studentId: string
@@ -52,11 +54,19 @@ export interface MemberRow {
   parentPhone: string | null
   startDate: string
   balance: Balance | null
-  /** Lessons «в долг» (В7) and their price with the discount. */
+  /** Lessons «в долг» over all subscriptions of the group (В7) and what they cost beyond the money paid. */
   debt: number
   debtSom: number
+  /** Paid lessons of the current subscription (В7.1). */
+  paidLessons: number
   pay: PayState
 }
+
+const PAY_OF = { debt: 'debt', soon: 'soon', partial: 'partial', paid: 'ok' } as const
+
+/** 1–3 lessons «в долг» are a warning, 4+ and no subscription — red (В7). */
+export const memberDebtTone = (m: Pick<MemberRow, 'balance' | 'debt'>): 'warn' | 'debt' =>
+  !m.balance || m.debt > DEBT_LIMIT ? 'debt' : 'warn'
 
 /** Students enrolled in the group today, with the subscription their next lesson goes to. */
 export function memberRows(group: Pick<TeacherGroup, 'enrollments'>, today: string): MemberRow[] {
@@ -67,7 +77,7 @@ export function memberRows(group: Pick<TeacherGroup, 'enrollments'>, today: stri
       .filter((x) => x.student.id === e.student.id)
       .flatMap((x) => x.subscriptions)
     const balance = pickSubscription(subs, null)
-    const debt = balance ? debtLessons(balance) : 0
+    const money = studentPay(subs, null)
     rows.set(e.student.id, {
       studentId: e.student.id,
       fullName: e.student.full_name,
@@ -75,9 +85,10 @@ export function memberRows(group: Pick<TeacherGroup, 'enrollments'>, today: stri
       parentPhone: e.student.parent_phone,
       startDate: e.start_date,
       balance,
-      debt,
-      debtSom: balance ? Math.round(debt * balance.lessonPrice) : 0,
-      pay: !balance || debt > 0 ? 'debt' : balance.left <= 2 ? 'soon' : 'ok',
+      debt: money?.debtLessons ?? 0,
+      debtSom: money?.debtSom ?? 0,
+      paidLessons: money?.paidLessons ?? 0,
+      pay: !balance || !money ? 'debt' : PAY_OF[money.state],
     })
   }
   return [...rows.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
@@ -260,5 +271,6 @@ export function memberCaption(m: MemberRow, phone: string | null): string {
       .join(' · ')
   }
   if (m.pay === 'soon') return `пора оплачивать · ${freezes}`
+  if (m.pay === 'partial') return `частично · оплачено ${m.paidLessons} ур · ${freezes}`
   return `${sinceShort(m.startDate)} · ${freezes}`
 }

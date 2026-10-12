@@ -174,6 +174,8 @@ export const bookForm = z
     groupId: z.uuid({ error: 'Выберите группу' }),
     lessonId: z.uuid({ error: 'Выберите занятие' }),
     source: z.enum(TRIAL_SOURCES).nullable(),
+    /** «Привёл друг»: the student who brought the lead — their 5 % (В5) after enroll_trial. */
+    referredBy: z.uuid().nullable().default(null),
     note: z.string().trim(),
   })
   .refine((v) => v.studentId !== null || v.people.length > 0, {
@@ -201,6 +203,7 @@ export async function bookTrials(input: BookInput): Promise<number> {
     ? [{ ...common, student_id: input.studentId, full_name: '—', grade: input.grade }]
     : input.people.map((p) => ({
         ...common,
+        referred_by_student_id: input.referredBy,
         full_name: p.fullName,
         parent_phone: p.phone,
         grade: input.grade,

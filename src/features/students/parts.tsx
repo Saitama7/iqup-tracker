@@ -3,7 +3,8 @@ import type { ComponentProps, ReactNode } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { chipClass } from '@/features/tariffs/parts'
 import { cn } from '@/lib/utils'
-import { STATUS_LABEL, type StudentStatus } from './model'
+import type { StudentListRow } from './model'
+import { chipTone, type PayTone } from './pay-view'
 
 // Shared by А5 / А6 and the enrollment dialog; same look as А8 / А9 (tariffs/parts.tsx).
 
@@ -26,14 +27,30 @@ export function NativeSelect({ className, children, ...props }: ComponentProps<'
   )
 }
 
-const STATUS_CHIP: Record<StudentStatus, string> = {
-  active: 'bg-present-soft text-present-strong',
-  exhausted: 'bg-warn-soft text-warn-strong',
-  not_enrolled: 'bg-stone text-ink-muted',
+const TONE_CLASS: Record<PayTone, string> = {
+  ok: 'bg-present-soft text-present-strong',
+  warn: 'bg-warn-soft text-warn-strong',
+  burned: 'bg-burned-soft text-burned-deep',
 }
 
-export function StatusChip({ status }: { status: StudentStatus }) {
-  return <span className={cn(chipClass, STATUS_CHIP[status])}>{STATUS_LABEL[status]}</span>
+/** Colour + text (never colour alone): the pay state of a student on А5. */
+export function PayChip({
+  row,
+}: {
+  row: Pick<StudentListRow, 'payState' | 'payLabel' | 'status' | 'debtLessons'>
+}) {
+  if (!row.payState || !row.payLabel) {
+    return row.status === 'not_enrolled' ? (
+      <span className={cn(chipClass, 'bg-stone text-ink-muted')}>Не зачислен</span>
+    ) : (
+      <span className="text-ink-muted">—</span>
+    )
+  }
+  return (
+    <span className={cn(chipClass, TONE_CLASS[chipTone(row.payState, row.debtLessons)])}>
+      {row.payLabel}
+    </span>
+  )
 }
 
 export function FormDialog({

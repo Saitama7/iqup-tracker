@@ -168,6 +168,7 @@ const subscriptionSchema = z.object({
   price_final: z.number(),
   tariff: z.object({ freeze_limit: z.number().int() }),
   attendance: z.array(z.object({ lesson_id: z.uuid(), status: markSchema })),
+  payments: z.array(z.object({ amount: z.number().int() })),
 })
 
 export const enrollmentSchema = z.object({
@@ -178,16 +179,17 @@ export const enrollmentSchema = z.object({
   subscriptions: z.array(subscriptionSchema),
 })
 
-/** subscriptions(…) of an enrollment, with every mark charged to them. */
+/** subscriptions(…) of an enrollment, with every mark charged to them and their payments (teacher RLS: own students, Д3). */
 export const ENROLLMENT_FIELDS =
-  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status))'
+  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status), payments(amount))'
 
 export function toEnrollment(row: z.infer<typeof enrollmentSchema>): EnrollmentSource {
   return {
     ...row,
-    subscriptions: row.subscriptions.map(({ tariff, attendance, ...s }) => ({
+    subscriptions: row.subscriptions.map(({ tariff, attendance, payments, ...s }) => ({
       ...s,
       freeze_limit: tariff.freeze_limit,
+      paid: payments.reduce((n, p) => n + p.amount, 0),
       marks: attendance,
     })),
   }

@@ -61,22 +61,14 @@ const groupSchema = z.object({
   ),
 })
 
-const balanceSchema = z.object({
-  subscription_id: z.uuid(),
-  lessons_used: z.number().int(),
-  lessons_left: z.number().int(),
-  freezes_used: z.number().int(),
-  freeze_limit: z.number().int(),
-})
-
 export const STUDENTS_KEY = ['admin-students'] as const
 
-/** All students with enrollments and subscriptions, groups and balances — ~100 rows, one fetch. */
+/** All students with enrollments and subscriptions, and groups — ~100 rows. Balances: payments/api balancesQuery. */
 export const studentsQuery = () =>
   queryOptions({
     queryKey: STUDENTS_KEY,
     queryFn: async (): Promise<StudentsSource> => {
-      const [students, groups, balances] = await Promise.all([
+      const [students, groups] = await Promise.all([
         supabase
           .from('students')
           .select(
@@ -87,17 +79,12 @@ export const studentsQuery = () =>
           .select(
             'id, name, subject:subjects(name), group_type, status, start_date, end_date, teacher:teachers(full_name), schedule_rules(weekday, start_time, valid_from, valid_to)',
           ),
-        supabase
-          .from('v_subscription_balances')
-          .select('subscription_id, lessons_used, lessons_left, freezes_used, freeze_limit'),
       ])
       if (students.error) throw students.error
       if (groups.error) throw groups.error
-      if (balances.error) throw balances.error
       return {
         students: z.array(studentSchema).parse(students.data),
         groups: z.array(groupSchema).parse(groups.data),
-        balances: z.array(balanceSchema).parse(balances.data),
       }
     },
   })

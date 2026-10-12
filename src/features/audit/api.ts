@@ -84,6 +84,12 @@ const lessonSchema = z.object({
   planned_start: z.string(),
 })
 const enrollmentSchema = z.object({ id: z.uuid(), student_id: z.uuid(), group_id: z.uuid() })
+const subscriptionSchema = z.object({
+  id: z.uuid(),
+  lessons_total: z.number().int(),
+  price_final: z.number().int(),
+  enrollment: enrollmentSchema,
+})
 const named = z.object({ id: z.uuid(), full_name: z.string() })
 const groupSchema = z.object({ id: z.uuid(), name: z.string(), subject: subjectName })
 const tariffSchema = z.object({
@@ -115,7 +121,10 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
   const enrollmentIds = ids(
     rows.filter((r) => r.entity === 'subscriptions').map((r) => field(r, 'enrollment_id')),
   )
-  const [lessons, enrollments, tariffs] = await Promise.all([
+  const subscriptionIds = ids(
+    rows.filter((r) => r.entity === 'payments').map((r) => field(r, 'subscription_id')),
+  )
+  const [lessons, ownEnrollments, tariffs, subscriptions] = await Promise.all([
     select(
       () =>
         supabase
@@ -138,7 +147,19 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
       tariffSchema,
       !rows.some((r) => r.entity === 'tariffs'),
     ),
+    select(
+      () =>
+        supabase
+          .from('subscriptions')
+          .select(
+            'id, lessons_total, price_final, enrollment:enrollments!inner(id, student_id, group_id)',
+          )
+          .in('id', subscriptionIds),
+      subscriptionSchema,
+      subscriptionIds.length === 0,
+    ),
   ])
+  const enrollments = [...ownEnrollments, ...subscriptions.map((s) => s.enrollment)]
 
   const studentIds = ids([
     ...rows
@@ -187,6 +208,12 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
     ),
     enrollments: Object.fromEntries(
       enrollments.map((e) => [e.id, { studentId: e.student_id, groupId: e.group_id }]),
+    ),
+    subscriptions: Object.fromEntries(
+      subscriptions.map((s) => [
+        s.id,
+        { enrollmentId: s.enrollment.id, lessons: s.lessons_total, price: s.price_final },
+      ]),
     ),
     tariffs: tariffs.map((t) => ({
       id: t.id,

@@ -1,6 +1,6 @@
 // У4 «Мои группы» (docs/design/Groups.dc.html), У5 «Группа» (GroupDetail.dc.html) and УД3 «Группы и
 // ученики» (TeacherGroupsDesk.dc.html). Read-only for the teacher except «Доп. урок» (0010);
-// payments are R2, so «Оплата» shows only what the lessons tell: debt or «пора оплачивать».
+// «Оплата» comes from the real balance: debt (1–3 lessons yellow, 4+ red), «пора оплачивать», partial.
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { ChevronLeft, Info, Plus } from 'lucide-react'
@@ -28,6 +28,7 @@ import {
   groupSummary,
   inMonth,
   memberCaption,
+  memberDebtTone,
   memberRows,
   monthShort,
   scheduleDots,
@@ -562,7 +563,14 @@ function ExtraLesson({
   )
 }
 
-const MEMBER_TONE = { debt: 'text-burned-strong', soon: 'text-warn', ok: 'text-ink-muted' } as const
+const MEMBER_TONE = { soon: 'text-warn', partial: 'text-warn', ok: 'text-ink-muted' } as const
+
+const memberTone = (m: MemberRow) =>
+  m.pay === 'debt'
+    ? memberDebtTone(m) === 'debt'
+      ? 'text-burned-strong'
+      : 'text-warn'
+    : MEMBER_TONE[m.pay]
 
 function MemberCard({ m }: { m: MemberRow }) {
   const b = m.balance
@@ -579,7 +587,7 @@ function MemberCard({ m }: { m: MemberRow }) {
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="text-[15px] font-extrabold">{m.fullName}</span>
-        <span className={cn('text-xs font-bold', MEMBER_TONE[m.pay])}>
+        <span className={cn('text-xs font-bold', memberTone(m))}>
           {memberCaption(m, displayPhone(m.parentPhone))}
         </span>
       </span>
@@ -588,7 +596,7 @@ function MemberCard({ m }: { m: MemberRow }) {
           <span
             className={cn(
               'font-display text-sm font-bold whitespace-nowrap',
-              m.debt > 0 && 'text-burned-strong',
+              m.debt > 0 && (memberDebtTone(m) === 'debt' ? 'text-burned-strong' : 'text-warn'),
             )}
           >
             {m.debt > 0 ? `−${m.debt}` : `${b.left} / ${b.total}`}
@@ -775,17 +783,35 @@ function MemberTableRow({ m }: { m: MemberRow }) {
         </div>
       </td>
       <td className={cn(tdClass, 'whitespace-nowrap')}>{dayShort(m.startDate)}</td>
-      <td className={cn(tdClass, numClass, m.debt > 0 && 'font-extrabold text-burned-strong')}>
+      <td
+        className={cn(
+          tdClass,
+          numClass,
+          m.debt > 0 &&
+            cn('font-extrabold', memberDebtTone(m) === 'debt' ? 'text-burned-strong' : 'text-warn'),
+        )}
+      >
         {b ? (m.debt > 0 ? `−${m.debt}` : `${b.left} / ${b.total}`) : '—'}
       </td>
       <td className={cn(tdClass, numClass)}>{b ? `${b.freezes} / ${b.freezeLimit}` : '—'}</td>
       <td className={tdClass}>
         {m.pay === 'debt' ? (
-          <span className={cn(chipClass, 'bg-burned-soft text-burned-deep')}>
-            {b ? `Долг ${formatSom(m.debtSom)} сом` : 'Нет абонемента'}
+          <span
+            className={cn(
+              chipClass,
+              memberDebtTone(m) === 'debt'
+                ? 'bg-burned-soft text-burned-deep'
+                : 'bg-warn-soft text-warn-strong',
+            )}
+          >
+            {b ? `Долг ${m.debt} ур. · ${formatSom(m.debtSom)} сом` : 'Нет абонемента'}
           </span>
         ) : m.pay === 'soon' ? (
           <span className={cn(chipClass, 'bg-warn-soft text-warn-strong')}>Пора оплачивать</span>
+        ) : m.pay === 'partial' ? (
+          <span className={cn(chipClass, 'bg-warn-soft text-warn-strong')}>
+            Частично · {m.paidLessons} ур
+          </span>
         ) : (
           <span className="text-sm font-bold text-ink-muted">—</span>
         )}

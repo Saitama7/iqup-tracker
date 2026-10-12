@@ -258,7 +258,7 @@ test('Ж1–Ж8: записать → учитель видит завтра →
     const { data } = await service()
       .from('trials')
       .select(
-        'status, student:students(full_name, parent_phone, enrollments(start_date, group_id, subscriptions(id)))',
+        'status, student:students!trials_student_id_fkey(full_name, parent_phone, enrollments(start_date, group_id, subscriptions(id)))',
       )
       .eq('full_name', name)
       .single()

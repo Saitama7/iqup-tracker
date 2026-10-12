@@ -1,6 +1,9 @@
 // А5 / А6 view model: pure functions of (rows, today) — no fetching, no clock.
 import { formatSom } from '@/features/tariffs/model'
 import { formatPhone } from '@/lib/phone'
+import type { StudentBalance } from '@/features/payments/api'
+import { payState, totalDebt, type PayState } from '@/features/payments/balance'
+import { payChipLabel, remainingLabel, worstState } from './pay-view'
 import {
   discountByPct,
   type DiscountPct,
@@ -66,18 +69,12 @@ export interface StudentRow {
   enrollments: EnrollmentRow[]
 }
 
-export interface Balance {
-  subscription_id: string
-  lessons_used: number
-  lessons_left: number
-  freezes_used: number
-  freeze_limit: number
-}
+/** One subscription's money and lessons — a row of v_student_balance (features/payments). */
+export type Balance = StudentBalance
 
 export interface StudentsSource {
   students: StudentRow[]
   groups: GroupBrief[]
-  balances: Balance[]
 }
 
 // ─── Formatting ─────────────────────────────────────────────────────────────
@@ -126,6 +123,12 @@ export function formatDayMonth(iso: string): string {
 export function formatLessonWhen(iso: string, time: string): string {
   const d = utc(iso)
   return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}, ${WEEKDAYS_SHORT[d.getUTCDay()]} ${time.slice(0, 5)}`
+}
+
+/** '2026-10-01' → «1 окт» (А6 «Платежи»). */
+export function formatShortDate(iso: string): string {
+  const d = utc(iso)
+  return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`
 }
 
 /** «Асан Асанов» → «АА»; one word → its first letter. */
@@ -206,6 +209,19 @@ export function currentSubscription(
   return found
 }
 
+function newestRefunded(
+  e: Pick<EnrollmentRow, 'subscriptions'>,
+  balances: ReadonlyMap<string, Balance>,
+): EnrollmentView['refunded'] {
+  const found = e.subscriptions
+    .filter((s) => s.status === 'refunded')
+    .sort(
+      (a, b) =>
+        b.started_at.localeCompare(a.started_at) || b.created_at.localeCompare(a.created_at),
+    )[0]
+  return found ? { subscription: found, balance: balances.get(found.id) ?? null } : null
+}
+
 export interface EnrollmentView {
   enrollmentId: string
   group: GroupBrief | null
@@ -214,6 +230,8 @@ export interface EnrollmentView {
   active: boolean
   subscription: SubscriptionRow | null
   balance: Balance | null
+  /** The newest returned subscription — shown as «Возврат» when there is no live one. */
+  refunded: { subscription: SubscriptionRow; balance: Balance | null } | null
 }
 
 export function enrollmentViews(
@@ -233,6 +251,7 @@ export function enrollmentViews(
         active: e.status === 'active',
         subscription,
         balance: subscription ? (balances.get(subscription.id) ?? null) : null,
+        refunded: newestRefunded(e, balances),
       }
     })
     .sort((a, b) => Number(b.active) - Number(a.active) || a.groupLabel.localeCompare(b.groupLabel))
@@ -240,13 +259,7 @@ export function enrollmentViews(
 
 // ─── А5 list ────────────────────────────────────────────────────────────────
 
-export type StudentStatus = 'active' | 'exhausted' | 'not_enrolled'
-
-export const STATUS_LABEL: Record<StudentStatus, string> = {
-  active: 'Занимается',
-  exhausted: 'Уроки закончились',
-  not_enrolled: 'Не зачислен',
-}
+export type StudentStatus = 'active' | 'not_enrolled'
 
 export interface StudentListRow {
   id: string
@@ -256,9 +269,16 @@ export interface StudentListRow {
   /** «Математика · 8 класс А · Химия · 9 класс» — active enrollments. */
   groups: string
   groupIds: string[]
-  /** «12 / 12 · 2 / 12» — lessons left / total per active enrollment (А5 «Осталось уроков»). */
+  /** «12 / 12 · −2» — lessons left / total, or the debt, per active enrollment (А5 «Осталось уроков»). */
   remaining: string
   status: StudentStatus
+  /** The worst pay state among the current subscriptions of active enrollments; debt of any subscription counts. */
+  payState: PayState | null
+  /** «Оплачено» / «Частично · 6 ур» / «Пора оплачивать» / «Долг». */
+  payLabel: string | null
+  /** Lessons «в долг» and what they cost over all subscriptions of the student. */
+  debtLessons: number
+  debtSom: number
 }
 
 export function studentListRow(
@@ -270,12 +290,17 @@ export function studentListRow(
   const remaining = active
     .map((e) => {
       if (!e.subscription) return '—'
-      const left = e.balance?.lessons_left ?? e.subscription.lessons_total
-      return `${left} / ${e.subscription.lessons_total}`
+      if (!e.balance) return `${e.subscription.lessons_total} / ${e.subscription.lessons_total}`
+      return remainingLabel(e.balance)
     })
     .join(' · ')
-  const exhausted =
-    active.length > 0 && active.every((e) => e.balance !== null && e.balance.lessons_left <= 0)
+  const debt = totalDebt(
+    s.enrollments.flatMap((e) => e.subscriptions.flatMap((x) => balances.get(x.id) ?? [])),
+  )
+  const current = active.flatMap((e) => (e.balance ? [e.balance] : []))
+  const states = current.map((b) => ({ b, state: payState(b) }))
+  const state: PayState | null = debt.lessons > 0 ? 'debt' : worstState(states.map((x) => x.state))
+  const detail = states.find((x) => x.state === state)?.b
   return {
     id: s.id,
     fullName: s.full_name,
@@ -284,17 +309,28 @@ export function studentListRow(
     groups: active.map((e) => e.groupLabel).join(' · '),
     groupIds: active.flatMap((e) => (e.group ? [e.group.id] : [])),
     remaining,
-    status: active.length === 0 ? 'not_enrolled' : exhausted ? 'exhausted' : 'active',
+    status: active.length === 0 ? 'not_enrolled' : 'active',
+    payState: state,
+    payLabel: state ? payChipLabel(state, detail?.paidLessons ?? 0) : null,
+    debtLessons: debt.lessons,
+    debtSom: debt.som,
   }
 }
 
-export function studentListRows(source: StudentsSource): StudentListRow[] {
+export function studentListRows(
+  source: StudentsSource,
+  balanceRows: readonly Balance[],
+): StudentListRow[] {
   const groups = new Map(source.groups.map((g) => [g.id, g]))
-  const balances = new Map(source.balances.map((b) => [b.subscription_id, b]))
+  const balances = new Map(balanceRows.map((b) => [b.subscriptionId, b]))
   return source.students
     .map((s) => studentListRow(s, groups, balances))
     .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
 }
+
+/** Rows that need the admin to take money: debt, a reminder or a partial payment. */
+export const needsPayment = (r: Pick<StudentListRow, 'payState'>) =>
+  r.payState !== null && r.payState !== 'paid'
 
 const fold = (s: string) => s.toLocaleLowerCase('ru').replaceAll('ё', 'е')
 
@@ -317,23 +353,46 @@ export function matchesQuery(row: Pick<StudentListRow, 'fullName' | 'parentPhone
   return fold(row.fullName).includes(fold(query))
 }
 
+export type PayFilter = 'debt' | 'soon' | 'partial'
+export const PAY_FILTERS: readonly PayFilter[] = ['debt', 'soon', 'partial']
+
 export interface StudentFilter {
   q?: string
   group?: string
+  pay?: PayFilter
 }
 
 export function filterRows(rows: readonly StudentListRow[], f: StudentFilter): StudentListRow[] {
   return rows.filter(
-    (r) => (!f.group || r.groupIds.includes(f.group)) && matchesQuery(r, f.q ?? ''),
+    (r) =>
+      (!f.group || r.groupIds.includes(f.group)) &&
+      (!f.pay || r.payState === f.pay) &&
+      matchesQuery(r, f.q ?? ''),
   )
 }
 
-/** «31 активный · 2 без группы» — eyebrow of А5. */
+/** Counters of the filter chips (the group and the search are not applied). */
+export function payCounts(rows: readonly StudentListRow[]): Record<PayFilter, number> {
+  return {
+    debt: rows.filter((r) => r.payState === 'debt').length,
+    soon: rows.filter((r) => r.payState === 'soon').length,
+    partial: rows.filter((r) => r.payState === 'partial').length,
+  }
+}
+
+/** «31 активный · 5 с долгом · 2 без группы» — eyebrow of А5. */
 export function listCaption(rows: readonly StudentListRow[]): string {
   const active = rows.filter((r) => r.status !== 'not_enrolled').length
   const idle = rows.length - active
+  const debtors = rows.filter((r) => r.payState === 'debt').length
   const word = active % 10 === 1 && active % 100 !== 11 ? 'активный' : 'активных'
-  return idle > 0 ? `${active} ${word} · ${idle} без группы` : `${active} ${word}`
+  return [
+    `${active} ${word}`,
+    debtors > 0 ? `${debtors} с долгом` : null,
+    idle > 0 ? `${idle} без группы` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** Groups a student can be enrolled into, by label. */

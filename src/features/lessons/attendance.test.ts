@@ -8,6 +8,7 @@ import {
   marksPayload,
   mobileMeta,
   pickSubscription,
+  studentPay,
   tally,
   type EnrollmentSource,
   type Mark,
@@ -29,6 +30,7 @@ const sub = (
   price_full: 3200,
   price_final: 3200,
   freeze_limit: 2,
+  paid: 3200,
   marks: marks.map((status, i) => ({ lesson_id: `${id}-l${i}`, status })),
   ...over,
 })
@@ -210,30 +212,86 @@ describe('freeze limit', () => {
 })
 
 describe('captions', () => {
-  const balance = (marks: Mark[]) => ({ balance: pickSubscription([sub('s', {}, marks)], LESSON) })
+  const meta = (marks: Mark[], over: Partial<SubscriptionSource> = {}) => {
+    const subs = [sub('s', over, marks)]
+    return { balance: pickSubscription(subs, LESSON), pay: studentPay(subs, LESSON) }
+  }
 
   it('mobile (У3)', () => {
-    expect(mobileMeta(balance([...times(8, 'present'), 'absent_frozen']))).toEqual({
+    expect(mobileMeta(meta([...times(8, 'present'), 'absent_frozen']))).toEqual({
       text: 'Осталось 4 ур. · заморозок 1/2',
       tone: 'muted',
     })
-    expect(mobileMeta(balance(times(11, 'present'))).text).toBe('Осталось 1 ур. · пора оплачивать')
-    expect(mobileMeta(balance(times(14, 'present')))).toEqual({
-      text: 'Долг 2 ур. · абонемент не оплачен',
-      tone: 'debt',
+    expect(mobileMeta(meta(times(11, 'present'))).text).toBe('Осталось 1 ур. · пора оплачивать')
+    expect(mobileMeta(meta(times(14, 'present')))).toEqual({
+      text: 'Долг 2 ур. · 534 сом',
+      tone: 'warn',
     })
   })
 
+  it('debt beyond 3 lessons is red', () => {
+    expect(mobileMeta(meta(times(16, 'present'))).tone).toBe('debt')
+    expect(desktopMeta(meta(times(15, 'present'))).tone).toBe('warn')
+  })
+
+  it('partial payment: 6 lessons open, the rest unpaid', () => {
+    const half = { paid: 1600 }
+    expect(mobileMeta(meta(times(2, 'present'), half))).toEqual({
+      text: 'Частично · оплачено 6 ур · заморозок 0/2',
+      tone: 'warn',
+    })
+    expect(mobileMeta(meta(times(5, 'present'), half)).text).toBe(
+      'Оплачено ещё 1 ур. · пора оплачивать',
+    )
+    // 8 used, 6 paid: 2 lessons «в долг» = 8 × 266.67 − 1 600 = 533,33 → 534 сом (ceil, И37)
+    expect(desktopMeta(meta(times(8, 'present'), half))).toEqual({
+      text: 'долг 2 урока · 534 сом',
+      tone: 'warn',
+    })
+    expect(desktopMeta(meta(times(2, 'present'), half)).text).toBe(
+      'частично · оплачено 6 ур · заморозок 0/2',
+    )
+  })
+
   it('desktop (УД2)', () => {
-    expect(desktopMeta(balance([...times(8, 'present'), 'absent_frozen'])).text).toBe(
+    expect(desktopMeta(meta([...times(8, 'present'), 'absent_frozen'])).text).toBe(
       '4 из 12 · заморозок 1/2',
     )
-    expect(desktopMeta(balance([...times(5, 'present'), ...times(2, 'absent_frozen')])).text).toBe(
+    expect(desktopMeta(meta([...times(5, 'present'), ...times(2, 'absent_frozen')])).text).toBe(
       '7 из 12 · заморозок 2/2 — лимит',
     )
-    expect(desktopMeta(balance(times(11, 'present'))).text).toBe('1 из 12 · пора оплачивать')
-    // 3 200 / 12 × 2 = 533 сом
-    expect(desktopMeta(balance(times(14, 'present'))).text).toBe('долг 2 урока · 533 сом')
+    expect(desktopMeta(meta(times(11, 'present'))).text).toBe('1 из 12 · пора оплачивать')
+    // 3 200 / 12 × 2 = 533,33 → 534 сом (ceil, И37)
+    expect(desktopMeta(meta(times(14, 'present'))).text).toBe('долг 2 урока · 534 сом')
+  })
+
+  it('no subscription', () => {
+    expect(mobileMeta({ balance: null, pay: null })).toEqual({
+      text: 'Нет абонемента',
+      tone: 'debt',
+    })
+  })
+})
+
+describe('studentPay', () => {
+  it('does not count the mark of the lesson itself', () => {
+    const base = sub('s', {}, times(12, 'present'))
+    const subs = [
+      { ...base, marks: [...base.marks, { lesson_id: LESSON, status: 'present' as const }] },
+    ]
+    expect(studentPay(subs, LESSON)).toMatchObject({ state: 'soon', debtLessons: 0 })
+    expect(studentPay(subs, null)).toMatchObject({ state: 'debt', debtLessons: 1 })
+  })
+
+  it('an old subscription that still owes counts in the debt', () => {
+    const old = sub('old', { paid: 1600 }, times(12, 'present'))
+    const fresh = sub('fresh', { started_at: '2026-10-01' }, [])
+    // old: 6 paid, 12 used — 6 over its package... the 6 unpaid ones stay on it (capacity 12)
+    expect(studentPay([old, fresh], LESSON)).toMatchObject({ state: 'debt', debtLessons: 6 })
+  })
+
+  it('refunded only — nothing to pay', () => {
+    expect(studentPay([sub('r', { status: 'refunded' })], LESSON)).toBeNull()
   })
 })
 

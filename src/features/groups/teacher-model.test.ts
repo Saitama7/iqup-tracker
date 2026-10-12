@@ -6,6 +6,7 @@ import {
   groupSummary,
   inMonth,
   memberCaption,
+  memberDebtTone,
   memberRows,
   scheduleDots,
   scheduleRange,
@@ -30,6 +31,7 @@ const sub = (
   price_full: 3200,
   price_final: 3200,
   freeze_limit: 2,
+  paid: 3200,
   marks: marks.map((status, i) => ({ lesson_id: `${id}-${i}`, status })),
   ...over,
 })
@@ -80,6 +82,7 @@ const group: TeacherGroup = {
     enrollment('Данияр Кадыров', sub('d', times(11, 'present'))),
     enrollment('Элина Сыдыкова', sub('e', times(14, 'present'))),
     enrollment('Новенький', sub('n', []), '2026-10-09'),
+    enrollment('Половинка', sub('p', times(2, 'present'), { paid: 1600 })),
   ],
   lessons: [
     lesson('2026-10-01', 'held', ['present', 'present', 'absent_burned', 'absent_frozen']),
@@ -110,22 +113,31 @@ describe('memberRows', () => {
     expect(rows.map((r) => r.fullName)).toEqual([
       'Айжан Бекова',
       'Данияр Кадыров',
+      'Половинка',
       'Элина Сыдыкова',
     ])
     expect(rows[0]?.balance?.left).toBe(5)
-    expect(rows.map((r) => r.pay)).toEqual(['ok', 'soon', 'debt'])
+    expect(rows.map((r) => r.pay)).toEqual(['ok', 'soon', 'partial', 'debt'])
   })
 
   it('debt in lessons and som (price with the discount)', () => {
-    expect(rows[2]).toMatchObject({ debt: 2, debtSom: 533 })
+    const debtor = rows[3]
+    expect(debtor).toMatchObject({ debt: 2, debtSom: 534 })
+    expect(memberDebtTone({ balance: debtor?.balance ?? null, debt: 2 })).toBe('warn')
+  })
+
+  it('partial payment: paid lessons, no debt yet', () => {
+    expect(rows[2]).toMatchObject({ debt: 0, paidLessons: 6, pay: 'partial' })
+    expect(memberDebtTone({ balance: rows[3]?.balance ?? null, debt: 4 })).toBe('debt')
   })
 
   it('captions as on У5', () => {
-    const [a, d, e] = rows
-    if (!a || !d || !e) throw new Error('rows')
+    const [a, d, p, e] = rows
+    if (!a || !d || !p || !e) throw new Error('rows')
     expect(memberCaption(a, null)).toBe('с 1 сент · заморозок 1 / 2')
     expect(memberCaption(d, null)).toBe('пора оплачивать · заморозок 0 / 2')
-    expect(memberCaption(e, '0555 123 456')).toBe('долг 2 урока · 533 сом · родитель 0555 123 456')
+    expect(memberCaption(p, null)).toBe('частично · оплачено 6 ур · заморозок 0 / 2')
+    expect(memberCaption(e, '0555 123 456')).toBe('долг 2 урока · 534 сом · родитель 0555 123 456')
   })
 })
 
@@ -134,7 +146,7 @@ describe('groupSummary', () => {
     const s = groupSummary(group, source, TODAY, at(TODAY, '14:20'))
     // 3200 / 12 × 45 % = 120 сом × (3 + 3) paid marks
     expect(s).toMatchObject({
-      students: 3,
+      students: 4,
       maxStudents: 10,
       held: 2,
       studentLessons: 6,
@@ -144,7 +156,7 @@ describe('groupSummary', () => {
       unconfirmed: 1,
       isNow: true,
     })
-    expect(capacity(s)).toBe('3 / 10')
+    expect(capacity(s)).toBe('4 / 10')
   })
 
   it('badges of У4', () => {

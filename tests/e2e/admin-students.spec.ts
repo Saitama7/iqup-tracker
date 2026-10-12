@@ -62,7 +62,7 @@ test('А5: list with balances, search by name and phone, group filter in the URL
   // Seed: September is held (#13) — 13 lessons in each group, the 13th already from the renewal
   await expect(kamila).toContainText('11 / 12 · 11 / 12')
   await expect(kamila).toContainText('0770 555 666')
-  await expect(kamila).toContainText('Занимается')
+  await expect(kamila).toContainText('Оплачено')
   await page.screenshot({ path: testInfo.outputPath('students.png'), fullPage: true })
 
   const search = page.getByRole('searchbox', { name: 'Поиск ученика' })
@@ -147,7 +147,9 @@ test('create a student → enroll into «8 класс А» with 15 % → in the 
   await expect(enroll).toBeHidden()
 
   const card = page.getByRole('region', { name: 'Математика · 8 класс А' })
-  await expect(card).toContainText('Активен')
+  // #47: nothing paid yet — the pay state, not «Активен», on the phone
+  await expect(card).toContainText(isDesktop(page) ? 'Активен' : 'Пора оплачивать')
+  await expect(card).toContainText('Оплачено 0 из 12')
   await expect(card).toContainText('2 720 сом · скидка 15 %')
   await expect(card).toContainText(isDesktop(page) ? '0 из 12' : 'Использовано 0 из 12')
 

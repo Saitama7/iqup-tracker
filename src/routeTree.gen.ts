@@ -19,6 +19,7 @@ import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppAdminAuditRouteImport } from './routes/_app/admin/audit'
+import { Route as AppAdminPaymentsRouteImport } from './routes/_app/admin/payments'
 import { Route as AppAdminScheduleRouteImport } from './routes/_app/admin/schedule'
 import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
 import { Route as AppAdminTrialsRouteImport } from './routes/_app/admin/trials'
@@ -78,6 +79,11 @@ const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
 const AppAdminAuditRoute = AppAdminAuditRouteImport.update({
   id: '/audit',
   path: '/audit',
+  getParentRoute: () => AppAdminRouteRoute,
+} as any)
+const AppAdminPaymentsRoute = AppAdminPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
   getParentRoute: () => AppAdminRouteRoute,
 } as any)
 const AppAdminScheduleRoute = AppAdminScheduleRouteImport.update({
@@ -146,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AppProfileRoute
   '/today': typeof AppTodayRoute
   '/admin/audit': typeof AppAdminAuditRoute
+  '/admin/payments': typeof AppAdminPaymentsRoute
   '/admin/schedule': typeof AppAdminScheduleRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/trials': typeof AppAdminTrialsRoute
@@ -167,6 +174,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AppProfileRoute
   '/today': typeof AppTodayRoute
   '/admin/audit': typeof AppAdminAuditRoute
+  '/admin/payments': typeof AppAdminPaymentsRoute
   '/admin/schedule': typeof AppAdminScheduleRoute
   '/admin/settings': typeof AppAdminSettingsRoute
   '/admin/trials': typeof AppAdminTrialsRoute
@@ -191,6 +199,7 @@ export interface FileRoutesById {
   '/_app/profile': typeof AppProfileRoute
   '/_app/today': typeof AppTodayRoute
   '/_app/admin/audit': typeof AppAdminAuditRoute
+  '/_app/admin/payments': typeof AppAdminPaymentsRoute
   '/_app/admin/schedule': typeof AppAdminScheduleRoute
   '/_app/admin/settings': typeof AppAdminSettingsRoute
   '/_app/admin/trials': typeof AppAdminTrialsRoute
@@ -215,6 +224,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/today'
     | '/admin/audit'
+    | '/admin/payments'
     | '/admin/schedule'
     | '/admin/settings'
     | '/admin/trials'
@@ -236,6 +246,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/today'
     | '/admin/audit'
+    | '/admin/payments'
     | '/admin/schedule'
     | '/admin/settings'
     | '/admin/trials'
@@ -259,6 +270,7 @@ export interface FileRouteTypes {
     | '/_app/profile'
     | '/_app/today'
     | '/_app/admin/audit'
+    | '/_app/admin/payments'
     | '/_app/admin/schedule'
     | '/_app/admin/settings'
     | '/_app/admin/trials'
@@ -351,6 +363,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminAuditRouteImport
       parentRoute: typeof AppAdminRouteRoute
     }
+    '/_app/admin/payments': {
+      id: '/_app/admin/payments'
+      path: '/payments'
+      fullPath: '/admin/payments'
+      preLoaderRoute: typeof AppAdminPaymentsRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
     '/_app/admin/schedule': {
       id: '/_app/admin/schedule'
       path: '/schedule'
@@ -433,6 +452,7 @@ declare module '@tanstack/react-router' {
 
 interface AppAdminRouteRouteChildren {
   AppAdminAuditRoute: typeof AppAdminAuditRoute
+  AppAdminPaymentsRoute: typeof AppAdminPaymentsRoute
   AppAdminScheduleRoute: typeof AppAdminScheduleRoute
   AppAdminSettingsRoute: typeof AppAdminSettingsRoute
   AppAdminTrialsRoute: typeof AppAdminTrialsRoute
@@ -446,6 +466,7 @@ interface AppAdminRouteRouteChildren {
 
 const AppAdminRouteRouteChildren: AppAdminRouteRouteChildren = {
   AppAdminAuditRoute: AppAdminAuditRoute,
+  AppAdminPaymentsRoute: AppAdminPaymentsRoute,
   AppAdminScheduleRoute: AppAdminScheduleRoute,
   AppAdminSettingsRoute: AppAdminSettingsRoute,
   AppAdminTrialsRoute: AppAdminTrialsRoute,
