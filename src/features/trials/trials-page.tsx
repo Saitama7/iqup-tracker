@@ -930,6 +930,7 @@ function BookForm({
     group: useId(),
     lesson: useId(),
     source: useId(),
+    referrer: useId(),
     note: useId(),
   }
   const queryClient = useQueryClient()
@@ -940,6 +941,7 @@ function BookForm({
   const [groupId, setGroupId] = useState(initialGroup ?? '')
   const [lessonId, setLessonId] = useState('')
   const [from, setFrom] = useState<TrialSource | ''>('')
+  const [referredBy, setReferredBy] = useState('')
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
 
@@ -964,6 +966,11 @@ function BookForm({
     [source, groupId],
   )
   const teacher = group?.teacher ? firstName(group.teacher.full_name) : 'Учитель'
+  const referrers = useMemo(
+    () =>
+      [...(source?.students ?? [])].sort((a, b) => a.full_name.localeCompare(b.full_name, 'ru')),
+    [source],
+  )
 
   const mutation = useMutation({
     mutationFn: bookTrials,
@@ -984,6 +991,7 @@ function BookForm({
       )
       setPeople([{ name: '', phone: '' }])
       setStudentId('')
+      setReferredBy('')
       setNote('')
       setError(null)
       onBooked()
@@ -1010,6 +1018,8 @@ function BookForm({
       groupId,
       lessonId,
       source: from || null,
+      // «привёл друг» → the friend's 5 % once the lead is enrolled (В5, enroll_trial)
+      referredBy: !existing && from === 'referral' && referredBy ? referredBy : null,
       note,
     })
     if (!parsed.success) {
@@ -1217,6 +1227,25 @@ function BookForm({
           ))}
         </NativeSelect>
       </Field>
+
+      {!existing && from === 'referral' && (
+        <Field id={ids.referrer} label="Кто привёл">
+          <NativeSelect
+            id={ids.referrer}
+            value={referredBy}
+            onChange={(e) => {
+              setReferredBy(e.target.value)
+            }}
+          >
+            <option value="">— не из учеников</option>
+            {referrers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.full_name}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+      )}
 
       <Field id={ids.note} label="Комментарий">
         <input
