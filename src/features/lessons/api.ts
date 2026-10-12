@@ -3,7 +3,7 @@
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { z } from 'zod'
-import { GROUP_TYPES, type GroupType, type TariffTerms } from '@/features/tariffs/current'
+import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { PAYROLL_KEY } from '@/features/payroll/api'
 import { supabase } from '@/lib/supabase/client'
 import { addDays } from '@/features/groups/model'
@@ -163,6 +163,7 @@ const subscriptionSchema = z.object({
   started_at: z.string(),
   created_at: z.string(),
   lessons_total: z.number().int(),
+  price_full: z.number(),
   price_final: z.number(),
   tariff: z.object({ freeze_limit: z.number().int() }),
   attendance: z.array(z.object({ lesson_id: z.uuid(), status: markSchema })),
@@ -178,7 +179,7 @@ export const enrollmentSchema = z.object({
 
 /** subscriptions(…) of an enrollment, with every mark charged to them. */
 export const ENROLLMENT_FIELDS =
-  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status))'
+  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status))'
 
 export function toEnrollment(row: z.infer<typeof enrollmentSchema>): EnrollmentSource {
   return {
@@ -229,30 +230,23 @@ export interface LessonSheet {
   enrollments: EnrollmentSource[]
   /** Marks saved on this lesson. */
   marks: Map<string, Mark>
-  tariffs: TariffTerms[]
 }
 
 export const lessonKey = (lessonId: string) => ['lesson', lessonId] as const
 
-/** The lesson, every enrollment of its group with subscriptions and their marks, tariffs. */
+/** The lesson, every enrollment of its group with subscriptions and their marks. */
 export const lessonSheetQuery = (lessonId: string) =>
   queryOptions({
     queryKey: lessonKey(lessonId),
     queryFn: async (): Promise<LessonSheet | null> => {
-      const [lesson, tariffs] = await Promise.all([
-        supabase
-          .from('lessons')
-          .select(
-            `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, group:groups!inner(id, name, subject, group_type, room, teacher:teachers!inner(rates:teacher_rates(percent, valid_from)), enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status)`,
-          )
-          .eq('id', lessonId)
-          .maybeSingle(),
-        supabase
-          .from('tariffs')
-          .select('group_type, valid_from, lessons_in_package, package_price'),
-      ])
+      const lesson = await supabase
+        .from('lessons')
+        .select(
+          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, group:groups!inner(id, name, subject, group_type, room, teacher:teachers!inner(rates:teacher_rates(percent, valid_from)), enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status)`,
+        )
+        .eq('id', lessonId)
+        .maybeSingle()
       if (lesson.error) throw lesson.error
-      if (tariffs.error) throw tariffs.error
       if (!lesson.data) return null
       const { group, attendance, ...rest } = sheetSchema.parse(lesson.data)
       const { teacher, enrollments, ...g } = group
@@ -262,16 +256,6 @@ export const lessonSheetQuery = (lessonId: string) =>
         rates: teacher.rates,
         enrollments: enrollments.map(toEnrollment),
         marks: new Map(attendance.map((a) => [a.student_id, a.status])),
-        tariffs: z
-          .array(
-            z.object({
-              group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
-              valid_from: z.string(),
-              lessons_in_package: z.number().int(),
-              package_price: z.number().int(),
-            }),
-          )
-          .parse(tariffs.data),
       }
     },
   })

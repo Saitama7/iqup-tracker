@@ -1,7 +1,8 @@
 -- А9 «Тарифы и праздники» (issue #7): tariffs in effect and past holidays are frozen (0006),
 -- a planned tariff version can be deleted, only admin writes, created_by is the signed-in user.
+-- The earliest start of a new tariff (today / 1st of next month, К6) — tariffs_next_month.test.sql.
 begin;
-select plan(20);
+select plan(19);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 -- a…1 admin, a…2 teacher, a…3 accountant
@@ -62,11 +63,6 @@ select is(
 );
 select throws_ok(
   $$ insert into public.tariffs (group_type, lessons_in_package, package_price, max_students, lesson_duration_min, valid_from)
-     select 'mini', 12, 3900, 4, 60, today from d $$,
-  '23514', null, 'admin cannot add a tariff starting today'
-);
-select throws_ok(
-  $$ insert into public.tariffs (group_type, lessons_in_package, package_price, max_students, lesson_duration_min, valid_from)
      select 'mini', 12, 3900, 4, 60, past from d $$,
   '23514', null, 'admin cannot add a tariff in the past'
 );
@@ -79,9 +75,9 @@ select throws_ok(
   '23514', null, 'admin cannot delete a tariff in effect'
 );
 select throws_ok(
-  $$ update public.tariffs set valid_from = (select today from d)
+  $$ update public.tariffs set valid_from = (select past from d)
      where id = 'f7000000-0000-4000-8000-000000000002' $$,
-  '23514', null, 'a planned tariff cannot be moved into effect'
+  '23514', null, 'a planned tariff cannot be moved into the past'
 );
 select lives_ok(
   $$ delete from public.tariffs where id = 'f7000000-0000-4000-8000-000000000002' $$,

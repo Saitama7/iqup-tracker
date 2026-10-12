@@ -10,18 +10,20 @@ import {
   type LessonTiming,
 } from '@/features/lessons/select'
 import { ATTENDANCE_LABEL, formatMarkedAt, groupLabel } from '@/features/students/model'
-import { type GroupType, type TariffTerms } from '@/features/tariffs/current'
+import { tariffFor, type GroupType, type TariffTerms } from '@/features/tariffs/current'
 import { formatLessonPrice, formatSom } from '@/features/tariffs/model'
 import { bishkekDate, formatDayMonth } from '@/lib/time'
 import {
   byGroup,
   calcLessonPay,
   calcMonth,
+  consumesCredit,
   rateOn,
   roundSom,
-  termsOn,
+  subscriptionLessonPrice,
   totals,
   type MonthPay,
+  type PayAttendance,
   type PayMark,
   type PayRate,
   type PayTotals,
@@ -109,7 +111,7 @@ export function periodCaption(month: string, today: string): string {
 export interface MyMonthLesson extends LessonTiming {
   confirmed_at: string | null
   confirmed_late: boolean
-  attendance: { status: PayMark }[]
+  attendance: PayAttendance[]
 }
 
 export interface MyMonthGroup {
@@ -190,6 +192,8 @@ export interface MonthLessonLine {
   studentLessons: number
   /** Whole som; 0 for unconfirmed. */
   amount: number
+  /** Student-lessons paid 0 — no subscription behind the mark (И5). */
+  noSubscription: number
   confirmed: { text: string; late: boolean } | null
 }
 
@@ -230,7 +234,7 @@ export function myMonthView(source: MyMonthSource, month: string, now: number): 
   const all = source.groups.flatMap((g) =>
     g.lessons.map((l) => ({ ...l, group_id: g.id, group_type: g.group_type, group: g })),
   )
-  const pay = calcMonth(all, source.rates, source.tariffs)
+  const pay = calcMonth(all, source.rates)
   const paid = byGroup(pay.lessons)
 
   const lessons: MonthLessonLine[] = []
@@ -247,6 +251,7 @@ export function myMonthView(source: MyMonthSource, month: string, now: number): 
       marks: state === 'held' ? marksCaption(l.attendance) : 'Не отмечено',
       studentLessons: held?.studentLessons ?? 0,
       amount: held ? roundSom(held.pay) : 0,
+      noSubscription: held?.noSubscription ?? 0,
       confirmed: confirmedCaption(l),
     })
   }
@@ -271,19 +276,26 @@ export function myMonthView(source: MyMonthSource, month: string, now: number): 
     .filter((g) => g.lessonsHeld > 0 || g.unconfirmed > 0 || g.laterToday > 0)
     .sort((a, b) => b.amount - a.amount || a.label.localeCompare(b.label, 'ru'))
 
-  // One price for every group (the usual case — all group lessons) → «120 сом за ученико-урок».
-  const terms = source.groups.flatMap((g) => {
-    const t = termsOn(g.group_type, asOf, source.rates, source.tariffs)
-    return t ? [t] : []
-  })
-  const prices = new Set(terms.map((t) => t.packagePrice / t.lessonsInPackage))
-  const single = prices.size === 1 ? terms[0] : undefined
+  // One lesson price for the month (the usual case — all group lessons) → «120 сом за ученико-урок».
+  // Prices of the subscriptions paid for (К6); nothing held yet — the groups' tariffs as of asOf.
+  const percent = rateOn(source.rates, asOf)
+  const lessonPrice = singlePrice(source, pay, asOf)
 
   return {
     pay,
-    percent: rateOn(source.rates, asOf),
-    lessonPrice: single ? single.packagePrice / single.lessonsInPackage : null,
-    share: single ? roundSom(calcLessonPay({ ...single, consumedCount: 1 })) : null,
+    percent,
+    lessonPrice,
+    share:
+      lessonPrice !== null && percent !== null
+        ? roundSom(
+            calcLessonPay({
+              consumedCount: 1,
+              packagePrice: lessonPrice,
+              lessonsInPackage: 1,
+              percent,
+            }),
+          )
+        : null,
     groups,
     lessons,
     unconfirmed: lessons.filter((l) => l.state === 'unconfirmed'),
@@ -293,6 +305,24 @@ export function myMonthView(source: MyMonthSource, month: string, now: number): 
         ? ROUNDING_NOTE
         : null,
   }
+}
+
+/** The one full lesson price of the month, null when there are several (or none). */
+function singlePrice(source: MyMonthSource, pay: MonthPay, asOf: string): number | null {
+  const paid = pay.lessons.flatMap((p) =>
+    p.lesson.attendance.flatMap((m) =>
+      consumesCredit(m.status) && m.subscription ? [subscriptionLessonPrice(m.subscription)] : [],
+    ),
+  )
+  const prices = new Set(
+    paid.length > 0
+      ? paid
+      : source.groups.flatMap((g) => {
+          const t = tariffFor(g.group_type, asOf, source.tariffs)
+          return t ? [t.package_price / t.lessons_in_package] : []
+        }),
+  )
+  return prices.size === 1 ? ([...prices][0] ?? null) : null
 }
 
 const STUDENT_LESSONS = ['ученико-урок', 'ученико-урока', 'ученико-уроков'] as const
@@ -312,6 +342,13 @@ export function groupCaption(g: MonthGroupLine): string {
         : `${g.students} ${pluralRu(g.students, STUDENTS)}`,
   ].join(' · ')
 }
+
+/**
+ * «нет абонемента», «нет абонемента: 2» — marks written off no subscription: counted, paid 0 (И5).
+ * Shown on the lesson line (У6 / УД4) and the teacher's row (Б1) until an admin fixes the marks.
+ */
+export const noSubscriptionCaption = (n: number) =>
+  n === 1 ? 'нет абонемента' : `нет абонемента: ${n}`
 
 /** «Сумма = ученико-уроки × 266,67 сом × 45 %. Цифры предварительные, …» (УД4). */
 export function formulaNote(v: Pick<MyMonthView, 'lessonPrice' | 'percent'>): string {
@@ -361,6 +398,7 @@ export function payrollView(source: PayrollSource, month: string, now: number): 
         lessonsHeld: p?.lessonsHeld ?? 0,
         hours: p?.hours ?? 0,
         studentLessons: p?.studentLessons ?? 0,
+        noSubscription: p?.noSubscription ?? 0,
         amount: p?.amount ?? 0,
       }
     })
@@ -372,6 +410,7 @@ export function payrollView(source: PayrollSource, month: string, now: number): 
       // hours come with 2 decimals (1,33 ч) — cut the float noise of the sum the same way
       hours: Math.round(sum(rows.map((r) => r.hours)) * 100) / 100,
       studentLessons: rows.reduce((n, r) => n + r.studentLessons, 0),
+      noSubscription: rows.reduce((n, r) => n + r.noSubscription, 0),
       amount: rows.reduce((n, r) => n + r.amount, 0),
     },
     teachers: rows.length,

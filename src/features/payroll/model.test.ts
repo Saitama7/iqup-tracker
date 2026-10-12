@@ -34,6 +34,8 @@ const TARIFFS: TariffTerms[] = [
   },
 ]
 const RATES = [{ percent: 45, valid_from: '2026-09-01' }]
+// Group subscription at the September 2026 tariff: 3200 / 12 = 266,67.
+const SUB = { price_full: 3200, lessons_total: 12 }
 
 let seq = 0
 function lesson(over: Partial<MyMonthLesson> = {}): MyMonthLesson {
@@ -46,7 +48,7 @@ function lesson(over: Partial<MyMonthLesson> = {}): MyMonthLesson {
     status: 'held',
     confirmed_at: '2026-10-08T04:02:00Z', // 10:02 Bishkek
     confirmed_late: false,
-    attendance: [{ status: 'present' }],
+    attendance: [{ status: 'present', subscription: SUB }],
     ...over,
   }
 }
@@ -129,10 +131,15 @@ describe('lesson captions (УД4)', () => {
 
 describe('myMonthView', () => {
   const a = group('a', '8 класс А', [
-    lesson({ attendance: Array.from({ length: 7 }, () => ({ status: 'present' })) }),
+    lesson({
+      attendance: Array.from({ length: 7 }, () => ({ status: 'present', subscription: SUB })),
+    }),
     lesson({
       lesson_date: '2026-10-06',
-      attendance: [{ status: 'present' }, { status: 'absent_frozen' }],
+      attendance: [
+        { status: 'present', subscription: SUB },
+        { status: 'absent_frozen', subscription: SUB },
+      ],
     }),
     lesson({ lesson_date: '2026-10-20', status: 'planned', confirmed_at: null, attendance: [] }),
   ])
@@ -199,24 +206,21 @@ describe('myMonthView', () => {
   })
 
   it('rounding note: 3 × 158,33 = 475 in the total, 3 × 158 in the lines', () => {
+    // mini subscription 3800 / 12 at 50 %
+    const attendance = [
+      { status: 'present' as const, subscription: { price_full: 3800, lessons_total: 12 } },
+    ]
     const mini = group('m', 'Мини', [
-      lesson({ lesson_date: '2026-10-05' }),
-      lesson({ lesson_date: '2026-10-06' }),
-      lesson({ lesson_date: '2026-10-07' }),
+      lesson({ lesson_date: '2026-10-05', attendance }),
+      lesson({ lesson_date: '2026-10-06', attendance }),
+      lesson({ lesson_date: '2026-10-07', attendance }),
     ])
     const v = myMonthView(
       {
         teacherId: 't',
         rates: [{ percent: 50, valid_from: '2026-09-01' }],
         groups: [mini],
-        tariffs: [
-          {
-            group_type: 'group',
-            valid_from: '2026-09-01',
-            lessons_in_package: 12,
-            package_price: 3800,
-          },
-        ],
+        tariffs: TARIFFS,
       },
       '2026-10',
       NOW,
@@ -227,7 +231,22 @@ describe('myMonthView', () => {
   })
 
   it('no common price → no «за ученико-урок»', () => {
-    const solo = { ...group('c', 'Бекзат', [], 1), group_type: 'individual' as const }
+    const solo = {
+      ...group(
+        'c',
+        'Бекзат',
+        [
+          lesson({
+            lesson_date: '2026-10-07',
+            attendance: [
+              { status: 'present', subscription: { price_full: 7200, lessons_total: 12 } },
+            ],
+          }),
+        ],
+        1,
+      ),
+      group_type: 'individual' as const,
+    }
     const mixed = myMonthView(
       { teacherId: 't', rates: RATES, groups: [a, solo], tariffs: TARIFFS },
       '2026-10',
@@ -237,14 +256,72 @@ describe('myMonthView', () => {
     expect(formulaNote(mixed)).toContain('цена урока × 45 %')
     expect(formulaNote(view)).toContain('266,67 сом × 45 %')
   })
+
+  it('the price comes from the subscriptions paid for, not the tariff (К6)', () => {
+    // bought at 3000 before the 3200 tariff: 250 × 45 % = 112,5 → 113 «за ученико-урок»
+    const old = { price_full: 3000, lessons_total: 12 }
+    const g = group('o', 'Старый абонемент', [
+      lesson({ attendance: [{ status: 'present', subscription: old }] }),
+    ])
+    const v = myMonthView(
+      { teacherId: 't', rates: RATES, groups: [g], tariffs: TARIFFS },
+      '2026-10',
+      NOW,
+    )
+    expect(v.lessonPrice).toBe(250)
+    expect(v.share).toBe(113)
+    expect(v.pay.amount).toBe(113)
+  })
+
+  it("nothing held yet → the price of the groups' tariffs", () => {
+    const g = group('e', 'Пусто', [])
+    const v = myMonthView(
+      { teacherId: 't', rates: RATES, groups: [g], tariffs: TARIFFS },
+      '2026-10',
+      NOW,
+    )
+    expect(v.share).toBe(120)
+  })
+
+  it('a mark without a subscription: counted, 0 сом, flagged on the line (И5)', () => {
+    const g = group('n', 'Без абонемента', [
+      lesson({
+        attendance: [
+          { status: 'present', subscription: SUB },
+          { status: 'present', subscription: null },
+        ],
+      }),
+    ])
+    const v = myMonthView(
+      { teacherId: 't', rates: RATES, groups: [g], tariffs: TARIFFS },
+      '2026-10',
+      NOW,
+    )
+    expect(v.lessons[0]).toMatchObject({ studentLessons: 2, noSubscription: 1, amount: 120 })
+    expect(v.pay.noSubscription).toBe(1)
+  })
 })
 
 describe('payrollView (Б1)', () => {
   const view = payrollView(
     {
       preview: [
-        { teacherId: 'g', lessonsHeld: 52, hours: 52, studentLessons: 318, amount: 38_160 },
-        { teacherId: 'n', lessonsHeld: 22, hours: 66, studentLessons: 22, amount: 3_663 },
+        {
+          teacherId: 'g',
+          lessonsHeld: 52,
+          hours: 52,
+          studentLessons: 318,
+          noSubscription: 0,
+          amount: 38_160,
+        },
+        {
+          teacherId: 'n',
+          lessonsHeld: 22,
+          hours: 66,
+          studentLessons: 22,
+          noSubscription: 0,
+          amount: 3_663,
+        },
       ],
       teachers: [
         {
@@ -279,7 +356,13 @@ describe('payrollView (Б1)', () => {
       ['Нургуль Токтоева', 'Продлёнка · 1 группа', 3_663, 45],
       ['Аман Новый', '0 групп', 0, null],
     ])
-    expect(view.total).toEqual({ lessonsHeld: 74, hours: 118, studentLessons: 340, amount: 41_823 })
+    expect(view.total).toEqual({
+      lessonsHeld: 74,
+      hours: 118,
+      noSubscription: 0,
+      studentLessons: 340,
+      amount: 41_823,
+    })
   })
 
   it('total hours are rounded to 2 decimals, not float noise', () => {
@@ -290,6 +373,7 @@ describe('payrollView (Б1)', () => {
           lessonsHeld: 1,
           hours,
           studentLessons: 1,
+          noSubscription: 0,
           amount: 100,
         })),
         teachers: [0, 1, 2].map((i) => ({

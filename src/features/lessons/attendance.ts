@@ -1,5 +1,11 @@
 // У3 / УД2 «Посещаемость»: roster of a lesson, the subscription each mark is charged to, counters.
 // Pure: callers pass rows they already have; time comes in as arguments (§7.1).
+import {
+  markPay,
+  roundSom,
+  subscriptionLessonPrice,
+  type PaySubscription,
+} from '@/features/payroll/calc'
 import { initials } from '@/features/students/model'
 import { pluralRu } from './select'
 import { formatSom } from '@/features/tariffs/model'
@@ -23,6 +29,7 @@ export interface SubscriptionSource {
   started_at: string
   created_at: string
   lessons_total: number
+  price_full: number
   price_final: number
   freeze_limit: number
   /** Every mark charged to this subscription. */
@@ -98,6 +105,11 @@ export interface RosterRow {
   initials: string
   parentPhone: string | null
   balance: Balance | null
+  /**
+   * The subscription the mark is charged to — of a held lesson the one holding the mark — whose
+   * full price is the teacher's base (К6); null — no subscription, the mark pays 0.
+   */
+  paySubscription: PaySubscription | null
 }
 
 /**
@@ -118,12 +130,19 @@ export function lessonRoster(
     const subs = enrollments
       .filter((x) => x.student.id === e.student.id)
       .flatMap((x) => x.subscriptions)
+    const balance = pickSubscription(subs, lesson.id)
+    const charged =
+      subs.find((s) => s.marks.some((m) => m.lesson_id === lesson.id)) ??
+      subs.find((s) => s.id === balance?.subscriptionId)
     rows.set(e.student.id, {
       studentId: e.student.id,
       fullName: e.student.full_name,
       initials: initials(e.student.full_name),
       parentPhone: e.student.parent_phone,
-      balance: pickSubscription(subs, lesson.id),
+      balance,
+      paySubscription: charged
+        ? { price_full: charged.price_full, lessons_total: charged.lessons_total }
+        : null,
     })
   }
   return [...rows.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
@@ -212,6 +231,32 @@ export function tally(
     total: rows.length,
     unmarked: rows.length - marked,
     studentLessons: present + burned,
+  }
+}
+
+export interface LessonAccrual {
+  /** «Начислено / Начислится», whole som: each consumed mark by its subscription (И18, К6). */
+  pay: number
+  /** «N сом за ученико-урок» when every subscription of the roster has one price; else null. */
+  perStudentLesson: number | null
+}
+
+/** Teacher's pay of one lesson — same rule as payroll/calc.ts calcMonth(), `percent` on its date. */
+export function lessonAccrual(
+  rows: readonly Pick<RosterRow, 'studentId' | 'paySubscription'>[],
+  marks: ReadonlyMap<string, Mark>,
+  percent: number,
+): LessonAccrual {
+  let pay = 0
+  for (const r of rows) {
+    const m = marks.get(r.studentId)
+    if (m && consumesCredit(m)) pay += markPay(r.paySubscription, percent)
+  }
+  const subs = rows.flatMap((r) => (r.paySubscription ? [r.paySubscription] : []))
+  const prices = new Set(subs.map(subscriptionLessonPrice))
+  return {
+    pay: roundSom(pay),
+    perStudentLesson: prices.size === 1 && subs[0] ? roundSom(markPay(subs[0], percent)) : null,
   }
 }
 

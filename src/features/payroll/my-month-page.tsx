@@ -22,6 +22,7 @@ import {
   monthOf,
   monthTitle,
   myMonthView,
+  noSubscriptionCaption,
   payday,
   periodCaption,
   PRELIMINARY_NOTE,
@@ -228,6 +229,12 @@ function MobileMonth({ view, month, today }: { view: MyMonthView; month: string;
                   <span className="text-xs font-bold text-ink-muted">
                     {l.when} · {l.marks}
                     {l.confirmed?.late && <span className="text-warn"> · поздно</span>}
+                    {l.noSubscription > 0 && (
+                      <span className="text-burned-strong">
+                        {' · '}
+                        {noSubscriptionCaption(l.noSubscription)}
+                      </span>
+                    )}
                   </span>
                 </span>
                 <span className="font-display text-sm font-bold whitespace-nowrap">
@@ -429,6 +436,12 @@ function LessonRow({ lesson: l }: { lesson: MonthLessonLine }) {
       <td className={cn(td, 'font-extrabold')}>{l.group}</td>
       <td className={cn(td, unconfirmed ? 'font-bold text-burned-strong' : 'text-ink-muted')}>
         {l.marks}
+        {l.noSubscription > 0 && (
+          <span className="font-bold whitespace-nowrap text-burned-strong">
+            {' · '}
+            {noSubscriptionCaption(l.noSubscription)}
+          </span>
+        )}
       </td>
       <td className={cn(td, num)}>{unconfirmed ? '—' : l.studentLessons}</td>
       <td className={cn(td, num, !unconfirmed && 'font-extrabold')}>

@@ -1,49 +1,41 @@
 import { describe, expect, it } from 'vitest'
-import type { GroupType, TariffTerms } from '@/features/tariffs/current'
+import type { GroupType } from '@/features/tariffs/current'
 import {
   byGroup,
   calcLessonPay,
   calcMonth,
+  markPay,
   roundSom,
+  subscriptionLessonPrice,
   totals,
   type PayLesson,
   type PayMark,
+  type PaySubscription,
 } from './calc'
 
-// Tariffs of September 2026 — 01-domain-model.md §3.
-const TARIFFS: TariffTerms[] = [
-  { group_type: 'group', valid_from: '2026-09-01', lessons_in_package: 12, package_price: 3200 },
-  { group_type: 'mini', valid_from: '2026-09-01', lessons_in_package: 12, package_price: 3800 },
-  { group_type: 'pair', valid_from: '2026-09-01', lessons_in_package: 12, package_price: 4400 },
-  {
-    group_type: 'individual',
-    valid_from: '2026-09-01',
-    lessons_in_package: 12,
-    package_price: 7200,
-  },
-  {
-    group_type: 'afterschool',
-    valid_from: '2026-09-01',
-    lessons_in_package: 20,
-    package_price: 7400,
-  },
-  { group_type: 'group', valid_from: '2025-09-01', lessons_in_package: 12, package_price: 3000 },
-]
+// Subscriptions at the tariffs of September 2026 — 01-domain-model.md §3.
+const SUB: Record<'group' | 'mini' | 'afterschool' | 'group2025', PaySubscription> = {
+  group: { price_full: 3200, lessons_total: 12 },
+  mini: { price_full: 3800, lessons_total: 12 },
+  afterschool: { price_full: 7400, lessons_total: 20 },
+  group2025: { price_full: 3000, lessons_total: 12 },
+}
 
 const RATE_45 = [{ percent: 45, valid_from: '2026-09-01' }]
 
 let seq = 0
-function lesson(over: Partial<PayLesson> & { marks?: PayMark[] } = {}): PayLesson {
-  const { marks = ['present'], ...rest } = over
+function lesson(
+  over: Partial<PayLesson> & { marks?: PayMark[]; sub?: PaySubscription | null } = {},
+): PayLesson {
+  const { marks = ['present'], sub = SUB.group, ...rest } = over
   seq++
   return {
     id: `l${seq}`,
     group_id: 'g1',
-    group_type: 'group',
     lesson_date: '2026-09-15',
     duration_min: 60,
     status: 'held',
-    attendance: marks.map((status) => ({ status })),
+    attendance: marks.map((status) => ({ status, subscription: sub })),
     ...rest,
   }
 }
@@ -66,6 +58,11 @@ describe('calcLessonPay — §3 «Учителю за ученико-урок»'
     expect(calcLessonPay({ ...terms, percent: 50 })).toBeCloseTo(p50, 2)
   })
 
+  it('subscriptionLessonPrice: price_full / lessons_total', () => {
+    expect(subscriptionLessonPrice(SUB.group)).toBeCloseTo(266.67, 2)
+    expect(subscriptionLessonPrice(SUB.afterschool)).toBe(370)
+  })
+
   it('266,67 × 45 % × 318 ученико-уроков = 38 160 (Гульзат, сентябрь)', () => {
     const pay = calcLessonPay({
       consumedCount: 318,
@@ -80,7 +77,6 @@ describe('calcLessonPay — §3 «Учителю за ученико-урок»'
     const month = calcMonth(
       Array.from({ length: 12 }, () => lesson({ marks: present(8) })),
       RATE_45,
-      TARIFFS,
     )
     expect(month.amount).toBe(11_520)
     expect(month.studentLessons).toBe(96)
@@ -92,7 +88,6 @@ describe('calcMonth', () => {
     const month = calcMonth(
       [lesson({ marks: ['present', 'absent_burned', 'absent_frozen', 'present'] })],
       RATE_45,
-      TARIFFS,
     )
     expect(month.studentLessons).toBe(3)
     expect(month.amount).toBe(360)
@@ -106,7 +101,6 @@ describe('calcMonth', () => {
         lesson({ status: 'cancelled', marks: [] }),
       ],
       RATE_45,
-      TARIFFS,
     )
     expect(month.lessonsHeld).toBe(1)
     expect(month.studentLessons).toBe(5)
@@ -115,7 +109,7 @@ describe('calcMonth', () => {
   })
 
   it('a held lesson with nobody consuming (only trials, Ж6) counts as held, pays 0', () => {
-    const month = calcMonth([lesson({ marks: [] })], RATE_45, TARIFFS)
+    const month = calcMonth([lesson({ marks: [] })], RATE_45)
     expect(month).toMatchObject({ lessonsHeld: 1, hours: 1, studentLessons: 0, amount: 0 })
   })
 
@@ -130,30 +124,93 @@ describe('calcMonth', () => {
         lesson({ lesson_date: '2026-09-16', marks: present(6) }),
       ],
       rates,
-      TARIFFS,
     )
     // 6 × 120 + 6 × 133,33 = 720 + 800
-    expect(month.lessons.map((p) => p.pay)).toEqual([720, 800])
+    expect(month.lessons.map((p) => roundSom(p.pay))).toEqual([720, 800])
     expect(month.amount).toBe(1_520)
   })
 
-  it('tariff by the lesson date, not today (В6)', () => {
+  it('price of the subscription the mark was written off, not of the tariff on the date (К6)', () => {
+    // bought at 3000 before the tariff became 3200 on 01.09 — lessons after it still pay 3000 / 12
     const month = calcMonth(
-      [lesson({ lesson_date: '2026-08-31', marks: present(1) })],
+      [lesson({ lesson_date: '2026-09-20', marks: present(1), sub: SUB.group2025 })],
       [{ percent: 45, valid_from: '2026-01-01' }],
-      TARIFFS,
     )
     // 3000 / 12 × 45 % = 112,5
     expect(month.lessons[0]?.pay).toBe(112.5)
     expect(month.amount).toBe(113)
   })
 
+  it('a tariff changed after the purchase does not change the accrual (К6)', () => {
+    // same lessons, the subscription kept its price — nothing else goes into calcMonth
+    const marks = present(8)
+    const before = calcMonth([lesson({ lesson_date: '2026-09-15', marks })], RATE_45)
+    const after = calcMonth([lesson({ lesson_date: '2026-11-15', marks })], RATE_45)
+    expect(after.amount).toBe(before.amount)
+    expect(after.amount).toBe(960)
+  })
+
+  it('marks of one lesson on different subscriptions are priced each by its own', () => {
+    const month = calcMonth(
+      [
+        {
+          ...lesson(),
+          attendance: [
+            { status: 'present', subscription: SUB.group },
+            { status: 'absent_burned', subscription: SUB.group2025 },
+            { status: 'absent_frozen', subscription: SUB.group },
+          ],
+        },
+      ],
+      RATE_45,
+    )
+    // 120 + 112,5
+    expect(month.lessons[0]?.pay).toBe(232.5)
+    expect(month.studentLessons).toBe(2)
+  })
+
+  it('К3: a student with a discount gives the teacher the same share as without', () => {
+    // Сабырбекова Асия pays 2 880 (−10 %), the teacher gets the full 3 200 / 12 × 45 % = 120
+    const discounted = { price_full: 3200, lessons_total: 12, price_final: 2880 }
+    const month = calcMonth(
+      [
+        {
+          ...lesson(),
+          attendance: [
+            { status: 'present', subscription: SUB.group },
+            { status: 'present', subscription: discounted },
+          ],
+        },
+      ],
+      RATE_45,
+    )
+    expect(markPay(discounted, 45)).toBe(markPay(SUB.group, 45))
+    expect(month.lessons[0]?.pay).toBe(240)
+  })
+
+  it('a consumed mark without a subscription counts, pays 0 and is flagged (И5)', () => {
+    const month = calcMonth(
+      [
+        {
+          ...lesson(),
+          attendance: [
+            { status: 'present', subscription: SUB.group },
+            { status: 'present', subscription: null },
+            { status: 'absent_frozen', subscription: null },
+          ],
+        },
+      ],
+      RATE_45,
+    )
+    expect(month).toMatchObject({ studentLessons: 2, noSubscription: 1, amount: 120 })
+    expect(month.lessons[0]?.noSubscription).toBe(1)
+  })
+
   it('rounds once in the total, not on every lesson', () => {
     // mini at 50 %: 158,333… — per lesson rounding would give 158 × 3 = 474
     const month = calcMonth(
-      Array.from({ length: 3 }, () => lesson({ group_type: 'mini', marks: present(1) })),
+      Array.from({ length: 3 }, () => lesson({ sub: SUB.mini, marks: present(1) })),
       [{ percent: 50, valid_from: '2026-09-01' }],
-      TARIFFS,
     )
     expect(month.amount).toBe(475)
   })
@@ -161,20 +218,15 @@ describe('calcMonth', () => {
   it('x.5 rounds up like SQL round()', () => {
     // afterschool at 45 %: 166,5
     const month = calcMonth(
-      [lesson({ group_type: 'afterschool', duration_min: 180, marks: present(1) })],
+      [lesson({ sub: SUB.afterschool, duration_min: 180, marks: present(1) })],
       RATE_45,
-      TARIFFS,
     )
     expect(month.amount).toBe(167)
     expect(month.hours).toBe(3)
   })
 
-  it('no tariff or no rate on the date → the lesson counts, pays 0', () => {
-    const month = calcMonth(
-      [lesson({ lesson_date: '2026-08-20', marks: present(4) })],
-      RATE_45,
-      TARIFFS,
-    )
+  it('no rate on the date → the lesson counts, pays 0', () => {
+    const month = calcMonth([lesson({ lesson_date: '2026-08-20', marks: present(4) })], RATE_45)
     expect(month).toMatchObject({ lessonsHeld: 1, studentLessons: 4, amount: 0 })
   })
 })
@@ -188,7 +240,6 @@ describe('byGroup / totals', () => {
         lesson({ group_id: 'a', marks: present(7) }),
       ],
       RATE_45,
-      TARIFFS,
     )
     const groups = byGroup(month.lessons)
     expect([...groups.keys()]).toEqual(['a', 'b'])
@@ -196,6 +247,7 @@ describe('byGroup / totals', () => {
       lessonsHeld: 2,
       hours: 2,
       studentLessons: 15,
+      noSubscription: 0,
       amount: 1_800,
     })
     expect(totals(groups.get('b') ?? []).amount).toBe(720)

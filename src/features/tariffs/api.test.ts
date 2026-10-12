@@ -13,7 +13,8 @@ const prices = {
 }
 
 describe('planTariffsForm', () => {
-  const form = planTariffsForm(TODAY)
+  // К6: a type with subscriptions → from the 1st of next month
+  const form = planTariffsForm({ date: '2026-11-01', paid: true })
 
   it('accepts a future date and whole prices for every type', () => {
     expect(form.parse({ validFrom: '01.09.2027', prices })).toEqual({
@@ -22,11 +23,20 @@ describe('planTariffsForm', () => {
     })
   })
 
-  it('rejects today and past dates', () => {
-    for (const validFrom of ['11.10.2026', '01.09.2026']) {
+  it('with subscriptions: from the 1st of next month — not today, not the 31st (К6)', () => {
+    for (const validFrom of ['11.10.2026', '31.10.2026', '01.09.2026']) {
       const r = form.safeParse({ validFrom, prices })
-      expect(r.error?.issues[0]?.message).toBe('Новый тариф — только с будущей даты')
+      expect(r.error?.issues[0]?.message).toBe('Для действующих групп — не раньше 1 ноября')
     }
+    expect(form.safeParse({ validFrom: '01.11.2026', prices }).success).toBe(true)
+  })
+
+  it('no subscriptions yet: from today', () => {
+    const fresh = planTariffsForm({ date: TODAY, paid: false })
+    expect(fresh.safeParse({ validFrom: '11.10.2026', prices }).success).toBe(true)
+    expect(fresh.safeParse({ validFrom: '10.10.2026', prices }).error?.issues[0]?.message).toBe(
+      'Новый тариф — не раньше сегодняшнего дня',
+    )
   })
 
   it('rejects a bad date', () => {
@@ -58,7 +68,10 @@ describe('planRows', () => {
   const tariffs: Tariff[] = (['group', 'mini', 'pair', 'individual', 'afterschool'] as const).map(
     (group_type, i) => ({ ...base, id: `t${i}`, group_type, max_students: 10 - i }),
   )
-  const input = planTariffsForm(TODAY).parse({ validFrom: '01.09.2027', prices })
+  const input = planTariffsForm({ date: TODAY, paid: false }).parse({
+    validFrom: '01.09.2027',
+    prices,
+  })
 
   it('creates one row per group type with one date, terms carried over', () => {
     const rows = planRows(input, tariffs)

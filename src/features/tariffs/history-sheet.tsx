@@ -19,9 +19,12 @@ import {
   formatLessonPrice,
   formatSom,
   GROUP_TYPE_LABEL,
-  nextSeptember,
+  planMinDate,
+  planMinDateHint,
   subscriptionsCaption,
   versionSummary,
+  type PlanMinDate,
+  type SubscriptionRef,
   type Tariff,
   type TariffVersion,
 } from './model'
@@ -254,11 +257,13 @@ export function PlanTariffsDialog({
   open,
   onOpenChange,
   tariffs,
+  subscriptions,
   today,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   tariffs: Tariff[]
+  subscriptions: SubscriptionRef[]
   today: string
 }) {
   return (
@@ -275,6 +280,7 @@ export function PlanTariffsDialog({
           <PlanForm
             tariffs={tariffs}
             today={today}
+            min={planMinDate({ tariffs, subscriptions }, today)}
             onDone={() => {
               onOpenChange(false)
             }}
@@ -288,16 +294,20 @@ export function PlanTariffsDialog({
 function PlanForm({
   tariffs,
   today,
+  min,
   onDone,
 }: {
   tariffs: Tariff[]
   today: string
+  min: PlanMinDate
   onDone: () => void
 }) {
   const invalidate = useInvalidateSettings()
   const dateId = useId()
+  const hintId = useId()
   const priceId = useId()
-  const [validFrom, setValidFrom] = useState(() => formatDateRu(nextSeptember(today)))
+  const [validFrom, setValidFrom] = useState(() => formatDateRu(min.date))
+  const hint = planMinDateHint(min)
   const [prices, setPrices] = useState(
     () =>
       Object.fromEntries(
@@ -319,7 +329,7 @@ function PlanForm({
 
   function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
-    const parsed = planTariffsForm(today).safeParse({ validFrom, prices })
+    const parsed = planTariffsForm(min).safeParse({ validFrom, prices })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Проверьте дату и цены')
       return
@@ -343,10 +353,16 @@ function PlanForm({
           autoComplete="off"
           className={inputClass}
           value={validFrom}
+          aria-describedby={hint ? hintId : undefined}
           onChange={(e) => {
             setValidFrom(e.target.value)
           }}
         />
+        {hint && (
+          <p id={hintId} className="text-xs font-bold text-ink-muted">
+            {hint}
+          </p>
+        )}
       </Field>
       <div className="flex flex-col gap-2.5">
         {GROUP_TYPES.map((type) => {

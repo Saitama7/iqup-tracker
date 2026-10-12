@@ -27,6 +27,7 @@ const sub = (
   started_at: '2026-09-01',
   created_at: '2026-09-01T10:00:00Z',
   lessons_total: 12,
+  price_full: 3200,
   price_final: 3200,
   freeze_limit: 2,
   marks: marks.map((status, i) => ({ lesson_id: `${id}-${i}`, status })),
@@ -60,7 +61,10 @@ const lesson = (date: string, status: MonthLesson['status'], marks: Mark[] = [])
   planned_start: '14:00:00',
   duration_min: 60,
   status,
-  attendance: marks.map((m) => ({ status: m })),
+  attendance: marks.map((m) => ({
+    status: m,
+    subscription: { price_full: 3200, lessons_total: 12 },
+  })),
 })
 
 const group: TeacherGroup = {

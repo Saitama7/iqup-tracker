@@ -5,6 +5,9 @@ import {
   formatLessonPrice,
   formatSom,
   holidayItems,
+  nextMonthStart,
+  planMinDate,
+  planMinDateHint,
   seatsLabel,
   subscriptionsCaption,
   versionSummary,
@@ -129,6 +132,31 @@ describe('buildVersions', () => {
     expect(versionSummary(must(versions[1]))).toBe(
       'Групповая 3 000 → 3 200 · Мини 3 500 → 3 800 · Парная 4 000 → 4 400 · Инд. 6 500 → 7 200 · Продлёнка 7 000 → 7 400',
     )
+  })
+})
+
+describe('planMinDate (К6, А9)', () => {
+  it('nextMonthStart: the 1st of the following month, across the year end', () => {
+    expect(nextMonthStart('2026-10-11')).toBe('2026-11-01')
+    expect(nextMonthStart('2026-10-31')).toBe('2026-11-01')
+    expect(nextMonthStart('2026-12-15')).toBe('2027-01-01')
+  })
+
+  it('subscriptions bought → the 1st of next month, with the hint', () => {
+    const min = planMinDate(
+      { tariffs, subscriptions: [{ tariff_id: 'group-2026-09-01', status: 'active' }] },
+      TODAY,
+    )
+    expect(min).toEqual({ date: '2026-11-01', paid: true })
+    expect(planMinDateHint(min)).toBe(
+      'Для действующих групп новый тариф начнёт действовать с 1 ноября. Купленные абонементы остаются по старой цене',
+    )
+  })
+
+  it('nobody has paid yet → today, no hint', () => {
+    const min = planMinDate({ tariffs, subscriptions: [] }, TODAY)
+    expect(min).toEqual({ date: TODAY, paid: false })
+    expect(planMinDateHint(min)).toBeNull()
   })
 })
 

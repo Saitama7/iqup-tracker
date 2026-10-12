@@ -7,14 +7,14 @@ import {
   type EnrollmentSource,
 } from '@/features/lessons/attendance'
 import { lessonState, lessonsWord, pluralRu, type LessonTiming } from '@/features/lessons/select'
-import { calcMonth } from '@/features/payroll/calc'
+import { calcMonth, type PayAttendance } from '@/features/payroll/calc'
 import { initials } from '@/features/students/model'
 import { tariffFor, type GroupType, type TariffTerms } from '@/features/tariffs/current'
 import { currentRules, weekdaysCaption, type ScheduleRule } from './model'
 import { formatSom } from '@/features/tariffs/model'
 
 export interface MonthLesson extends LessonTiming {
-  attendance: { status: 'present' | 'absent_frozen' | 'absent_burned' }[]
+  attendance: PayAttendance[]
 }
 
 export interface TeacherGroup {
@@ -118,9 +118,8 @@ export function groupSummary(
     if (state === 'ended_unconfirmed') unconfirmed++
   }
   const pay = calcMonth(
-    group.lessons.map((l) => ({ ...l, group_id: group.id, group_type: group.group_type })),
+    group.lessons.map((l) => ({ ...l, group_id: group.id })),
     source.rates,
-    source.tariffs,
   )
   return {
     students: members.length,

@@ -8,6 +8,34 @@ import { KANYKEI, login } from './support/auth'
 
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900
 
+const MONTHS_GEN = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+]
+
+/** Today in Asia/Bishkek (UTC+6) and the 1st of next month — the earliest new tariff (К6). */
+function planDates() {
+  const today = new Date(Date.now() + 6 * 3_600_000).toISOString().slice(0, 10)
+  const [y = 0, m = 1] = today.split('-').map(Number)
+  const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10)
+  const ru = (iso: string) => iso.split('-').reverse().join('.')
+  return {
+    todayRu: ru(today),
+    nextRu: ru(next),
+    nextLong: `1 ${MONTHS_GEN[Number(next.slice(5, 7)) - 1]}`,
+  }
+}
+
 // Dates per project, so the two viewports never write the same row.
 const fixtures = (testInfo: TestInfo) =>
   testInfo.project.name === 'webkit-desktop'
@@ -138,10 +166,23 @@ test('plan a new tariff version from a future date, then remove it', async ({ pa
 
   const form = page.getByRole('form', { name: 'Новая версия тарифов' })
   await expect(form.getByLabel('Групповая')).toHaveValue('3200')
-  // zod: the date must be strictly in the future, prices whole and > 0
-  await form.getByLabel('Действует с').fill('01.09.2026')
+  // К6: the seed has subscriptions → the 1st of next month, by default and at the earliest
+  const d = planDates()
+  const date = form.getByLabel('Действует с')
+  await expect(date).toHaveValue(d.nextRu)
+  await expect(form).toContainText(
+    `Для действующих групп новый тариф начнёт действовать с ${d.nextLong}. Купленные абонементы остаются по старой цене`,
+  )
+  await expect(date).toHaveAccessibleDescription(/Купленные абонементы остаются по старой цене/)
+  // let the dialog animation finish before the screenshot
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: testInfo.outputPath('tariff-plan.png') })
+  await date.fill(d.todayRu)
   await form.getByRole('button', { name: 'Запланировать' }).click()
-  await expect(form.getByRole('alert')).toHaveText('Новый тариф — только с будущей даты')
+  await expect(form.getByRole('alert')).toHaveText(
+    `Для действующих групп — не раньше ${d.nextLong}`,
+  )
+  // zod: prices whole and > 0
   await form.getByLabel('Действует с').fill(f.planRu)
   await form.getByLabel('Групповая').fill('0')
   await form.getByRole('button', { name: 'Запланировать' }).click()
