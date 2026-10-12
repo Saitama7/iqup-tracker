@@ -127,7 +127,10 @@ test('holiday: add, refuse a past date, delete with confirm', async ({ page }, t
   await expect(page).toHaveURL(/\/admin$/)
   await page.goto('/admin/settings')
 
-  await page.getByRole('button', { name: 'Добавить', exact: true }).click()
+  await page
+    .getByRole('region', { name: 'Праздники и выходные центра' })
+    .getByRole('button', { name: 'Добавить', exact: true })
+    .click()
   const add = page.getByRole('dialog', { name: 'Новый праздник' })
   await add.getByLabel('Дата').fill('01.10.2026')
   await add.getByLabel('Название').fill('Тестовый день')
@@ -209,4 +212,61 @@ test('plan a new tariff version from a future date, then remove it', async ({ pa
   await plannedAgain.getByRole('button', { name: 'Удалить запланированный' }).click()
   await plannedAgain.getByRole('button', { name: 'Да, удалить' }).click()
   await expect(versions.filter({ hasText: 'запланирован' })).toHaveCount(0)
+})
+
+test('subjects (#42): add, rename, hide from «Новая группа», show again', async ({
+  page,
+}, testInfo) => {
+  // Unique per run — `--repeat-each` copies and both projects run in parallel (И30).
+  const tag = `${testInfo.project.name === 'webkit-desktop' ? 'деск' : 'моб'} ${Date.now() % 1_000_000}`
+  const name = `Физика ${tag}`
+  const renamed = `Астрономия ${tag}`
+  const env = localSupabase()
+  const service = createClient(env.apiUrl, env.serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  try {
+    await login(page, KANYKEI)
+    await expect(page).toHaveURL(/\/admin$/)
+    await page.goto('/admin/settings')
+    const section = page.getByRole('region', { name: 'Предметы' })
+    const list = section.getByRole('list', { name: 'Список предметов' })
+    await expect(list.getByRole('listitem').first()).toContainText('Математика')
+
+    await section.getByRole('button', { name: 'Добавить', exact: true }).click()
+    const add = page.getByRole('dialog', { name: 'Новый предмет' })
+    await add.getByLabel('Название').fill('математика')
+    await add.getByRole('button', { name: 'Добавить' }).click()
+    await expect(add.getByRole('alert')).toHaveText('Такой предмет уже есть')
+    await add.getByLabel('Название').fill(name)
+    await add.getByRole('button', { name: 'Добавить' }).click()
+    await expect(add).toBeHidden()
+    const row = list.getByRole('listitem').filter({ hasText: tag })
+    await expect(row).toHaveText(new RegExp(name))
+
+    await row.getByRole('button', { name: `Переименовать: ${name}` }).click()
+    const rename = page.getByRole('dialog', { name: 'Переименовать предмет' })
+    await expect(rename.getByLabel('Название')).toHaveValue(name)
+    await rename.getByLabel('Название').fill(renamed)
+    await rename.getByRole('button', { name: 'Сохранить' }).click()
+    await expect(rename).toBeHidden()
+    await expect(row).toContainText(renamed)
+
+    await row.getByRole('button', { name: `Скрыть: ${renamed}` }).click()
+    await expect(row).toContainText('скрыт')
+    await row.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: testInfo.outputPath('subjects.png'), fullPage: true })
+
+    await page.goto('/admin/groups')
+    if (!isDesktop(page)) await page.getByRole('button', { name: '+ Новая' }).click()
+    const subjectSelect = page.getByRole('form', { name: 'Новая группа' }).getByLabel('Предмет')
+    await expect(subjectSelect.locator('option', { hasText: 'Математика' })).toHaveCount(1)
+    await expect(subjectSelect.locator('option', { hasText: renamed })).toHaveCount(0)
+
+    await page.goto('/admin/settings')
+    await row.getByRole('button', { name: `Показать: ${renamed}` }).click()
+    await expect(row).not.toContainText('скрыт')
+  } finally {
+    await service.from('subjects').delete().like('name', `%${tag}`)
+  }
 })

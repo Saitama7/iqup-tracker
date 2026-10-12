@@ -18,13 +18,21 @@ const testGroup = (testInfo: TestInfo) =>
     ? { name: 'e2e десктоп', teacher: /^Айпери/ }
     : { name: 'e2e мобильный', teacher: /^Бекзат/ }
 
-async function removeGroup(name: string) {
+const serviceClient = () => {
   const env = localSupabase()
-  const service = createClient<Database>(env.apiUrl, env.serviceRoleKey, {
+  return createClient<Database>(env.apiUrl, env.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
-  const { data: groups } = await service.from('groups').select('id').eq('name', name)
-  for (const { id } of groups ?? []) {
+}
+
+async function removeGroup(name: string) {
+  const { data: groups } = await serviceClient().from('groups').select('id').eq('name', name)
+  await removeGroups((groups ?? []).map((g) => g.id))
+}
+
+async function removeGroups(ids: readonly string[]) {
+  const service = serviceClient()
+  for (const id of ids) {
     await service
       .from('lessons')
       .delete()
@@ -199,4 +207,84 @@ test('create a group from А3 → future lessons on А4; cancel, make up, substi
   await expect(groupRow(page, label)).toContainText('В архиве')
 
   await removeGroup(name)
+})
+
+test('А3: auto name from subject and class with a letter; new subject from the form (#42)', async ({
+  page,
+}, testInfo) => {
+  const { teacher } = testGroup(testInfo)
+  // Unique per run — `--repeat-each` copies and both projects run in parallel (И30).
+  const subject = `Е2е ${testInfo.project.name === 'webkit-desktop' ? 'деск' : 'моб'} ${Date.now() % 1_000_000}`
+  const service = serviceClient()
+  try {
+    await login(page, KANYKEI)
+    await page.goto('/admin/groups')
+    if (!isDesktop(page)) await page.getByRole('button', { name: '+ Новая' }).click()
+    const form = page.getByRole('form', { name: 'Новая группа' })
+    const nameField = form.getByLabel('Название')
+
+    // Seed: Математика · 8 класс А / Б, Математика · 6 класс.
+    await form.getByLabel('Предмет').selectOption({ label: 'Математика' })
+    await form.getByLabel('Класс').selectOption('8')
+    await expect(nameField).toHaveValue('8 класс В')
+    await form.getByLabel('Класс').selectOption('6')
+    await expect(nameField).toHaveValue('6 класс А')
+    await form.getByLabel('Класс').selectOption('7')
+    await expect(nameField).toHaveValue('7 класс')
+    await form.getByLabel('Тип и тариф').selectOption('pair')
+    await expect(nameField).toHaveValue('7 класс · пара')
+    await form.getByLabel('Тип и тариф').selectOption('group')
+
+    // A name typed by the admin is kept.
+    await nameField.fill('Олимпиадная')
+    await form.getByLabel('Класс').selectOption('9')
+    await expect(nameField).toHaveValue('Олимпиадная')
+    await form.getByLabel('Класс').selectOption('6')
+    await expect(nameField).toHaveValue('Олимпиадная')
+
+    // A duplicate typed by hand is caught before saving.
+    await nameField.fill('6 класс')
+    await form.getByLabel('Учитель').selectOption({ index: 1 })
+    await form.getByRole('button', { name: 'ВТ' }).click()
+    await form.getByRole('button', { name: 'Создать группу' }).click()
+    await expect(form.getByRole('alert')).toHaveText(
+      'Группа с таким названием по этому предмету уже есть',
+    )
+
+    // New subject right from the form; it becomes the selected subject.
+    await form.getByLabel('Предмет').selectOption({ label: '+ Новый предмет…' })
+    await form.getByLabel('Новый предмет').fill(subject)
+    await form.getByRole('button', { name: 'Добавить предмет' }).click()
+    await expect(form.getByLabel('Новый предмет')).toBeHidden()
+    await expect(form.getByLabel('Предмет').locator('option:checked')).toHaveText(subject)
+    await form.getByLabel('Класс').selectOption('7')
+    await nameField.fill('7 класс')
+    const teacherOption = await form
+      .getByLabel('Учитель')
+      .locator('option')
+      .filter({ hasText: teacher })
+      .first()
+      .getAttribute('value')
+    await form.getByLabel('Учитель').selectOption(teacherOption ?? '')
+    await form.getByLabel('Время').fill('20:00')
+    await page.screenshot({ path: testInfo.outputPath('new-group-autoname.png') })
+
+    await form.getByRole('button', { name: 'Создать группу' }).click()
+    await expect(page).toHaveURL(/\/admin\/groups\/[0-9a-f-]{36}$/)
+    await expect(page.getByRole('heading', { name: `${subject} · 7 класс` })).toBeVisible()
+
+    // A fresh form names the second group of the same subject and class with «А».
+    await page.goto('/admin/groups')
+    if (!isDesktop(page)) await page.getByRole('button', { name: '+ Новая' }).click()
+    await form.getByLabel('Предмет').selectOption({ label: subject })
+    await form.getByLabel('Класс').selectOption('7')
+    await expect(nameField).toHaveValue('7 класс А')
+  } finally {
+    const { data: subj } = await service.from('subjects').select('id').eq('name', subject)
+    for (const { id } of subj ?? []) {
+      const { data: groups } = await service.from('groups').select('id').eq('subject_id', id)
+      await removeGroups((groups ?? []).map((g) => g.id))
+      await service.from('subjects').delete().eq('id', id)
+    }
+  }
 })
