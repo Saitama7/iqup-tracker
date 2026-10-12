@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ChevronLeft } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
+import { BackButton } from '@/components/shell/back-button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { balancesQuery } from '@/features/payments/api'
 import { studentsQuery } from '@/features/students/api'
@@ -158,7 +158,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
   if (!group) {
     return (
       <div className="flex flex-col gap-4">
-        <BackLink />
+        <BackButton />
         <p className={cn(cardClass, 'p-5 font-bold text-ink-muted')}>Группа не найдена</p>
       </div>
     )
@@ -288,7 +288,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
     <div className="flex flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">
-          <BackLink />
+          <BackButton />
           <div className="flex flex-wrap items-center gap-3.5">
             <PageTitle className="min-[900px]:text-[28px]">{label}</PageTitle>
             <GroupStatusChip status={group.status} className="px-3 py-1.5" />
@@ -410,18 +410,6 @@ function headerCaption(group: GroupRow, data: GroupsSource, today: string): stri
   ]
     .filter(Boolean)
     .join(' · ')
-}
-
-function BackLink() {
-  return (
-    <Link
-      to="/admin/groups"
-      className="flex min-h-11 w-fit items-center gap-1.5 text-[13px] font-extrabold text-ink-muted min-[900px]:min-h-0"
-    >
-      <ChevronLeft className="size-4" strokeWidth={2.5} aria-hidden />
-      Группы
-    </Link>
-  )
 }
 
 function ActionButton({

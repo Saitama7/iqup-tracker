@@ -9,12 +9,14 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { cn } from '@/lib/utils'
-import { isPushedScreen, MORE, TABS, type NavItem, type TabItem } from './nav'
+import { BackButton } from './back-button'
+import { backTarget, isPushedScreen, MORE, TABS, type NavItem, type TabItem } from './nav'
 import { useSignOut } from './use-sign-out'
 import { useView } from './use-view'
 
 // Phone layout: no app bar — each screen draws its own header (У2, У4, У7);
-// bottom tabs as on У2–У6 / АМ1. 100dvh, safe-area insets.
+// bottom tabs as on У2–У6 / АМ1. 100dvh, safe-area insets. Screens off the tab bar get
+// «‹ Родитель» on top (#57); pushed screens place the same BackButton in their own header.
 export function MobileShell({ children }: { children: ReactNode }) {
   const { view } = useView()
   const pathname = useLocation({ select: (l) => l.pathname })
@@ -23,6 +25,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
   const showTabs = tabs.length > 1
   // АМ1 packs five tabs: narrower items, 10 px labels, 44×30 pill.
   const dense = tabs.length > 3
+  const back = !isPushedScreen(pathname) && backTarget(pathname, view) !== null
 
   return (
     <div className="flex min-h-dvh flex-col bg-paper">
@@ -34,6 +37,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
             : 'pb-[max(1.5rem,env(safe-area-inset-bottom))]',
         )}
       >
+        {back && <BackButton className="mb-4" />}
         {children}
       </main>
 
@@ -147,6 +151,8 @@ function MoreSheet({
                 {item.to ? (
                   <Link
                     to={item.to}
+                    // replaces the sheet's own history entry (#57): «назад» leads past the sheet
+                    replace
                     onClick={close}
                     className="flex min-h-12 items-center justify-between gap-3 px-2 text-[15px] font-bold text-ink data-[status=active]:font-extrabold"
                   >

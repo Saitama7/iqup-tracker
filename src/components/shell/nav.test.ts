@@ -1,4 +1,13 @@
-import { isPushedScreen, MORE, NAV, TABS, resolveView, viewCaption, viewsFor } from './nav'
+import {
+  backTarget,
+  isPushedScreen,
+  MORE,
+  NAV,
+  TABS,
+  resolveView,
+  viewCaption,
+  viewsFor,
+} from './nav'
 
 describe('viewsFor', () => {
   it('orders views by priority', () => {
@@ -118,5 +127,49 @@ describe('isPushedScreen', () => {
     expect(isPushedScreen('/groups/1f0c')).toBe(true)
     expect(isPushedScreen('/groups')).toBe(false)
     expect(isPushedScreen('/today')).toBe(false)
+  })
+})
+
+describe('backTarget (#57)', () => {
+  it('tabs and the home of the view have no back button', () => {
+    for (const path of ['/today', '/groups', '/my-month']) {
+      expect(backTarget(path, 'teacher')).toBeNull()
+    }
+    for (const path of ['/admin', '/admin/students', '/admin/payments', '/admin/groups']) {
+      expect(backTarget(path, 'admin')).toBeNull()
+    }
+    expect(backTarget('/payroll', 'accountant')).toBeNull()
+  })
+
+  it('detail screens lead to their list', () => {
+    expect(backTarget('/admin/students/1f0c', 'admin')).toEqual({
+      to: '/admin/students',
+      label: 'Ученики',
+    })
+    expect(backTarget('/admin/groups/1f0c/', 'admin')).toEqual({
+      to: '/admin/groups',
+      label: 'Группы',
+    })
+    expect(backTarget('/groups/1f0c', 'teacher')).toEqual({ to: '/groups', label: 'Группы' })
+    expect(backTarget('/lessons/1f0c', 'teacher')).toEqual({ to: '/today', label: 'Сегодня' })
+  })
+
+  it('a lesson opened by an admin-only user leads to the dashboard', () => {
+    expect(backTarget('/lessons/1f0c', 'admin')).toEqual({ to: '/admin', label: 'Сегодня' })
+  })
+
+  it('«Ещё» screens and the profile lead to the home of the view', () => {
+    for (const path of ['/admin/schedule', '/admin/trials', '/admin/audit', '/payroll']) {
+      expect(backTarget(path, 'admin')).toEqual({ to: '/admin', label: 'Сегодня' })
+    }
+    expect(backTarget('/profile', 'teacher')).toEqual({ to: '/today', label: 'Сегодня' })
+    expect(backTarget('/admin/audit', 'accountant')).toEqual({
+      to: '/payroll',
+      label: 'Расчёт ЗП',
+    })
+  })
+
+  it('no view yet — nothing to go to', () => {
+    expect(backTarget('/profile', null)).toBeNull()
   })
 })

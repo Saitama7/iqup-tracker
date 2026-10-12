@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ChevronLeft, Phone, Search } from 'lucide-react'
+import { Phone, Search } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
+import { BackButton } from '@/components/shell/back-button'
 import { balancesQuery, studentPaymentsQuery, type PaymentRow } from '@/features/payments/api'
 import { availableLessons, totalDebt } from '@/features/payments/balance'
 import { EnrollDialog, type EnrollStudent } from '@/features/subscriptions/enroll-dialog'
@@ -118,7 +119,7 @@ export function StudentPage({ studentId }: { studentId: string }) {
   if (!view) {
     return (
       <div className="flex flex-col gap-4">
-        <BackLink />
+        <BackButton />
         <p className={cn(cardClass, 'p-5 font-bold text-ink-muted')}>Ученик не найден</p>
       </div>
     )
@@ -200,18 +201,6 @@ function groupName(view: StudentView, groupId: string): string | null {
   return g ? groupLabel(g) : null
 }
 
-function BackLink() {
-  return (
-    <Link
-      to="/admin/students"
-      className="flex min-h-8 items-center gap-1.5 text-[13px] font-extrabold text-ink-muted"
-    >
-      <ChevronLeft className="size-4" strokeWidth={2.5} aria-hidden />
-      Ученики
-    </Link>
-  )
-}
-
 const outlineButton =
   'flex min-h-11 items-center justify-center rounded-xl border-[1.5px] border-line-strong bg-card px-4 text-[13px] font-extrabold whitespace-nowrap text-ink'
 const primaryButton =
@@ -237,7 +226,7 @@ function DesktopStudent({
             {initials(s.full_name)}
           </div>
           <div className="flex flex-col gap-1.5">
-            <BackLink />
+            <BackButton />
             <PageTitle className="min-[900px]:text-[28px]">{s.full_name}</PageTitle>
             <p className="text-sm font-bold text-ink-muted">{headerCaption(view)}</p>
           </div>
@@ -457,16 +446,10 @@ function MobileStudent({
   return (
     <div className="flex flex-col gap-2.5 pb-24">
       <div className="flex items-center gap-2.5">
-        <Link
-          to="/admin/students"
-          aria-label="Назад"
-          className="flex size-11 shrink-0 items-center justify-center rounded-full border border-line bg-card"
-        >
-          <ChevronLeft className="size-[22px]" strokeWidth={2.5} aria-hidden />
-        </Link>
+        <BackButton />
         <form
           role="search"
-          className="flex min-h-11 flex-1 items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-card px-3.5 focus-within:border-ink"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-card px-3.5 focus-within:border-ink"
           onSubmit={(e) => {
             e.preventDefault()
             void navigate({ to: '/admin/students', search: { q: q.trim() || undefined } })
