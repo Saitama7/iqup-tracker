@@ -89,6 +89,8 @@ cp .env.example .env.local               # и заменить на URL/anon dev
 6. После деплоя: **Settings → Builds & deployments → Preview deployments: All non-Production branches** (по умолчанию так) — каждый PR получает URL `https://<hash>.iqup-tracker.pages.dev`, ссылка появляется в PR как check «Cloudflare Pages».
 7. Проверить: открыть `https://iqup-tracker.pages.dev/some/route` — должен открыться SPA, не 404 (`public/_redirects`). На iPhone в Safari — «Поделиться → На экран Домой» → ставится как PWA.
 
+8. Кэш и обновления (#56): `public/_headers` — `index.html`, `sw.js`, `manifest.webmanifest` с `Cache-Control: no-cache`, `/assets/*` — `immutable`. Проверка: `curl -sI https://iqup-tracker.pages.dev/sw.js | grep -i cache-control`. Service worker нового деплоя активируется сразу (`skipWaiting` + `clientsClaim`): новая вкладка получает новый бандл, открытая — тост «Доступна новая версия · Обновить». Версия сборки (`CF_PAGES_COMMIT_SHA`, задаёт Cloudflare сам) — внизу профиля, «Версия abc1234». Если у пользователя всё равно белый/ошибочный экран — кнопка «Обновить приложение» на экране ошибки сбрасывает service worker и кэши.
+
 Домен `*.pages.dev` бесплатный; свой (`tracker.iqup.kg`) — позже, Custom domains, тоже бесплатно.
 
 `wrangler.jsonc` в репо **не держим**: если Cloudflare находит wrangler-конфиг, он берёт настройки из него и игнорирует переменные из дашборда («Build environment variables: (none found)») — сборка без `VITE_SUPABASE_*` даёт белый экран. Переменные живут только в Settings → Variables and secrets.

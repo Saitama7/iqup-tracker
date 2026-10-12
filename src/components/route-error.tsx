@@ -1,5 +1,6 @@
 import { Link, type ErrorComponentProps } from '@tanstack/react-router'
 import { ShieldAlert, TriangleAlert } from 'lucide-react'
+import { ResetAppButton } from '@/components/app-crash'
 import { Button } from '@/components/ui/button'
 import { ForbiddenError } from '@/lib/guards'
 
@@ -27,7 +28,11 @@ export function RouteError({ error, reset }: ErrorComponentProps) {
       <TriangleAlert className="size-12 text-warn" aria-hidden />
       <h1 className="font-display text-xl font-bold text-ink">Что-то пошло не так</h1>
       <p className="text-ink-muted">Проверьте интернет и попробуйте ещё раз.</p>
-      <Button onClick={reset}>Повторить</Button>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button onClick={reset}>Повторить</Button>
+        {/* A stale bundle (old service worker) fails the same way every time: a retry won't help */}
+        <ResetAppButton variant="outline" />
+      </div>
     </section>
   )
 }
