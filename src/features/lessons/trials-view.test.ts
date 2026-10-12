@@ -34,8 +34,12 @@ describe('tomorrowTrialCaption', () => {
   it('omits «первый раз» for an existing student', () => {
     expect(tomorrowTrialCaption([trial({ student_id: 's1' })])).toBe('+1 пробный · Нурай Ж.')
   })
-  it('counts several', () => {
-    expect(tomorrowTrialCaption([trial({}), trial({ id: 't2' })])).toBe('+2 пробных')
+  it('names up to three, then counts', () => {
+    const adema = trial({ id: 't2', full_name: 'Адема Кадырова' })
+    expect(tomorrowTrialCaption([trial({}), adema])).toBe('+2 пробных · Нурай Ж., Адема К.')
+    expect(tomorrowTrialCaption([trial({}), adema, trial({ id: 't3' }), trial({ id: 't4' })])).toBe(
+      '+4 пробных',
+    )
   })
 })
 

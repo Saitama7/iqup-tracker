@@ -18,12 +18,19 @@ export function ownTrialsByLesson(
   )
 }
 
-/** «+1 пробный · Нурай Ж. · первый раз» (Завтра); several — «+2 пробных». */
+/**
+ * «+1 пробный · Нурай Ж. · первый раз» (Завтра); several — «+2 пробных · Нурай Ж., Адема К.»: the
+ * teacher learns who comes, not only how many (Ж3). A long list — the count only.
+ */
 export function tomorrowTrialCaption(list: readonly Trial[]): string {
   const [only] = list
-  if (list.length !== 1 || !only) return trialsCaption(list)
-  const firstTime = only.student_id === null ? ' · первый раз' : ''
-  return `${plusTrials(1)} · ${shortPerson(only.full_name)}${firstTime}`
+  if (!only) return ''
+  if (list.length === 1) {
+    const firstTime = only.student_id === null ? ' · первый раз' : ''
+    return `${plusTrials(1)} · ${shortPerson(only.full_name)}${firstTime}`
+  }
+  if (list.length > 3) return trialsCaption(list)
+  return `${plusTrials(list.length)} · ${list.map((t) => shortPerson(t.full_name)).join(', ')}`
 }
 
 /** «РБ» for «Розаина Бекова». */

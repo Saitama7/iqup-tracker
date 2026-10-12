@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { trialsQuery, useTrialsRealtime } from '@/features/trials/api'
 import { phoneCaption, trialWhen, dayShort, type Trial } from '@/features/trials/model'
 import { EnrollTrialDialog, RebookDialog, TrialChip } from '@/features/trials/parts'
-import { numClass, tdClass } from '@/features/tariffs/parts'
+import { tdClass } from '@/features/tariffs/parts'
 import { cn } from '@/lib/utils'
 import type { GroupRow } from './model'
 
@@ -85,7 +85,7 @@ function ActionButton({
       className={cn(
         'rounded-lg px-2.5 text-xs font-extrabold whitespace-nowrap',
         status === 'attended'
-          ? 'bg-brand text-ink'
+          ? 'bg-ink text-brand'
           : 'border-[1.5px] border-line-strong bg-card text-ink',
         className,
       )}
@@ -120,10 +120,9 @@ export function TrialTableRows({ trials, today, fill, onAction }: Props) {
             <td className={cn(tdClass, 'whitespace-nowrap')}>
               {trialWhen(t.lessonDate, t.lessonStart, today)}
             </td>
-            <td className={cn(tdClass, numClass, 'text-ink-muted')}>—</td>
-            <td className={cn(tdClass, numClass, 'text-ink-muted')}>—</td>
-            <td className={tdClass}>
-              <div className="flex flex-col items-start gap-1.5">
+            {/* no balance or freezes for a trial: status and decision span those columns */}
+            <td colSpan={3} className={tdClass}>
+              <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
                 <span className={cn('text-xs whitespace-nowrap', status.className)}>
                   {status.text}
                 </span>

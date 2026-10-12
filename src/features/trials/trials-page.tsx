@@ -67,6 +67,10 @@ export interface TrialsSearch {
   group?: string
 }
 
+// artboard: th, td { padding: 10px; font-size: 13px } — the six columns fit next to the form
+const denseTable =
+  'w-full min-w-[560px] border-collapse [&_td]:px-2.5 [&_td]:text-[13px] [&_th]:px-2.5'
+
 const smallBtn =
   'inline-flex min-h-9 items-center justify-center rounded-[10px] px-3 text-xs font-extrabold whitespace-nowrap'
 
@@ -306,7 +310,7 @@ function Kpis({
           {conv.percent === null ? 'пока никто не пришёл' : `${conv.percent} % конверсия`}
         </div>
       </div>
-      <div className="rounded-2xl bg-band px-4 py-3.5">
+      <div className={cn('rounded-2xl bg-band px-4 py-3.5', !isDesktop && 'col-span-2')}>
         <div className={cn(label, 'text-ink-muted')}>Правило</div>
         <div className="text-[13px] leading-snug font-bold">
           Пробный урок полностью бесплатный: не списывается, учителю не начисляется, в заполненность
@@ -420,6 +424,7 @@ function UpcomingSection({
                     <button
                       type="button"
                       className={cn(smallBtn, 'text-teal')}
+                      aria-label={`Перенести: ${t.full_name}`}
                       onClick={() => {
                         actions.onRebook(t)
                       }}
@@ -437,7 +442,7 @@ function UpcomingSection({
   }
   return (
     <Section title="Предстоящие">
-      <table className="w-full min-w-[560px] border-collapse" aria-label="Предстоящие пробные">
+      <table className={denseTable} aria-label="Предстоящие пробные">
         <thead>
           <tr className="border-b border-line">
             <th className={thClass}>Когда</th>
@@ -697,7 +702,7 @@ function WaitingSection({
 
   return (
     <Section title={title} aside={aside}>
-      <table className="w-full min-w-[560px] border-collapse" aria-label="Ждут решения">
+      <table className={denseTable} aria-label="Ждут решения">
         <thead>
           <tr className="border-b border-line">
             <th className={thClass}>Было</th>
