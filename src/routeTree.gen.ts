@@ -21,6 +21,7 @@ import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppAdminAuditRouteImport } from './routes/_app/admin/audit'
 import { Route as AppAdminScheduleRouteImport } from './routes/_app/admin/schedule'
 import { Route as AppAdminSettingsRouteImport } from './routes/_app/admin/settings'
+import { Route as AppAdminTrialsRouteImport } from './routes/_app/admin/trials'
 import { Route as AppAdminUsersRouteImport } from './routes/_app/admin/users'
 import { Route as AppGroupsIndexRouteImport } from './routes/_app/groups/index'
 import { Route as AppGroupsGroupIdRouteImport } from './routes/_app/groups/$groupId'
@@ -89,6 +90,11 @@ const AppAdminSettingsRoute = AppAdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppAdminRouteRoute,
 } as any)
+const AppAdminTrialsRoute = AppAdminTrialsRouteImport.update({
+  id: '/trials',
+  path: '/trials',
+  getParentRoute: () => AppAdminRouteRoute,
+} as any)
 const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AppAdminAuditRoute
   '/admin/schedule': typeof AppAdminScheduleRoute
   '/admin/settings': typeof AppAdminSettingsRoute
+  '/admin/trials': typeof AppAdminTrialsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/groups/$groupId': typeof AppGroupsGroupIdRoute
   '/lessons/$lessonId': typeof AppLessonsLessonIdRoute
@@ -162,6 +169,7 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AppAdminAuditRoute
   '/admin/schedule': typeof AppAdminScheduleRoute
   '/admin/settings': typeof AppAdminSettingsRoute
+  '/admin/trials': typeof AppAdminTrialsRoute
   '/admin/users': typeof AppAdminUsersRoute
   '/groups/$groupId': typeof AppGroupsGroupIdRoute
   '/lessons/$lessonId': typeof AppLessonsLessonIdRoute
@@ -185,6 +193,7 @@ export interface FileRoutesById {
   '/_app/admin/audit': typeof AppAdminAuditRoute
   '/_app/admin/schedule': typeof AppAdminScheduleRoute
   '/_app/admin/settings': typeof AppAdminSettingsRoute
+  '/_app/admin/trials': typeof AppAdminTrialsRoute
   '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/groups/$groupId': typeof AppGroupsGroupIdRoute
   '/_app/lessons/$lessonId': typeof AppLessonsLessonIdRoute
@@ -208,6 +217,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/schedule'
     | '/admin/settings'
+    | '/admin/trials'
     | '/admin/users'
     | '/groups/$groupId'
     | '/lessons/$lessonId'
@@ -228,6 +238,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/schedule'
     | '/admin/settings'
+    | '/admin/trials'
     | '/admin/users'
     | '/groups/$groupId'
     | '/lessons/$lessonId'
@@ -250,6 +261,7 @@ export interface FileRouteTypes {
     | '/_app/admin/audit'
     | '/_app/admin/schedule'
     | '/_app/admin/settings'
+    | '/_app/admin/trials'
     | '/_app/admin/users'
     | '/_app/groups/$groupId'
     | '/_app/lessons/$lessonId'
@@ -353,6 +365,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminSettingsRouteImport
       parentRoute: typeof AppAdminRouteRoute
     }
+    '/_app/admin/trials': {
+      id: '/_app/admin/trials'
+      path: '/trials'
+      fullPath: '/admin/trials'
+      preLoaderRoute: typeof AppAdminTrialsRouteImport
+      parentRoute: typeof AppAdminRouteRoute
+    }
     '/_app/admin/users': {
       id: '/_app/admin/users'
       path: '/users'
@@ -416,6 +435,7 @@ interface AppAdminRouteRouteChildren {
   AppAdminAuditRoute: typeof AppAdminAuditRoute
   AppAdminScheduleRoute: typeof AppAdminScheduleRoute
   AppAdminSettingsRoute: typeof AppAdminSettingsRoute
+  AppAdminTrialsRoute: typeof AppAdminTrialsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppAdminGroupsGroupIdRoute: typeof AppAdminGroupsGroupIdRoute
@@ -428,6 +448,7 @@ const AppAdminRouteRouteChildren: AppAdminRouteRouteChildren = {
   AppAdminAuditRoute: AppAdminAuditRoute,
   AppAdminScheduleRoute: AppAdminScheduleRoute,
   AppAdminSettingsRoute: AppAdminSettingsRoute,
+  AppAdminTrialsRoute: AppAdminTrialsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppAdminGroupsGroupIdRoute: AppAdminGroupsGroupIdRoute,

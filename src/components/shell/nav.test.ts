@@ -57,6 +57,7 @@ describe('NAV / TABS', () => {
     expect(MORE.admin.filter((i) => i.to).map((i) => i.to)).toEqual([
       '/admin/schedule',
       '/admin/groups',
+      '/admin/trials',
       '/admin/users',
       '/admin/settings',
       '/admin/audit',

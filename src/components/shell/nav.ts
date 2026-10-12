@@ -16,6 +16,7 @@ export type AppPath =
   | '/admin/students'
   | '/admin/settings'
   | '/admin/audit'
+  | '/admin/trials'
   | '/payroll'
   | '/profile'
 
@@ -45,7 +46,7 @@ export const NAV: Record<View, NavItem[]> = {
     { label: 'Расписание', to: '/admin/schedule' },
     { label: 'Группы', to: '/admin/groups' },
     { label: 'Ученики', to: '/admin/students' },
-    { label: 'Пробные занятия', to: null },
+    { label: 'Пробные занятия', to: '/admin/trials' },
     { label: 'Оплаты', to: null },
     { label: 'Расчёт ЗП', to: '/payroll' },
     { label: 'Учителя и доступ', to: '/admin/users' },
@@ -86,7 +87,7 @@ export const MORE: Record<View, NavItem[]> = {
   admin: [
     { label: 'Расписание', to: '/admin/schedule' },
     { label: 'Группы', to: '/admin/groups' },
-    { label: 'Пробные', to: null },
+    { label: 'Пробные', to: '/admin/trials' },
     { label: 'Учителя и доступ', to: '/admin/users' },
     { label: 'Тарифы и праздники', to: '/admin/settings' },
     { label: 'Журнал изменений', to: '/admin/audit' },

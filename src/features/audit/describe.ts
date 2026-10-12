@@ -49,7 +49,7 @@ export const EMPTY_LOOKUPS: AuditLookups = {
   tariffs: [],
 }
 
-export type BadgeTone = 'present' | 'burned' | 'warn' | 'stone' | 'teal'
+export type BadgeTone = 'present' | 'burned' | 'warn' | 'stone' | 'teal' | 'trial'
 export type TextTone = 'present' | 'burned' | 'frozen'
 /** A piece of the line: plain text, or a name / status shown in bold or colour (as on the artboard). */
 export type Part = string | { text: string; strong?: true; tone?: TextTone }
@@ -83,7 +83,7 @@ export const KIND_LABEL: Record<AuditKind, string> = {
   other: 'Остальное',
 }
 
-/** Tables with the audit trigger, for «Все таблицы ▾». payments / trials come in R2. */
+/** Tables with the audit trigger, for «Все таблицы ▾». payments come in R2. */
 export const ENTITY_LABEL: Record<string, string> = {
   lessons: 'Занятия',
   attendance: 'Посещаемость',
@@ -92,6 +92,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   teacher_rates: 'Ставки учителей',
   tariffs: 'Тарифы',
   subjects: 'Предметы',
+  trials: 'Пробные',
 }
 
 const STATUS_TONE: Record<AttendanceStatus, TextTone> = {
@@ -584,6 +585,55 @@ function describeSubject(row: AuditRow): Described {
   return { badge, link, parts: ['Предмет ', strong(name), ': порядок в списке изменён'] }
 }
 
+function describeTrial(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const lessonId = str(s, 'lesson_id')
+  const lesson = lessonId ? l.lessons[lessonId] : undefined
+  const groupId = str(s, 'group_id')
+  const where = lessonWhere(
+    { groupId, date: lesson?.date ?? null, start: lesson?.start ?? null },
+    l,
+  )
+  const who: Part[] = [strong(str(s, 'full_name') ?? 'Пробный'), ' — ']
+  const badge = { label: 'Пробное', tone: 'trial' as const }
+  const link = groupLink(groupId)
+
+  if (row.action === 'insert')
+    return { badge, link, parts: [...who, `записан(а) на пробное: ${where}`] }
+  if (row.action === 'delete') return { badge, link, parts: [...who, 'пробное удалено'] }
+  if (changed(row, 'status')) {
+    const next = str(row.after, 'status')
+    if (next === 'attended') {
+      return { badge, link, parts: [...who, 'на пробном: ', { text: 'был(а)', tone: 'present' }] }
+    }
+    if (next === 'no_show') {
+      return {
+        badge,
+        link,
+        parts: [...who, 'на пробном: ', { text: 'не пришёл(ла)', tone: 'burned' }],
+      }
+    }
+    if (next === 'enrolled') {
+      return {
+        badge: { label: 'Пробное', tone: 'present' },
+        link: studentLink(str(row.after, 'student_id')) ?? link,
+        parts: [...who, `оплатил(а) после пробного, зачислен(а) в ${groupName(groupId, l)}`],
+      }
+    }
+    if (next === 'closed') {
+      return {
+        badge: { label: 'Пробное', tone: 'stone' },
+        link,
+        parts: [...who, bool(row.after, 'came') ? 'отказ после пробного' : 'пробное закрыто'],
+      }
+    }
+    if (next === 'scheduled') return { badge, link, parts: [...who, `записан(а) заново: ${where}`] }
+  }
+  if (changed(row, 'lesson_id'))
+    return { badge, link, parts: [...who, `пробное перенесено: ${where}`] }
+  return { badge, link, parts: [...who, 'пробное изменено'] }
+}
+
 const ACTION_TEXT: Record<AuditAction, string> = {
   insert: 'запись добавлена',
   update: 'запись изменена',
@@ -606,6 +656,7 @@ const DESCRIBERS: Record<string, (row: AuditRow, l: AuditLookups) => Described> 
   teacher_rates: describeRate,
   tariffs: describeTariff,
   subjects: describeSubject,
+  trials: describeTrial,
 }
 
 /** The author's name: «Система» — service role, migrations, imports (no auth.uid()). */

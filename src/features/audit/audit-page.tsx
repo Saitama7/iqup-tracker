@@ -287,6 +287,7 @@ const BADGE: Record<BadgeTone, string> = {
   warn: 'bg-warn-soft text-warn-strong',
   stone: 'bg-stone text-ink-muted',
   teal: 'bg-teal-soft text-teal-strong',
+  trial: 'bg-trial-soft text-trial-strong',
 }
 
 const ROW_TINT: Partial<Record<AuditKind, string>> = {
