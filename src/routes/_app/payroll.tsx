@@ -3,9 +3,8 @@ import { z } from 'zod'
 import { MONTH_RE, pickMonth } from '@/features/payroll/model'
 import { PayrollPage } from '@/features/payroll/payroll-page'
 import { payrollMonth } from '@/features/schedule/model'
-import { ForbiddenError } from '@/lib/guards'
+import { requireRole } from '@/lib/guards'
 import { useNow } from '@/lib/now'
-import { hasRole } from '@/lib/roles'
 import { bishkekDate } from '@/lib/time'
 
 // ?month=2026-09; without it — the month being paid: until the 15th the previous one (И15).
@@ -17,8 +16,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute('/_app/payroll')({
   validateSearch: searchSchema,
   beforeLoad: ({ context }) => {
-    const { roles } = context.auth
-    if (!hasRole(roles, 'accountant') && !hasRole(roles, 'admin')) throw new ForbiddenError()
+    requireRole(context.auth, 'accountant', 'admin')
   },
   component: PayrollRoute,
 })
