@@ -35,11 +35,11 @@ on conflict (day) do nothing;
 
 -- G1: ВТ/ЧТ/СБ 09:00, 1 Sep – 31 Oct 2026 (teacher A). G2: individual, ПН 10:00, Sep–Oct 2001 (teacher B).
 -- G3: archived. G4: forming, ПН 10:00 from 2001-09-03, no end.
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, end_date, status) values
-  ('d9000000-0000-4000-8000-000000000001', 'G1', 'Математика', 8, 'mini', 'b9000000-0000-4000-8000-000000000001', '2026-09-01', '2026-10-31', 'active'),
-  ('d9000000-0000-4000-8000-000000000002', 'G2', 'Химия', 9, 'individual', 'b9000000-0000-4000-8000-000000000002', '2001-09-01', '2001-10-31', 'active'),
-  ('d9000000-0000-4000-8000-000000000003', 'G3', 'Химия', 9, 'mini', 'b9000000-0000-4000-8000-000000000002', '2001-09-01', null, 'archived'),
-  ('d9000000-0000-4000-8000-000000000004', 'G4', 'Химия', 9, 'mini', 'b9000000-0000-4000-8000-000000000002', '2001-09-03', null, 'forming');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, end_date, status) values
+  ('d9000000-0000-4000-8000-000000000001', 'G1', (select id from public.subjects where name = 'Математика'), 8, 'mini', 'b9000000-0000-4000-8000-000000000001', '2026-09-01', '2026-10-31', 'active'),
+  ('d9000000-0000-4000-8000-000000000002', 'G2', (select id from public.subjects where name = 'Химия'), 9, 'individual', 'b9000000-0000-4000-8000-000000000002', '2001-09-01', '2001-10-31', 'active'),
+  ('d9000000-0000-4000-8000-000000000003', 'G3', (select id from public.subjects where name = 'Химия'), 9, 'mini', 'b9000000-0000-4000-8000-000000000002', '2001-09-01', null, 'archived'),
+  ('d9000000-0000-4000-8000-000000000004', 'G4', (select id from public.subjects where name = 'Химия'), 9, 'mini', 'b9000000-0000-4000-8000-000000000002', '2001-09-03', null, 'forming');
 insert into public.schedule_rules (group_id, weekday, start_time, valid_from) values
   ('d9000000-0000-4000-8000-000000000001', 2, '09:00', '2026-09-01'),
   ('d9000000-0000-4000-8000-000000000001', 4, '09:00', '2026-09-01'),
@@ -61,7 +61,7 @@ select throws_ok(
 );
 select throws_ok($$ select public.ensure_lessons('2026-12-31') $$, '42501', null, 'teacher cannot call ensure_lessons');
 select throws_ok(
-  $$ select * from public.create_group('X', 'Химия', 9, 'mini', 'b9000000-0000-4000-8000-000000000001', '{1}', '10:00', '2026-09-01', null, '2026-09-30') $$,
+  $$ select * from public.create_group('X', (select id from public.subjects where name = 'Химия'), 9, 'mini', 'b9000000-0000-4000-8000-000000000001', '{1}', '10:00', '2026-09-01', null, '2026-09-30') $$,
   '42501', null, 'teacher cannot create groups'
 );
 
@@ -236,7 +236,7 @@ select lives_ok(
 
 -- ─── create_group ───────────────────────────────────────────────────────────
 insert into r (key, id, n) select 'new', group_id, lessons_created from public.create_group(
-  ' Химия · 7 класс ', 'Химия', 7, 'group', 'b9000000-0000-4000-8000-000000000001',
+  ' Химия · 7 класс ', (select id from public.subjects where name = 'Химия'), 7, 'group', 'b9000000-0000-4000-8000-000000000001',
   '{1,3,5,5}', '16:00', public.bishkek_today(), '3', public.bishkek_today() + 13);
 select is(
   (select n from r where key = 'new'),
@@ -251,14 +251,14 @@ select results_eq(
   'group is forming, one rule per distinct weekday'
 );
 select throws_ok(
-  $$ select * from public.create_group('X', 'Химия', 7, 'group', 'b9000000-0000-4000-8000-000000000001', '{}', '16:00', '2026-09-01', null, '2026-09-30') $$,
+  $$ select * from public.create_group('X', (select id from public.subjects where name = 'Химия'), 7, 'group', 'b9000000-0000-4000-8000-000000000001', '{}', '16:00', '2026-09-01', null, '2026-09-30') $$,
   '23514', null, 'at least one weekday'
 );
 
 -- ─── reschedule_group ───────────────────────────────────────────────────────
 -- G5: ПН/СР/ПТ 10:00 from two weeks ago; generated four weeks ahead
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
-  ('d9000000-0000-4000-8000-000000000005', 'G5', 'Химия', 9, 'mini', 'b9000000-0000-4000-8000-000000000002', public.bishkek_today() - 14, 'active');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
+  ('d9000000-0000-4000-8000-000000000005', 'G5', (select id from public.subjects where name = 'Химия'), 9, 'mini', 'b9000000-0000-4000-8000-000000000002', public.bishkek_today() - 14, 'active');
 insert into public.schedule_rules (group_id, weekday, start_time, valid_from)
 select 'd9000000-0000-4000-8000-000000000005', w, '10:00', public.bishkek_today() - 14 from unnest(array[1, 3, 5]) w;
 select ok(public.generate_lessons('d9000000-0000-4000-8000-000000000005', public.bishkek_today() + 28) > 0, 'G5 generated');

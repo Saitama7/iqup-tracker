@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, X } from 'lucide-react'
-import { useId, useMemo, useState, type ReactNode, type SubmitEvent } from 'react'
+import { useId, useMemo, useState, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/page'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
+import { SubjectsSection } from '@/features/subjects/subjects-section'
 import { addHoliday, deleteHolidays, holidayForm, settingsQuery } from './api'
 import { lessonPrice, teacherShare } from './current'
 import { HistorySheet, PlanTariffsDialog } from './history-sheet'
@@ -30,6 +30,7 @@ import {
   Field,
   inputClass,
   numClass,
+  SmallDialog,
   SubmitButton,
   tdClass,
   thClass,
@@ -118,6 +119,8 @@ export function SettingsPage() {
             <Rules />
             <Holidays items={holidays} today={today} />
           </div>
+
+          <SubjectsSection />
         </>
       )}
 
@@ -325,34 +328,6 @@ function Holidays({ items, today }: { items: HolidayItem[]; today: string }) {
         }}
       />
     </section>
-  )
-}
-
-function SmallDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  children,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  title: string
-  description: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="gap-4 rounded-[20px] border-line bg-card p-6 sm:max-w-md">
-        <div className="flex flex-col gap-1.5 pr-6">
-          <DialogTitle className="font-display text-lg font-bold">{title}</DialogTitle>
-          <DialogDescription className="text-sm font-bold text-ink-muted">
-            {description}
-          </DialogDescription>
-        </div>
-        {children}
-      </DialogContent>
-    </Dialog>
   )
 }
 

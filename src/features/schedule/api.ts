@@ -6,6 +6,7 @@ import { useEffect } from 'react'
 import { z } from 'zod'
 import { PAYROLL_KEY } from '@/features/payroll/api'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
+import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import type { LessonStatus } from '@/features/lessons/select'
 
@@ -28,7 +29,7 @@ const lessonSchema = z.object({
   group: z.object({
     id: z.uuid(),
     name: z.string(),
-    subject: z.string(),
+    subject: subjectName,
     group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
     room: z.string().nullable(),
     status: z.enum(['forming', 'active', 'archived']),
@@ -64,7 +65,7 @@ export interface AdminLesson {
 }
 
 const LESSON_FIELDS =
-  'id, lesson_date, planned_start, duration_min, status, is_extra, makes_up_for_lesson_id, cancel_reason, confirmed_at, group:groups!inner(id, name, subject, group_type, room, status, teacher:teachers!inner(id, full_name), enrollments(status)), attendance(status)'
+  'id, lesson_date, planned_start, duration_min, status, is_extra, makes_up_for_lesson_id, cancel_reason, confirmed_at, group:groups!inner(id, name, subject:subjects(name), group_type, room, status, teacher:teachers!inner(id, full_name), enrollments(status)), attendance(status)'
 
 async function toLessons(data: unknown): Promise<AdminLesson[]> {
   const rows = z.array(lessonSchema).parse(data)

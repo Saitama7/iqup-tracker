@@ -26,12 +26,12 @@ insert into public.tariffs (id, group_type, lessons_in_package, package_price, m
   ('c8000000-0000-4000-8000-000000000001', 'pair', 12, 3200, 2, 60, 2, '1990-01-01'),
   ('c8000000-0000-4000-8000-000000000002', 'pair', 12, 4000, 2, 60, 2, '2001-09-01');
 
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
-  ('d8000000-0000-4000-8000-000000000001', 'Pair A', 'Математика', 8, 'pair', 'b8000000-0000-4000-8000-000000000001', '2000-01-01', 'active'),
-  ('d8000000-0000-4000-8000-000000000002', 'Pair B', 'Химия', 9, 'pair', 'b8000000-0000-4000-8000-000000000002', '2000-01-01', 'active'),
-  ('d8000000-0000-4000-8000-000000000003', 'Old', 'Химия', 9, 'pair', 'b8000000-0000-4000-8000-000000000002', '2000-01-01', 'archived'),
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
+  ('d8000000-0000-4000-8000-000000000001', 'Pair A', (select id from public.subjects where name = 'Математика'), 8, 'pair', 'b8000000-0000-4000-8000-000000000001', '2000-01-01', 'active'),
+  ('d8000000-0000-4000-8000-000000000002', 'Pair B', (select id from public.subjects where name = 'Химия'), 9, 'pair', 'b8000000-0000-4000-8000-000000000002', '2000-01-01', 'active'),
+  ('d8000000-0000-4000-8000-000000000003', 'Old', (select id from public.subjects where name = 'Химия'), 9, 'pair', 'b8000000-0000-4000-8000-000000000002', '2000-01-01', 'archived'),
   -- seed tariffs for 'individual' start in 2025: none in effect in 2001
-  ('d8000000-0000-4000-8000-000000000004', 'Solo', 'Химия', 9, 'individual', 'b8000000-0000-4000-8000-000000000002', '2000-01-01', 'active');
+  ('d8000000-0000-4000-8000-000000000004', 'Solo', (select id from public.subjects where name = 'Химия'), 9, 'individual', 'b8000000-0000-4000-8000-000000000002', '2000-01-01', 'active');
 
 -- e…1 new, e…2 returning, e…3 brought by e…1, e…4 never enrolled anywhere
 insert into public.students (id, full_name, is_returning, referred_by_student_id) values

@@ -5,6 +5,7 @@ import { useEffect } from 'react'
 import { z } from 'zod'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { PAYROLL_KEY } from '@/features/payroll/api'
+import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import { addDays } from '@/features/groups/model'
 import type { EnrollmentSource, Mark } from './attendance'
@@ -23,7 +24,7 @@ const lessonSchema = z.object({
   group: z.object({
     id: z.uuid(),
     name: z.string(),
-    subject: z.string(),
+    subject: subjectName,
     group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
     room: z.string().nullable(),
     enrollments: z.array(z.object({ status: z.enum(['active', 'finished']) })),
@@ -46,7 +47,7 @@ export interface TeacherLesson {
 }
 
 const LESSON_FIELDS =
-  'id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, group:groups!inner(id, name, subject, group_type, room, enrollments(status)), attendance(status)'
+  'id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, group:groups!inner(id, name, subject:subjects(name), group_type, room, enrollments(status)), attendance(status)'
 
 function toLesson(row: z.infer<typeof lessonSchema>): TeacherLesson {
   const { group, attendance, ...rest } = row
@@ -204,7 +205,7 @@ const sheetSchema = z.object({
   group: z.object({
     id: z.uuid(),
     name: z.string(),
-    subject: z.string(),
+    subject: subjectName,
     group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
     room: z.string().nullable(),
     teacher: z.object({
@@ -242,7 +243,7 @@ export const lessonSheetQuery = (lessonId: string) =>
       const lesson = await supabase
         .from('lessons')
         .select(
-          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, group:groups!inner(id, name, subject, group_type, room, teacher:teachers!inner(rates:teacher_rates(percent, valid_from)), enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status)`,
+          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, group:groups!inner(id, name, subject:subjects(name), group_type, room, teacher:teachers!inner(rates:teacher_rates(percent, valid_from)), enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status)`,
         )
         .eq('id', lessonId)
         .maybeSingle()

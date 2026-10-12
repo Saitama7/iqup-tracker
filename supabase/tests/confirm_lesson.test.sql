@@ -20,9 +20,9 @@ insert into public.profiles (id, phone, full_name, roles) values
 insert into public.tariffs (id, group_type, lessons_in_package, package_price, max_students, lesson_duration_min, freeze_limit, valid_from)
 values ('cc000000-0000-4000-8000-000000000001', 'mini', 12, 3200, 4, 60, 2, '1990-01-01');
 
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
-  ('dc000000-0000-4000-8000-000000000001', 'Group A', 'Математика', 8, 'mini', 'bc000000-0000-4000-8000-000000000001', '2000-01-01', 'active'),
-  ('dc000000-0000-4000-8000-000000000002', 'Group B', 'Химия', 9, 'mini', 'bc000000-0000-4000-8000-000000000002', '2000-01-01', 'active');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
+  ('dc000000-0000-4000-8000-000000000001', 'Group A', (select id from public.subjects where name = 'Математика'), 8, 'mini', 'bc000000-0000-4000-8000-000000000001', '2000-01-01', 'active'),
+  ('dc000000-0000-4000-8000-000000000002', 'Group B', (select id from public.subjects where name = 'Химия'), 9, 'mini', 'bc000000-0000-4000-8000-000000000002', '2000-01-01', 'active');
 
 -- S1 — 2 freezes used; S2 — first subscription used up, a second one waits; S3 — only an exhausted one;
 -- S4 — left the group before the lessons (not on the roster); S5 — group B

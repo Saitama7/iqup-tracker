@@ -4,6 +4,7 @@ import { queryOptions } from '@tanstack/react-query'
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { normalizePhone } from '@/lib/phone'
+import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import { parseDateRu } from '@/lib/time'
 import type { UsersSource } from './model'
@@ -25,7 +26,7 @@ const teacherSchema = z.object({
   phone: z.string().nullable(),
   teacher_rates: z.array(z.object({ percent: z.number(), valid_from: z.string() })),
   groups: z.array(
-    z.object({ subject: z.string(), status: z.enum(['forming', 'active', 'archived']) }),
+    z.object({ subject: subjectName, status: z.enum(['forming', 'active', 'archived']) }),
   ),
 })
 
@@ -40,7 +41,7 @@ export const usersQuery = () =>
         supabase
           .from('teachers')
           .select(
-            'id, user_id, full_name, phone, teacher_rates(percent, valid_from), groups(subject, status)',
+            'id, user_id, full_name, phone, teacher_rates(percent, valid_from), groups(subject:subjects(name), status)',
           ),
         supabase.rpc('user_last_sign_in'),
       ])

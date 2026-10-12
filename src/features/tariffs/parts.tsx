@@ -1,5 +1,6 @@
 import { LoaderCircle } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 // Same look as А8 (users-page): cards, table heads, 44 px inputs and buttons.
@@ -62,5 +63,34 @@ export function SubmitButton({
       {pending && <LoaderCircle className="size-4 animate-spin" aria-hidden />}
       {children}
     </button>
+  )
+}
+
+/** Small centred dialog of А9 (holidays, subjects). */
+export function SmallDialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  children,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  title: string
+  description: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="gap-4 rounded-[20px] border-line bg-card p-6 sm:max-w-md">
+        <div className="flex flex-col gap-1.5 pr-6">
+          <DialogTitle className="font-display text-lg font-bold">{title}</DialogTitle>
+          <DialogDescription className="text-sm font-bold text-ink-muted">
+            {description}
+          </DialogDescription>
+        </div>
+        {children}
+      </DialogContent>
+    </Dialog>
   )
 }

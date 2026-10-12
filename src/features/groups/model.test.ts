@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   addDays,
   attendanceSummary,
+  autoGroupName,
+  groupNameTaken,
+  groupNameTemplate,
   currentRules,
   extraLessonDateError,
   filterGroups,
@@ -58,6 +61,7 @@ const tariffs: TariffRow[] = [
 const group = (over: Partial<GroupRow> = {}): GroupRow => ({
   id: 'g1',
   name: '8 класс А',
+  subject_id: 's-math',
   subject: 'Математика',
   grade: 8,
   group_type: 'group',
@@ -361,5 +365,46 @@ describe('extraLessonDateError (И16)', () => {
   it('does not limit the admin or an incomplete date', () => {
     expect(extraLessonDateError('2020-01-01', undefined)).toBeNull()
     expect(extraLessonDateError(null, '2026-10-08')).toBeNull()
+  })
+})
+
+describe('autoGroupName (А3, #42)', () => {
+  const math = { subjectId: 's-math', grade: 7, groupType: 'group' as const }
+  const g = (name: string, over: Partial<GroupRow> = {}) => group({ name, ...over })
+
+  it('template from class and type', () => {
+    expect(groupNameTemplate(7, 'group')).toBe('7 класс')
+    expect(groupNameTemplate(7, 'pair')).toBe('7 класс · пара')
+    expect(groupNameTemplate(7, 'individual', 'Б')).toBe('7 класс Б · инд.')
+    expect(groupNameTemplate(3, 'afterschool')).toBe('3 класс')
+  })
+
+  it('plain name while the class is free', () => {
+    expect(autoGroupName(math, [])).toBe('7 класс')
+    expect(autoGroupName(math, [g('8 класс А'), g('7 класс', { subject_id: 's-chem' })])).toBe(
+      '7 класс',
+    )
+  })
+
+  it('a duplicate gets the next letter', () => {
+    expect(autoGroupName(math, [g('7 класс')])).toBe('7 класс А')
+    expect(autoGroupName(math, [g('7 класс'), g('7 класс А')])).toBe('7 класс Б')
+    expect(autoGroupName({ ...math, grade: 8 }, [g('8 класс А'), g(' 8 КЛАСС б ')])).toBe(
+      '8 класс В',
+    )
+    expect(autoGroupName({ ...math, groupType: 'pair' }, [g('7 класс · пара')])).toBe(
+      '7 класс А · пара',
+    )
+  })
+
+  it('archived groups free their names', () => {
+    expect(autoGroupName(math, [g('7 класс', { status: 'archived' })])).toBe('7 класс')
+  })
+
+  it('groupNameTaken matches the unique index', () => {
+    const groups = [g('7 класс'), g('7 класс А', { status: 'archived' })]
+    expect(groupNameTaken(' 7 КЛАСС ', 's-math', groups)).toBe(true)
+    expect(groupNameTaken('7 класс', 's-chem', groups)).toBe(false)
+    expect(groupNameTaken('7 класс А', 's-math', groups)).toBe(false)
   })
 })

@@ -27,6 +27,7 @@
 erDiagram
     USER ||--o| TEACHER : "является"
     TEACHER ||--o{ GROUP : "ведёт (основной)"
+    SUBJECT ||--o{ GROUP : "предмет"
     TEACHER ||--o{ TEACHER_RATE : "процент с датой"
     GROUP }o--|| TARIFF : "тарифицируется"
     GROUP ||--o{ SCHEDULE_RULE : "повторяется по"
@@ -99,10 +100,16 @@ erDiagram
         int freeze_limit "2"
         date valid_from
     }
+    SUBJECT {
+        uuid id
+        string name "уникально без учёта регистра"
+        int sort_order
+        bool is_active "скрытый — не предлагается новым группам"
+    }
     GROUP {
         uuid id
-        string name
-        string subject
+        string name "«7 класс А»; уникально в предмете среди неархивных"
+        uuid subject_id
         int grade
         enum group_type
         uuid teacher_id "основной — ему начисляется ЗП"

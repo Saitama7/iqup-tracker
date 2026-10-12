@@ -5,6 +5,7 @@ import { queryOptions, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { z } from 'zod'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
+import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import { monthEnd, monthStart } from './model'
 import type { MyMonthSource, PayrollSource, PreviewRow } from './model'
@@ -39,7 +40,7 @@ const myMonthSchema = z.object({
     z.object({
       id: z.uuid(),
       name: z.string(),
-      subject: z.string(),
+      subject: subjectName,
       group_type: GROUP_TYPE,
       enrollments: z.array(
         z.object({
@@ -85,7 +86,7 @@ export const myMonthQuery = (userId: string, month: string) =>
         supabase
           .from('teachers')
           .select(
-            `id, rates:teacher_rates(percent, valid_from), groups(id, name, subject, group_type, enrollments(student_id, start_date, end_date, status), lessons(id, lesson_date, planned_start, duration_min, status, confirmed_at, confirmed_late, ${PAY_ATTENDANCE_FIELDS}))`,
+            `id, rates:teacher_rates(percent, valid_from), groups(id, name, subject:subjects(name), group_type, enrollments(student_id, start_date, end_date, status), lessons(id, lesson_date, planned_start, duration_min, status, confirmed_at, confirmed_late, ${PAY_ATTENDANCE_FIELDS}))`,
           )
           .eq('user_id', userId)
           .gte('groups.lessons.lesson_date', monthStart(month))
@@ -155,7 +156,7 @@ const payrollTeacherSchema = z.object({
   full_name: z.string(),
   rates: z.array(RATE),
   groups: z.array(
-    z.object({ subject: z.string(), status: z.enum(['forming', 'active', 'archived']) }),
+    z.object({ subject: subjectName, status: z.enum(['forming', 'active', 'archived']) }),
   ),
 })
 
@@ -181,7 +182,7 @@ export const payrollQuery = (month: string, today: string) =>
         supabase
           .from('teachers')
           .select(
-            'id, full_name, rates:teacher_rates(percent, valid_from), groups(subject, status)',
+            'id, full_name, rates:teacher_rates(percent, valid_from), groups(subject:subjects(name), status)',
           )
           .order('full_name'),
         supabase

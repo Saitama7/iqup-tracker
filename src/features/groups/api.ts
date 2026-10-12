@@ -3,6 +3,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
+import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import { parseDateRu } from '@/lib/time'
 import type { GroupRow, LessonRow, TariffRow, TeacherRow } from './model'
@@ -17,7 +18,8 @@ const ruleSchema = z.object({
 const groupSchema = z.object({
   id: z.uuid(),
   name: z.string(),
-  subject: z.string(),
+  subject_id: z.uuid(),
+  subject: subjectName,
   grade: z.number().int().nullable(),
   group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
   status: z.enum(['forming', 'active', 'archived']),
@@ -63,7 +65,7 @@ export const groupsQuery = () =>
         supabase
           .from('groups')
           .select(
-            'id, name, subject, grade, group_type, status, start_date, end_date, room, teacher_id, teacher:teachers(full_name), schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(status)',
+            'id, name, subject_id, subject:subjects(name), grade, group_type, status, start_date, end_date, room, teacher_id, teacher:teachers(full_name), schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(status)',
           ),
         supabase
           .from('tariffs')
@@ -152,6 +154,8 @@ export function groupsErrorMessage(error: { code?: string; message?: string }): 
   }
   if (error.code === '23505') {
     if (m.includes('made up')) return 'Это занятие уже восполнено'
+    if (m.includes('groups_active_name_key'))
+      return 'Группа с таким названием по этому предмету уже есть'
     return 'В это время у группы уже есть занятие'
   }
   if (error.code === '23514') {
@@ -194,7 +198,7 @@ const weekdaysField = z
 /** «Новая группа» (А3). */
 export const groupForm = z.object({
   name: z.string().trim().min(1, 'Введите название').max(120, 'Слишком длинное название'),
-  subject: z.string().trim().min(1, 'Выберите предмет'),
+  subjectId: z.uuid({ error: 'Выберите предмет' }),
   grade: z
     .string()
     .trim()
@@ -258,7 +262,7 @@ export async function ensureLessons(until: string): Promise<number> {
 export async function createGroup(input: GroupInput, until: string) {
   const { data, error } = await supabase.rpc('create_group', {
     p_name: input.name,
-    p_subject: input.subject,
+    p_subject_id: input.subjectId,
     // a group without a class (Продлёнка, ОРТ) is a valid row: the RPC takes null
     p_grade: input.grade as number,
     p_group_type: input.groupType,
