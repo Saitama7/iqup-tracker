@@ -2,11 +2,12 @@
 // Marks live in local state until «Провести занятие» sends the whole roster in one RPC (0010).
 // Trials (Ж2/Ж3) get their own section under the roster; they never count in «Отмечено N из M».
 import { useQuery } from '@tanstack/react-query'
-import { Link, useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router'
-import { Check, ChevronLeft } from 'lucide-react'
+import { useNavigate } from '@tanstack/react-router'
+import { Check } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
+import { BackButton } from '@/components/shell/back-button'
 import { rateOn } from '@/features/payroll/calc'
 import { PRELIMINARY_NOTE } from '@/features/payroll/model'
 import { trialsQuery, useTrialsRealtime } from '@/features/trials/api'
@@ -197,25 +198,6 @@ function lockedReason({ sheet, state, editable }: SheetModel): string | null {
 
 const som = (n: number) => `${formatSom(n)} сом`
 
-function BackButton() {
-  const router = useRouter()
-  const canGoBack = useCanGoBack()
-  const navigate = useNavigate()
-  return (
-    <button
-      type="button"
-      aria-label="Назад"
-      onClick={() => {
-        if (canGoBack) router.history.back()
-        else void navigate({ to: '/today' })
-      }}
-      className="inline-flex size-11 items-center justify-center rounded-full bg-ink/8"
-    >
-      <ChevronLeft className="size-[22px]" strokeWidth={2.5} aria-hidden />
-    </button>
-  )
-}
-
 // ─── Marks ──────────────────────────────────────────────────────────────────
 
 const ACTIVE: Record<Mark, string> = {
@@ -341,12 +323,11 @@ function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
   return (
     <section className="flex flex-1 flex-col gap-3.5">
       <header className="-mx-5 -mt-[max(1.5rem,calc(env(safe-area-inset-top)+0.75rem))] flex flex-col gap-3 rounded-b-[28px] bg-brand px-5 pt-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] pb-3.5">
-        <div className="flex items-center justify-between">
-          <BackButton />
-          <span className="rounded-full bg-ink px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-brand">
+        <div className="flex items-center justify-between gap-2">
+          <BackButton tone="brand" />
+          <span className="min-w-0 truncate rounded-full bg-ink px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-brand">
             {stateChip(sheet, m.state, now)}
           </span>
-          <span className="w-11" />
         </div>
         <div className="flex flex-col gap-0.5">
           <h1 className="font-display text-[22px] leading-[1.15] font-bold">
@@ -488,13 +469,7 @@ function DesktopSheet({ m, now }: { m: SheetModel; now: number }) {
     <section className="flex flex-col gap-[22px]">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
-          <Link
-            to="/today"
-            className="inline-flex min-h-11 w-fit items-center gap-1.5 text-[13px] font-extrabold text-ink-muted"
-          >
-            <ChevronLeft className="size-4" strokeWidth={2.5} aria-hidden />
-            Сегодня
-          </Link>
+          <BackButton />
           <div className="flex flex-wrap items-center gap-3.5">
             <PageTitle className="min-[900px]:text-[28px]">
               {sheet.group.subject} · {sheet.group.name}

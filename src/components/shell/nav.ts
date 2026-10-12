@@ -132,6 +132,37 @@ export function isPushedScreen(pathname: string): boolean {
   )
 }
 
+export interface BackTarget {
+  to: AppPath
+  /** Parent screen name under the back chevron: «‹ Ученики». */
+  label: string
+}
+
+/** Home of the view with its tab / menu label («Сегодня», «Расчёт ЗП»). */
+function homeTarget(view: View): BackTarget {
+  const to = VIEW_HOME[view]
+  const label =
+    TABS[view].find((t) => t.to === to)?.label ?? NAV[view].find((i) => i.to === to)?.label
+  return { to, label: label ?? 'Назад' }
+}
+
+/**
+ * Parent of a screen for the phone back button (#57); null — a root (a tab or the view's home),
+ * no back button. Used when the history has no page of the app to return to (direct link,
+ * PWA icon).
+ */
+export function backTarget(pathname: string, view: View | null): BackTarget | null {
+  const path = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname
+  if (view && (path === VIEW_HOME[view] || TABS[view].some((t) => t.to === path))) return null
+  if (/^\/admin\/students\/[^/]+$/.test(path)) return { to: '/admin/students', label: 'Ученики' }
+  if (/^\/admin\/groups\/[^/]+$/.test(path)) return { to: '/admin/groups', label: 'Группы' }
+  if (/^\/groups\/[^/]+$/.test(path)) return { to: '/groups', label: 'Группы' }
+  if (/^\/lessons\/[^/]+$/.test(path)) {
+    return view === 'teacher' || !view ? { to: '/today', label: 'Сегодня' } : homeTarget(view)
+  }
+  return view ? homeTarget(view) : null
+}
+
 function viewOfPath(pathname: string): View | null {
   if (pathname === '/admin' || pathname.startsWith('/admin/')) return 'admin'
   if (pathname === '/payroll' || pathname.startsWith('/payroll/')) return 'accountant'

@@ -1,10 +1,10 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
-import { ChevronLeft, ChevronRight, LoaderCircle } from 'lucide-react'
+import { ChevronRight, LoaderCircle } from 'lucide-react'
 import { useId, useState, type ReactNode, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/page'
-import { VIEW_HOME, VIEW_LABEL, viewsFor } from '@/components/shell/nav'
+import { BackButton } from '@/components/shell/back-button'
+import { VIEW_LABEL, viewsFor } from '@/components/shell/nav'
 import { Avatar, ViewSwitch } from '@/components/shell/shell-parts'
 import { useSignOut } from '@/components/shell/use-sign-out'
 import { useView } from '@/components/shell/use-view'
@@ -111,16 +111,9 @@ export function ProfilePage() {
 
   return (
     <div className="flex flex-1 flex-col">
-      <div className="flex items-center justify-between">
-        <Link
-          to={view ? VIEW_HOME[view] : '/'}
-          aria-label="Назад"
-          className="flex size-11 items-center justify-center rounded-full border border-line bg-card text-ink"
-        >
-          <ChevronLeft className="size-[22px]" strokeWidth={2.5} aria-hidden />
-        </Link>
+      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+        <BackButton />
         <h1 className="text-sm font-extrabold">Профиль</h1>
-        <div className="w-11" />
       </div>
 
       <div className="pt-6">{identity}</div>

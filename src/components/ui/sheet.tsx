@@ -1,12 +1,23 @@
 'use client'
 
 import * as React from 'react'
+import { useBackClose } from '@/lib/use-back-close'
 import { cn } from '@/lib/utils'
 import { XIcon } from 'lucide-react'
 import { Dialog as SheetPrimitive } from 'radix-ui'
 
-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+// Controlled or not, the open state is tracked here so the phone «назад» can close it (#57).
+function Sheet(props: React.ComponentProps<typeof SheetPrimitive.Root>) {
+  const [openState, setOpenState] = React.useState(props.defaultOpen ?? false)
+  const open = props.open ?? openState
+  const setOpen = (next: boolean) => {
+    if (props.open === undefined) setOpenState(next)
+    props.onOpenChange?.(next)
+  }
+  useBackClose(open, () => {
+    setOpen(false)
+  })
+  return <SheetPrimitive.Root data-slot="sheet" {...props} open={open} onOpenChange={setOpen} />
 }
 
 function SheetTrigger({ ...props }: React.ComponentProps<typeof SheetPrimitive.Trigger>) {

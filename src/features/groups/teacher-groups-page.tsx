@@ -3,9 +3,10 @@
 // «Оплата» comes from the real balance: debt (1–3 lessons yellow, 4+ red), «пора оплачивать», partial.
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ChevronLeft, Info, Plus } from 'lucide-react'
+import { Info, Plus } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { PageHeader, PageTitle } from '@/components/page'
+import { BackButton } from '@/components/shell/back-button'
 import { lessonState, lessonsWord, pluralRu } from '@/features/lessons/select'
 import { displayPhone, groupLabel } from '@/features/students/model'
 import { tariffFor } from '@/features/tariffs/current'
@@ -137,13 +138,7 @@ export function TeacherGroupsPage({ groupId }: { groupId?: string }) {
     }
     return (
       <section className="flex flex-col gap-4">
-        <Link
-          to="/groups"
-          className="inline-flex min-h-11 w-fit items-center gap-1 text-sm font-extrabold text-teal"
-        >
-          <ChevronLeft className="size-4" aria-hidden />
-          Группы
-        </Link>
+        <BackButton />
         <Notice>{notice ?? 'Группа не найдена'}</Notice>
       </section>
     )
@@ -423,18 +418,11 @@ function MobileDetail({
   return (
     <section className="flex flex-1 flex-col gap-3.5">
       <header className="-mx-5 -mt-[max(1.5rem,calc(env(safe-area-inset-top)+0.75rem))] flex flex-col gap-3 rounded-b-[28px] bg-ink px-5 pt-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] pb-4 text-paper">
-        <div className="flex items-center justify-between">
-          <Link
-            to="/groups"
-            aria-label="Назад"
-            className="inline-flex size-11 items-center justify-center rounded-full bg-paper/10"
-          >
-            <ChevronLeft className="size-[22px]" strokeWidth={2.5} aria-hidden />
-          </Link>
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <BackButton tone="ink" />
           <span className="rounded-full bg-brand px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-ink">
             {GROUP_TYPE_LABEL[group.group_type]} · {capacity(summary)}
           </span>
-          <span className="w-11" />
         </div>
         <div className="flex flex-col gap-0.5">
           <h1 className="font-display text-[22px] leading-[1.15] font-bold">{groupLabel(group)}</h1>
