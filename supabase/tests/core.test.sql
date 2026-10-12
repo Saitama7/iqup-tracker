@@ -24,9 +24,9 @@ insert into public.profiles (id, phone, full_name, roles) values
 insert into public.tariffs (id, group_type, lessons_in_package, package_price, max_students, lesson_duration_min, freeze_limit, valid_from)
 values ('c0000000-0000-4000-8000-000000000001', 'group', 12, 3200, 10, 60, 2, '2000-01-01');
 
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
-  ('d0000000-0000-4000-8000-000000000001', 'Test A', 'Математика', 8, 'group', 'b0000000-0000-4000-8000-000000000001', '2000-01-01', 'active'),
-  ('d0000000-0000-4000-8000-000000000002', 'Test B', 'Химия', 9, 'group', 'b0000000-0000-4000-8000-000000000002', '2000-01-01', 'active');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
+  ('d0000000-0000-4000-8000-000000000001', 'Test A', (select id from public.subjects where name = 'Математика'), 8, 'group', 'b0000000-0000-4000-8000-000000000001', '2000-01-01', 'active'),
+  ('d0000000-0000-4000-8000-000000000002', 'Test B', (select id from public.subjects where name = 'Химия'), 9, 'group', 'b0000000-0000-4000-8000-000000000002', '2000-01-01', 'active');
 
 insert into public.students (id, full_name) values
   ('e0000000-0000-4000-8000-000000000001', 'Student A'),
@@ -66,8 +66,8 @@ select ok((select count(*) > 0 from public.tariffs), 'teacher reads tariffs');
 
 -- ─── Teacher A: writes ──────────────────────────────────────────────────────
 select throws_ok(
-  $$ insert into public.groups (name, subject, group_type, teacher_id, start_date)
-     values ('X', 'X', 'group', 'b0000000-0000-4000-8000-000000000001', '2000-01-01') $$,
+  $$ insert into public.groups (name, subject_id, group_type, teacher_id, start_date)
+     values ('X', (select id from public.subjects where name = 'Химия'), 'group', 'b0000000-0000-4000-8000-000000000001', '2000-01-01') $$,
   '42501', null, 'teacher cannot create groups'
 );
 select lives_ok(

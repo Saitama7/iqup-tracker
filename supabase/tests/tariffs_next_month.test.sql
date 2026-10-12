@@ -28,8 +28,8 @@ insert into public.teachers (id, full_name, phone) values
   ('b3500000-0000-4000-8000-000000000001', 'Teacher 35', '996000003502');
 insert into public.tariffs (id, group_type, lessons_in_package, package_price, max_students, lesson_duration_min, valid_from)
 values ('f3500000-0000-4000-8000-000000000001', 'mini', 12, 3800, 4, 60, '1990-01-01');
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
-  ('d3500000-0000-4000-8000-000000000001', 'Mini 35', 'Химия', 9, 'mini', 'b3500000-0000-4000-8000-000000000001', '1990-01-01', 'active');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
+  ('d3500000-0000-4000-8000-000000000001', 'Mini 35', (select id from public.subjects where name = 'Химия'), 9, 'mini', 'b3500000-0000-4000-8000-000000000001', '1990-01-01', 'active');
 insert into public.students (id, full_name) values ('e3500000-0000-4000-8000-000000000001', 'S35');
 insert into public.enrollments (id, student_id, group_id, start_date) values
   ('c3500000-0000-4000-8000-000000000001', 'e3500000-0000-4000-8000-000000000001', 'd3500000-0000-4000-8000-000000000001', '1990-01-01');

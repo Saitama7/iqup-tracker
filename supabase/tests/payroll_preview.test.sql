@@ -34,9 +34,9 @@ insert into public.tariffs (id, group_type, lessons_in_package, package_price, m
   ('fd000000-0000-4000-8000-000000000002', 'group', 12, 3600, 10, 60, 2, '2001-04-01'),
   ('fd000000-0000-4000-8000-000000000003', 'afterschool', 20, 7400, 8, 180, 2, '1999-01-01');
 
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
-  ('dd000000-0000-4000-8000-000000000001', 'Group A', 'Математика', 8, 'group', 'bd000000-0000-4000-8000-000000000001', '2001-01-01', 'active'),
-  ('dd000000-0000-4000-8000-000000000002', 'Group B', 'Продлёнка', 3, 'afterschool', 'bd000000-0000-4000-8000-000000000002', '2001-01-01', 'active');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
+  ('dd000000-0000-4000-8000-000000000001', 'Group A', (select id from public.subjects where name = 'Математика'), 8, 'group', 'bd000000-0000-4000-8000-000000000001', '2001-01-01', 'active'),
+  ('dd000000-0000-4000-8000-000000000002', 'Group B', (select id from public.subjects where name = 'Продлёнка'), 3, 'afterschool', 'bd000000-0000-4000-8000-000000000002', '2001-01-01', 'active');
 
 insert into public.students (id, full_name) values
   ('ed000000-0000-4000-8000-000000000001', 'S1'),
@@ -147,8 +147,8 @@ select is(
 -- rounding once per month, not per lesson: 3 lessons × 1 student at 158,33 (mini 3800 / 12 × 50 %)
 insert into public.tariffs (id, group_type, lessons_in_package, package_price, max_students, lesson_duration_min, freeze_limit, valid_from)
 values ('fd000000-0000-4000-8000-000000000004', 'mini', 12, 3800, 4, 60, 2, '1999-01-01');
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
-  ('dd000000-0000-4000-8000-000000000003', 'Mini B', 'Химия', 9, 'mini', 'bd000000-0000-4000-8000-000000000002', '2001-01-01', 'active');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
+  ('dd000000-0000-4000-8000-000000000003', 'Mini B', (select id from public.subjects where name = 'Химия'), 9, 'mini', 'bd000000-0000-4000-8000-000000000002', '2001-01-01', 'active');
 insert into public.enrollments (id, student_id, group_id, start_date) values
   ('cd000000-0000-4000-8000-000000000006', 'ed000000-0000-4000-8000-000000000004', 'dd000000-0000-4000-8000-000000000003', '2001-01-01');
 insert into public.subscriptions (id, enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at) values

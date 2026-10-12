@@ -51,18 +51,18 @@ insert into public.teacher_rates (teacher_id, percent, valid_from) values
   ('00000000-0000-4000-a000-000000000005', 45, '2026-09-01');
 
 -- Groups of Гульзат — У4 / УД3 / А3
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
-  ('00000000-0000-4000-b000-000000000001', '8 класс А', 'Математика', 8, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active'),
-  ('00000000-0000-4000-b000-000000000002', '6 класс',   'Математика', 6, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active'),
-  ('00000000-0000-4000-b000-000000000003', '8 класс Б', 'Математика', 8, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active'),
-  ('00000000-0000-4000-b000-000000000004', '5 класс',   'Математика', 5, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
+  ('00000000-0000-4000-b000-000000000001', '8 класс А', (select id from public.subjects where name = 'Математика'), 8, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active'),
+  ('00000000-0000-4000-b000-000000000002', '6 класс',   (select id from public.subjects where name = 'Математика'), 6, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active'),
+  ('00000000-0000-4000-b000-000000000003', '8 класс Б', (select id from public.subjects where name = 'Математика'), 8, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active'),
+  ('00000000-0000-4000-b000-000000000004', '5 класс',   (select id from public.subjects where name = 'Математика'), 5, 'group', '00000000-0000-4000-a000-000000000001', '2026-09-01', 'active');
 
 -- Other teachers' groups from А5 (one student each in the seed; the full rosters come with the Excel import, #14)
-insert into public.groups (id, name, subject, grade, group_type, teacher_id, start_date, status) values
-  ('00000000-0000-4000-b000-000000000005', 'утро',       'Продлёнка',  3,  'afterschool', '00000000-0000-4000-a000-000000000004', '2026-09-01', 'active'),
-  ('00000000-0000-4000-b000-000000000006', 'математика', 'ОРТ',        11, 'group',       '00000000-0000-4000-a000-000000000002', '2026-09-01', 'active'),
-  ('00000000-0000-4000-b000-000000000007', 'Бекзат',     'Индивидуально', 10, 'individual', '00000000-0000-4000-a000-000000000003', '2026-09-01', 'active'),
-  ('00000000-0000-4000-b000-000000000008', '9 класс',    'Химия',      9,  'group',       '00000000-0000-4000-a000-000000000005', '2026-09-01', 'active');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
+  ('00000000-0000-4000-b000-000000000005', 'утро',       (select id from public.subjects where name = 'Продлёнка'), 3,  'afterschool', '00000000-0000-4000-a000-000000000004', '2026-09-01', 'active'),
+  ('00000000-0000-4000-b000-000000000006', 'математика', (select id from public.subjects where name = 'ОРТ'), 11, 'group',       '00000000-0000-4000-a000-000000000002', '2026-09-01', 'active'),
+  ('00000000-0000-4000-b000-000000000007', 'Бекзат',     (select id from public.subjects where name = 'Индивидуально'), 10, 'individual', '00000000-0000-4000-a000-000000000003', '2026-09-01', 'active'),
+  ('00000000-0000-4000-b000-000000000008', '9 класс',    (select id from public.subjects where name = 'Химия'), 9,  'group',       '00000000-0000-4000-a000-000000000005', '2026-09-01', 'active');
 
 -- Schedule: 8А 09:00, 6 кл 11:00, 8Б 14:00 — ВТ/ЧТ/СБ; 5 кл 15:00 — ПН/СР/ПТ
 insert into public.schedule_rules (group_id, weekday, start_time, valid_from)

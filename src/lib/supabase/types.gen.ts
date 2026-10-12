@@ -194,7 +194,7 @@ export type Database = {
           room: string | null
           start_date: string
           status: Database['public']['Enums']['group_status']
-          subject: string
+          subject_id: string
           teacher_id: string
         }
         ComputedFields: never
@@ -208,7 +208,7 @@ export type Database = {
           room?: string | null
           start_date: string
           status?: Database['public']['Enums']['group_status']
-          subject: string
+          subject_id: string
           teacher_id: string
         }
         Update: {
@@ -221,10 +221,17 @@ export type Database = {
           room?: string | null
           start_date?: string
           status?: Database['public']['Enums']['group_status']
-          subject?: string
+          subject_id?: string
           teacher_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: 'groups_subject_id_fkey'
+            columns: ['subject_id']
+            isOneToOne: false
+            referencedRelation: 'subjects'
+            referencedColumns: ['id']
+          },
           {
             foreignKeyName: 'groups_teacher_id_fkey'
             columns: ['teacher_id']
@@ -458,6 +465,31 @@ export type Database = {
             referencedColumns: ['id']
           },
         ]
+      }
+      subjects: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+        }
+        Relationships: []
       }
       subscriptions: {
         Row: {
@@ -811,7 +843,7 @@ export type Database = {
           p_room: string
           p_start_date: string
           p_start_time: string
-          p_subject: string
+          p_subject_id: string
           p_teacher_id: string
           p_until: string
           p_weekdays: number[]
