@@ -8,9 +8,11 @@ import { GULZAT, KANYKEI, login } from './support/auth'
 
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900
 
-// One student per project, so the two viewports never touch the same rows.
+// One student per project and per --repeat-each copy, so parallel runs never touch the same rows:
+// removeStudent() deletes by name (#38).
 const testName = (testInfo: TestInfo) =>
-  testInfo.project.name === 'webkit-desktop' ? 'Тестовый Десктопов' : 'Тестовый Мобильный'
+  (testInfo.project.name === 'webkit-desktop' ? 'Тестовый Десктопов' : 'Тестовый Мобильный') +
+  ` ${testInfo.repeatEachIndex + 1}`
 
 async function removeStudent(fullName: string) {
   const env = localSupabase()
