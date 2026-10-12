@@ -657,6 +657,49 @@ export type Database = {
       }
     }
     Views: {
+      v_audit_feed: {
+        Row: {
+          action: string | null
+          actor_id: string | null
+          after: Json | null
+          at: string | null
+          before: Json | null
+          entity: string | null
+          entity_id: string | null
+          id: string | null
+          kind: string | null
+          marks: Json | null
+          reason: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          action?: string | null
+          actor_id?: string | null
+          after?: Json | null
+          at?: string | null
+          before?: Json | null
+          entity?: string | null
+          entity_id?: string | null
+          id?: string | null
+          kind?: never
+          marks?: never
+          reason?: string | null
+        }
+        Update: {
+          action?: string | null
+          actor_id?: string | null
+          after?: Json | null
+          at?: string | null
+          before?: Json | null
+          entity?: string | null
+          entity_id?: string | null
+          id?: string | null
+          kind?: never
+          marks?: never
+          reason?: string | null
+        }
+        Relationships: []
+      }
       v_lesson_status: {
         Row: {
           cancel_reason: Database['public']['Enums']['cancel_reason'] | null

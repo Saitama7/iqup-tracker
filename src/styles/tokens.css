@@ -41,4 +41,8 @@
   --trial-soft: #f7f3ff;
   --trial-strong: #5b34d6;
   --today-col: #fffbeb;
+  /* А10: tinted rows (правка задним числом / поздно) and the day band */
+  --burned-tint: #fff4f4;
+  --warn-tint: #fff8e1;
+  --band: #f5f2e8;
 }

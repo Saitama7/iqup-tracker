@@ -374,5 +374,5 @@ stateDiagram-v2
 - `attendance.consumes_credit` ⇔ `status ∈ {present, absent_burned}`.
 - На одном абонементе `count(absent_frozen) ≤ freeze_limit`.
 - Баланс ученика (уроки и деньги) и сумма ЗП — **вычисляются** из первичных данных, не хранятся редактируемыми.
-- Любое изменение `lessons`, `attendance`, `payments`, `subscriptions`, `teacher_rates`, `enrollments` — строка в `AUDIT_LOG`.
+- Любое изменение `lessons`, `attendance`, `payments`, `subscriptions`, `teacher_rates`, `enrollments`, `trials`, `tariffs`, `subjects` — строка в `AUDIT_LOG` (экран А10, `v_audit_feed`).
 - Закрытый период пересчитывается в то же значение (ставки и тарифы с `valid_from`).

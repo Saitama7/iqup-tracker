@@ -1,0 +1,633 @@
+// А10 «Журнал изменений»: one audit_log row → a line a person can read. Pure: (row, lookups) only —
+// names come from lookups (current names), everything else from the row's before/after snapshots, so
+// a deleted lesson or rate still reads. Every table with the audit trigger (CLAUDE.md invariant 4)
+// has its describer here; a table without one falls back to «… запись изменена».
+import { firstName, groupLabel, ATTENDANCE_LABEL } from '@/features/students/model'
+import { pluralRu } from '@/features/lessons/select'
+import { CANCEL_REASON_LABEL, type AttendanceStatus } from '@/features/groups/model'
+import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
+import type { GroupType } from '@/features/tariffs/current'
+
+export type AuditAction = 'insert' | 'update' | 'delete'
+/** v_audit_feed.kind (0014) — the filter chips. */
+export type AuditKind = 'retro' | 'late' | 'payment' | 'attendance' | 'other'
+export type Snapshot = Record<string, unknown>
+
+export interface AuditRow {
+  id: string
+  actorId: string | null
+  entity: string
+  entityId: string
+  action: AuditAction
+  before: Snapshot | null
+  after: Snapshot | null
+  reason: string | null
+  at: string
+  kind: AuditKind
+  /** Statuses of the marks written by the same «Провести» (lesson rows only). */
+  marks: string[] | null
+}
+
+export interface AuditLookups {
+  /** profiles.id → full_name (authors). */
+  profiles: Record<string, string>
+  students: Record<string, string>
+  teachers: Record<string, string>
+  groups: Record<string, { name: string; subject: string }>
+  lessons: Record<string, { groupId: string; date: string; start: string }>
+  enrollments: Record<string, { studentId: string; groupId: string }>
+  tariffs: { id: string; groupType: GroupType; validFrom: string; price: number; lessons: number }[]
+}
+
+export const EMPTY_LOOKUPS: AuditLookups = {
+  profiles: {},
+  students: {},
+  teachers: {},
+  groups: {},
+  lessons: {},
+  enrollments: {},
+  tariffs: [],
+}
+
+export type BadgeTone = 'present' | 'burned' | 'warn' | 'stone' | 'teal'
+export type TextTone = 'present' | 'burned' | 'frozen'
+/** A piece of the line: plain text, or a name / status shown in bold or colour (as on the artboard). */
+export type Part = string | { text: string; strong?: true; tone?: TextTone }
+
+export type AuditLink =
+  | { to: '/admin/groups/$groupId'; params: { groupId: string }; label: string }
+  | { to: '/admin/students/$studentId'; params: { studentId: string }; label: string }
+  | { to: '/admin/users'; label: string }
+  | { to: '/admin/settings'; label: string }
+
+export interface AuditEntry {
+  id: string
+  at: string
+  kind: AuditKind
+  /** Full name, «Система» for service role / migrations, «Пользователь» if the profile is gone. */
+  author: string
+  badge: { label: string; tone: BadgeTone }
+  parts: Part[]
+  /** «Причина: «…»», a cancel comment. */
+  note: string | null
+  link: AuditLink | null
+}
+
+// ─── Labels ─────────────────────────────────────────────────────────────────
+
+export const KIND_LABEL: Record<AuditKind, string> = {
+  retro: 'Правки задним числом',
+  late: 'Поздние подтверждения',
+  payment: 'Оплаты',
+  attendance: 'Посещаемость',
+  other: 'Остальное',
+}
+
+/** Tables with the audit trigger, for «Все таблицы ▾». payments / trials come in R2. */
+export const ENTITY_LABEL: Record<string, string> = {
+  lessons: 'Занятия',
+  attendance: 'Посещаемость',
+  subscriptions: 'Абонементы',
+  enrollments: 'Зачисления',
+  teacher_rates: 'Ставки учителей',
+  tariffs: 'Тарифы',
+  subjects: 'Предметы',
+}
+
+const STATUS_TONE: Record<AttendanceStatus, TextTone> = {
+  present: 'present',
+  absent_frozen: 'frozen',
+  absent_burned: 'burned',
+}
+
+// ─── Snapshot readers ───────────────────────────────────────────────────────
+
+const str = (s: Snapshot | null, key: string): string | null => {
+  const v = s?.[key]
+  return typeof v === 'string' ? v : null
+}
+const num = (s: Snapshot | null, key: string): number | null => {
+  const v = s?.[key]
+  return typeof v === 'number' ? v : null
+}
+const bool = (s: Snapshot | null, key: string): boolean | null => {
+  const v = s?.[key]
+  return typeof v === 'boolean' ? v : null
+}
+const changed = (row: AuditRow, key: string) =>
+  JSON.stringify(row.before?.[key] ?? null) !== JSON.stringify(row.after?.[key] ?? null)
+/** The row as it is now (after), or as it was before a delete. */
+const current = (row: AuditRow): Snapshot | null => row.after ?? row.before
+
+/** A label from an enum map; an unknown value (a newer enum than the client) is shown as is. */
+const labelOf = (labels: Record<string, string>, value: string): string =>
+  (labels as Partial<Record<string, string>>)[value] ?? value
+
+const isAttendanceStatus = (v: string | null): v is AttendanceStatus =>
+  v === 'present' || v === 'absent_frozen' || v === 'absent_burned'
+
+// ─── Formatting ─────────────────────────────────────────────────────────────
+
+/** '2026-10-10' → «10.10»; another year → «10.10.2025» is not needed for a journal of this year. */
+export const dayMonth = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`
+/** '2026-10-10' → «10.10.2026». */
+const fullDate = (iso: string) => `${dayMonth(iso)}.${iso.slice(0, 4)}`
+/** '09:00:00' → «09:00». */
+const hhmm = (time: string) => time.slice(0, 5)
+
+const BISHKEK_MS = 6 * 60 * 60 * 1000
+/** Postgres sends microseconds; older WebKit parses at most milliseconds. */
+const parseTs = (ts: string) => Date.parse(ts.replace(/(\.\d{3})\d+/, '$1'))
+/** Bishkek wall clock of a timestamptz: «13:40». */
+export const bishkekTime = (at: string) =>
+  new Date(parseTs(at) + BISHKEK_MS).toISOString().slice(11, 16)
+/** Bishkek calendar date of a timestamptz. */
+export const bishkekDay = (at: string) =>
+  new Date(parseTs(at) + BISHKEK_MS).toISOString().slice(0, 10)
+
+const strong = (text: string): Part => ({ text, strong: true })
+const status = (s: string | null): Part =>
+  isAttendanceStatus(s) ? { text: ATTENDANCE_LABEL[s], tone: STATUS_TONE[s] } : (s ?? '—')
+
+/** «был 7, заморозка 1, не был 1» — a held lesson's marks. */
+export function marksSummary(marks: readonly string[]): string {
+  const count = (s: AttendanceStatus) => marks.filter((m) => m === s).length
+  return [
+    `был ${count('present')}`,
+    count('absent_frozen') > 0 ? `заморозка ${count('absent_frozen')}` : null,
+    count('absent_burned') > 0 ? `не был ${count('absent_burned')}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
+/** Text of the parts, for tests and aria. */
+export const entryText = (parts: readonly Part[]) =>
+  parts.map((p) => (typeof p === 'string' ? p : p.text)).join('')
+
+// ─── Describers ─────────────────────────────────────────────────────────────
+
+type Described = Pick<AuditEntry, 'badge' | 'parts' | 'link'> & { note?: string | null }
+
+const groupName = (id: string | null, l: AuditLookups) => {
+  const g = id ? l.groups[id] : undefined
+  return g ? groupLabel(g) : 'группа'
+}
+const groupLink = (groupId: string | null): AuditLink | null =>
+  groupId ? { to: '/admin/groups/$groupId', params: { groupId }, label: 'Группа' } : null
+const studentLink = (studentId: string | null): AuditLink | null =>
+  studentId ? { to: '/admin/students/$studentId', params: { studentId }, label: 'Ученик' } : null
+
+/** «Математика · 8 класс Б, 10.10 в 09:00». */
+function lessonWhere(
+  lesson: { groupId: string | null; date: string | null; start: string | null },
+  l: AuditLookups,
+) {
+  const when = [
+    lesson.date ? dayMonth(lesson.date) : null,
+    lesson.start ? `в ${hhmm(lesson.start)}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ')
+  return [groupName(lesson.groupId, l), when].filter(Boolean).join(', ')
+}
+
+function describeAttendance(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const studentId = str(s, 'student_id')
+  const lessonId = str(s, 'lesson_id')
+  const lesson = lessonId ? l.lessons[lessonId] : undefined
+  const student = strong((studentId && l.students[studentId]) || 'ученик')
+  const where = lesson
+    ? ` · ${lessonWhere({ groupId: lesson.groupId, date: lesson.date, start: lesson.start }, l)}`
+    : ''
+  const link = groupLink(lesson?.groupId ?? null)
+  const badge = { label: 'Правка', tone: 'burned' as const }
+  const before = str(row.before, 'status')
+  const after = str(row.after, 'status')
+
+  if (row.action === 'insert') {
+    return { badge, link, parts: ['Отметка ', student, ' добавлена: ', status(after), where] }
+  }
+  if (row.action === 'delete') {
+    return {
+      badge,
+      link,
+      parts: ['Отметка ', student, ' удалена (была ', status(before), ')', where],
+    }
+  }
+  if (before !== after) {
+    return {
+      badge,
+      link,
+      parts: ['Отметка ', student, ': ', status(before), ' → ', status(after), where],
+    }
+  }
+  return {
+    badge,
+    link,
+    parts: ['Отметка ', student, ': урок списан с другого абонемента', where],
+  }
+}
+
+function lateBy(row: AuditRow): string | null {
+  const date = str(row.after, 'lesson_date')
+  const confirmedAt = str(row.after, 'confirmed_at') ?? row.at
+  if (!date) return null
+  const days = Math.round((Date.parse(bishkekDay(confirmedAt)) - Date.parse(date)) / 86_400_000)
+  if (days <= 0) return null
+  return days === 1
+    ? 'на следующий день'
+    : `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`
+}
+
+function describeLesson(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const groupId = str(s, 'group_id')
+  const where = lessonWhere(
+    { groupId, date: str(s, 'lesson_date'), start: str(s, 'planned_start') },
+    l,
+  )
+  const link = groupLink(groupId)
+  const before = str(row.before, 'status')
+  const after = str(row.after, 'status')
+  const marks = row.marks ? ` · ${marksSummary(row.marks)}` : ''
+
+  if (row.action === 'insert') {
+    return bool(row.after, 'is_extra')
+      ? {
+          badge: { label: 'Доп. урок', tone: 'teal' },
+          link,
+          parts: [`Доп. урок ${where} назначен`],
+        }
+      : {
+          badge: { label: 'Занятие', tone: 'stone' },
+          link,
+          parts: [`Занятие ${where} запланировано`],
+        }
+  }
+  if (row.action === 'delete') {
+    return {
+      badge:
+        before === 'held'
+          ? { label: 'Правка', tone: 'burned' }
+          : { label: 'Удалено', tone: 'stone' },
+      link,
+      parts: [`${before === 'held' ? 'Проведённое занятие' : 'Занятие'} ${where} удалено`],
+    }
+  }
+  if (before === 'planned' && after === 'held') {
+    const late = bool(row.after, 'confirmed_late')
+    if (late) {
+      const by = lateBy(row)
+      return {
+        badge: { label: 'Поздно', tone: 'warn' },
+        link,
+        parts: [
+          `Занятие ${where} подтверждено с опозданием`,
+          ...(by ? [' — ', strong(by)] : []),
+          marks,
+        ],
+      }
+    }
+    return {
+      badge: { label: 'Проведено', tone: 'present' },
+      link,
+      parts: [`Занятие ${where} проведено${marks}`],
+    }
+  }
+  if (after === 'cancelled' && before !== 'cancelled') {
+    const reason = str(row.after, 'cancel_reason')
+    const comment = str(row.after, 'comment')
+    return {
+      badge:
+        before === 'held'
+          ? { label: 'Правка', tone: 'burned' }
+          : { label: 'Отмена', tone: 'stone' },
+      link,
+      parts: [
+        `${before === 'held' ? 'Проведённое занятие' : 'Занятие'} ${where} отменено`,
+        reason ? `: ${labelOf(CANCEL_REASON_LABEL, reason)}` : '',
+      ],
+      note: comment ? `Комментарий: «${comment}»` : null,
+    }
+  }
+  if (changed(row, 'lesson_date') || changed(row, 'planned_start')) {
+    const from = lessonWhere(
+      { groupId, date: str(row.before, 'lesson_date'), start: str(row.before, 'planned_start') },
+      l,
+    )
+    const to = [
+      dayMonth(str(row.after, 'lesson_date') ?? ''),
+      `в ${hhmm(str(row.after, 'planned_start') ?? '')}`,
+    ].join(' ')
+    return {
+      badge: { label: 'Перенос', tone: 'stone' },
+      link,
+      parts: [`Занятие ${from} перенесено на ${to}`],
+    }
+  }
+  if (changed(row, 'substitute_teacher_id')) {
+    const sub = str(row.after, 'substitute_teacher_id')
+    return {
+      badge: { label: 'Замена', tone: 'teal' },
+      link,
+      parts: sub
+        ? [`Занятие ${where}: замена — `, strong(l.teachers[sub] ?? 'учитель')]
+        : [`Занятие ${where}: замена снята`],
+    }
+  }
+  if (changed(row, 'is_locked') && bool(row.after, 'is_locked')) {
+    return {
+      badge: { label: 'Период', tone: 'stone' },
+      link,
+      parts: [`Занятие ${where} закрыто в периоде`],
+    }
+  }
+  if (changed(row, 'comment')) {
+    const comment = str(row.after, 'comment')
+    return {
+      badge: { label: 'Занятие', tone: 'stone' },
+      link,
+      parts: [
+        comment
+          ? `Занятие ${where}: комментарий «${comment}»`
+          : `Занятие ${where}: комментарий удалён`,
+      ],
+    }
+  }
+  return { badge: { label: 'Занятие', tone: 'stone' }, link, parts: [`Занятие ${where} изменено`] }
+}
+
+function enrollmentOf(s: Snapshot | null, l: AuditLookups) {
+  const id = str(s, 'enrollment_id')
+  return id ? l.enrollments[id] : undefined
+}
+
+/** «Камила Орозова · Математика · 8 класс А — ». */
+function whoIn(studentId: string | null, groupId: string | null, l: AuditLookups): Part[] {
+  const student = (studentId && l.students[studentId]) || 'Ученик'
+  return [strong(student), groupId ? ` · ${groupName(groupId, l)} — ` : ' — ']
+}
+
+function describeSubscription(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const e = enrollmentOf(s, l)
+  const who = whoIn(e?.studentId ?? null, e?.groupId ?? null, l)
+  const link = studentLink(e?.studentId ?? null)
+  const lessons = num(s, 'lessons_total') ?? 0
+  const price = num(s, 'price_final') ?? 0
+  const package_ = `${lessons} ${pluralRu(lessons, ['урок', 'урока', 'уроков'])}`
+
+  if (row.action === 'insert') {
+    const discount = num(row.after, 'discount_percent') ?? 0
+    return {
+      badge: { label: 'Оплата', tone: 'present' },
+      link,
+      parts: [
+        ...who,
+        `новый абонемент ${package_}, `,
+        strong(`${formatSom(price)} сом`),
+        discount > 0 ? ` (скидка ${discount} %)` : '',
+      ],
+    }
+  }
+  if (row.action === 'delete') {
+    return {
+      badge: { label: 'Абонемент', tone: 'stone' },
+      link,
+      parts: [...who, `абонемент ${package_} удалён`],
+    }
+  }
+  const after = str(row.after, 'status')
+  if (changed(row, 'status') && after === 'refunded') {
+    return {
+      badge: { label: 'Возврат', tone: 'burned' },
+      link,
+      parts: [...who, `возврат абонемента ${package_} (`, strong(`${formatSom(price)} сом`), ')'],
+    }
+  }
+  if (changed(row, 'status') && after === 'exhausted') {
+    return {
+      badge: { label: 'Абонемент', tone: 'stone' },
+      link,
+      parts: [...who, `абонемент ${package_} израсходован`],
+    }
+  }
+  if (changed(row, 'status') && after === 'active') {
+    return {
+      badge: { label: 'Абонемент', tone: 'stone' },
+      link,
+      parts: [...who, `абонемент ${package_} снова активен`],
+    }
+  }
+  return {
+    badge: { label: 'Абонемент', tone: 'stone' },
+    link,
+    parts: [...who, `абонемент ${package_} изменён`],
+  }
+}
+
+function describeEnrollment(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const studentId = str(s, 'student_id')
+  const group = groupName(str(s, 'group_id'), l)
+  const who: Part[] = [strong((studentId && l.students[studentId]) || 'Ученик'), ' — ']
+  const link = studentLink(studentId)
+  const badge = { label: 'Зачисление', tone: 'teal' as const }
+
+  if (row.action === 'insert') {
+    const from = str(row.after, 'start_date')
+    return {
+      badge,
+      link,
+      parts: [...who, `зачисление в ${group}${from ? ` с ${fullDate(from)}` : ''}`],
+    }
+  }
+  if (row.action === 'delete') {
+    return {
+      badge: { label: 'Зачисление', tone: 'stone' },
+      link,
+      parts: [...who, `зачисление в ${group} удалено`],
+    }
+  }
+  if (changed(row, 'status') && str(row.after, 'status') === 'finished') {
+    const until = str(row.after, 'end_date')
+    return {
+      badge: { label: 'Выбыл', tone: 'stone' },
+      link,
+      parts: [...who, `зачисление в ${group} закрыто${until ? ` с ${fullDate(until)}` : ''}`],
+    }
+  }
+  return {
+    badge: { label: 'Зачисление', tone: 'stone' },
+    link,
+    parts: [...who, `зачисление в ${group} изменено`],
+  }
+}
+
+function describeRate(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const teacherId = str(s, 'teacher_id')
+  const who: Part[] = [strong((teacherId && l.teachers[teacherId]) || 'Учитель'), ' — ']
+  const link: AuditLink = { to: '/admin/users', label: 'Учителя' }
+  const from = str(s, 'valid_from')
+  const since = from ? ` с ${fullDate(from)}` : ''
+  const badge =
+    row.kind === 'retro'
+      ? { label: 'Правка', tone: 'burned' as const }
+      : { label: 'Ставка', tone: 'teal' as const }
+
+  if (row.action === 'insert') {
+    return { badge, link, parts: [...who, `ставка ${num(row.after, 'percent')} %${since}`] }
+  }
+  if (row.action === 'delete') {
+    return {
+      badge,
+      link,
+      parts: [...who, `ставка ${num(row.before, 'percent')} %${since} удалена`],
+    }
+  }
+  if (changed(row, 'valid_from')) {
+    const was = str(row.before, 'valid_from')
+    return {
+      badge,
+      link,
+      parts: [
+        ...who,
+        `ставка ${num(row.after, 'percent')} %: с ${was ? fullDate(was) : '—'} → ${since.trim()}`,
+      ],
+    }
+  }
+  return {
+    badge,
+    link,
+    parts: [
+      ...who,
+      `ставка${since}: ${num(row.before, 'percent')} % → ${num(row.after, 'percent')} %`,
+    ],
+  }
+}
+
+function describeTariff(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const type = str(s, 'group_type')
+  const label = `Тариф «${type ? labelOf(GROUP_TYPE_LABEL, type) : '—'}»`
+  const from = str(s, 'valid_from') ?? ''
+  const price = num(s, 'package_price') ?? 0
+  const lessons = num(s, 'lessons_in_package') ?? 0
+  const badge = { label: 'Тариф', tone: 'teal' as const }
+  const link: AuditLink = { to: '/admin/settings', label: 'Тарифы' }
+  const package_ = `${lessons} ${pluralRu(lessons, ['урок', 'урока', 'уроков'])}`
+
+  if (row.action === 'delete') {
+    return {
+      badge: { label: 'Тариф', tone: 'stone' },
+      link,
+      parts: [`${label} с ${fullDate(from)} отменён`],
+    }
+  }
+  if (row.action === 'update') {
+    const was = num(row.before, 'package_price') ?? 0
+    return {
+      badge,
+      link,
+      parts: [
+        `${label} с ${fullDate(from)}: ${formatSom(was)} → `,
+        strong(`${formatSom(price)} сом`),
+      ],
+    }
+  }
+  // the version in effect before this one: «3 000 → 3 200 с 01.11.2026»
+  const prev = l.tariffs
+    .filter((t) => t.groupType === type && t.validFrom < from && t.id !== row.entityId)
+    .sort((a, b) => b.validFrom.localeCompare(a.validFrom))[0]
+  if (!prev) {
+    return {
+      badge,
+      link,
+      parts: [
+        `${label}: `,
+        strong(`${formatSom(price)} сом`),
+        ` за ${package_} с ${fullDate(from)}`,
+      ],
+    }
+  }
+  return {
+    badge,
+    link,
+    parts: [
+      `${label}: ${formatSom(prev.price)} → `,
+      strong(`${formatSom(price)} сом`),
+      prev.lessons !== lessons ? ` за ${package_}` : '',
+      ` с ${fullDate(from)}`,
+    ],
+  }
+}
+
+function describeSubject(row: AuditRow): Described {
+  const name = str(current(row), 'name') ?? '—'
+  const badge = { label: 'Предмет', tone: 'stone' as const }
+  const link: AuditLink = { to: '/admin/settings', label: 'Предметы' }
+  if (row.action === 'insert') return { badge, link, parts: ['Предмет добавлен: ', strong(name)] }
+  if (row.action === 'delete') return { badge, link, parts: ['Предмет удалён: ', strong(name)] }
+  if (changed(row, 'name')) {
+    return { badge, link, parts: [`Предмет: ${str(row.before, 'name') ?? '—'} → `, strong(name)] }
+  }
+  if (changed(row, 'is_active')) {
+    return {
+      badge,
+      link,
+      parts: [bool(row.after, 'is_active') ? 'Предмет показан: ' : 'Предмет скрыт: ', strong(name)],
+    }
+  }
+  return { badge, link, parts: ['Предмет ', strong(name), ': порядок в списке изменён'] }
+}
+
+const ACTION_TEXT: Record<AuditAction, string> = {
+  insert: 'запись добавлена',
+  update: 'запись изменена',
+  delete: 'запись удалена',
+}
+
+function describeOther(row: AuditRow): Described {
+  return {
+    badge: { label: 'Изменение', tone: 'stone' },
+    link: null,
+    parts: [`${ENTITY_LABEL[row.entity] ?? row.entity}: ${ACTION_TEXT[row.action]}`],
+  }
+}
+
+const DESCRIBERS: Record<string, (row: AuditRow, l: AuditLookups) => Described> = {
+  attendance: describeAttendance,
+  lessons: describeLesson,
+  subscriptions: describeSubscription,
+  enrollments: describeEnrollment,
+  teacher_rates: describeRate,
+  tariffs: describeTariff,
+  subjects: describeSubject,
+}
+
+/** The author's name: «Система» — service role, migrations, imports (no auth.uid()). */
+export function authorName(actorId: string | null, l: AuditLookups): string {
+  if (!actorId) return 'Система'
+  return l.profiles[actorId] ?? 'Пользователь'
+}
+
+export const authorShort = (author: string) =>
+  author === 'Система' || author === 'Пользователь' ? author : firstName(author)
+
+export function describeAuditRow(row: AuditRow, lookups: AuditLookups): AuditEntry {
+  const d = (DESCRIBERS[row.entity] ?? describeOther)(row, lookups)
+  const reason = row.reason && row.reason !== 'confirm_lesson' ? `Причина: «${row.reason}»` : null
+  return {
+    id: row.id,
+    at: row.at,
+    kind: row.kind,
+    author: authorName(row.actorId, lookups),
+    badge: d.badge,
+    parts: d.parts.filter((p) => p !== ''),
+    note: [reason, d.note ?? null].filter(Boolean).join(' · ') || null,
+    link: d.link,
+  }
+}
