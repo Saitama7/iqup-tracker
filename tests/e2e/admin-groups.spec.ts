@@ -190,7 +190,14 @@ test('create a group from А3 → future lessons on А4; cancel, make up, substi
   await edit.getByRole('button', { name: 'Сохранить' }).click()
   await expect(edit).toBeHidden()
   await expect(page.getByText('Активна', { exact: true })).toBeVisible()
-  await expect(upcoming.getByRole('listitem').filter({ hasText: /ср 19:00/ })).toHaveCount(0)
+  // Only planned ones go: the lesson cancelled above stays with its make-up link, and it is a
+  // Wednesday whenever the test runs from Monday 19:00 to Wednesday 19:00.
+  await expect(
+    upcoming
+      .getByRole('listitem')
+      .filter({ hasText: /ср 19:00/ })
+      .filter({ hasText: 'запланировано' }),
+  ).toHaveCount(0)
   await expect(
     upcoming
       .getByRole('listitem')
