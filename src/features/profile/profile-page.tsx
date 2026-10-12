@@ -8,6 +8,7 @@ import { VIEW_HOME, VIEW_LABEL, viewsFor } from '@/components/shell/nav'
 import { Avatar, ViewSwitch } from '@/components/shell/shell-parts'
 import { useSignOut } from '@/components/shell/use-sign-out'
 import { useView } from '@/components/shell/use-view'
+import { BUILD_SHA } from '@/lib/app-reset'
 import { useSession } from '@/lib/auth'
 import { useNow } from '@/lib/now'
 import { formatPhoneIntl } from '@/lib/phone'
@@ -75,6 +76,7 @@ export function ProfilePage() {
       <p className="py-1.5 text-center text-xs font-bold text-ink-muted">
         Изменить имя, телефон или процент может только администратор
       </p>
+      <p className="text-center text-[11px] font-bold text-ink-muted">Версия {BUILD_SHA}</p>
     </>
   )
   const signOutButton = (
