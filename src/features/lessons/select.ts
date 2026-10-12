@@ -43,6 +43,41 @@ export function lessonState(l: LessonTiming, now: number): LessonState {
   return 'ended_unconfirmed'
 }
 
+export interface ConfirmCopy {
+  /** The button. */
+  action: string
+  /** Not every student is marked yet. */
+  hint: string
+  /** While the database answers. */
+  busy: string
+  /** Success toast, «· HH:MM» is appended. */
+  done: string
+  /** Error toast, «: <reason>» is appended. */
+  failed: string
+}
+
+/**
+ * Words of the sheet's action (#41): a lesson that is over (an earlier day or past its end) is
+ * confirmed after the fact — «Подтвердить занятие»; a current one is held — «Провести занятие».
+ */
+export function confirmCopy(state: LessonState): ConfirmCopy {
+  return state === 'ended_unconfirmed'
+    ? {
+        action: 'Подтвердить занятие',
+        hint: 'Отметьте всех, чтобы подтвердить',
+        busy: 'Подтверждаем…',
+        done: 'Занятие подтверждено',
+        failed: 'Не удалось подтвердить занятие',
+      }
+    : {
+        action: 'Провести занятие',
+        hint: 'Отметьте всех, чтобы провести',
+        busy: 'Проводим…',
+        done: 'Занятие проведено',
+        failed: 'Не удалось провести занятие',
+      }
+}
+
 /** Planned lesson inside the deck's «current» window: start − 15 min ≤ now ≤ end + 30 min. */
 export function inCurrentWindow(l: LessonTiming, now: number): boolean {
   return (

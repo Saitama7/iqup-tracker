@@ -263,11 +263,8 @@ export const lessonSheetQuery = (lessonId: string) =>
 // ─── «Провести занятие» ─────────────────────────────────────────────────────
 
 export class LessonsApiError extends Error {
-  /**
-   * offline — no answer from the server, worth retrying; already_confirmed — the lesson is held
-   * (e.g. a retry after a lost response); rejected — any other rule.
-   */
-  readonly kind: 'offline' | 'already_confirmed' | 'rejected'
+  /** offline — no answer from the server, worth retrying; rejected — any rule of the database. */
+  readonly kind: 'offline' | 'rejected'
   constructor(message: string, kind: LessonsApiError['kind']) {
     super(message)
     this.name = 'LessonsApiError'
@@ -275,37 +272,43 @@ export class LessonsApiError extends Error {
   }
 }
 
-/** confirm_lesson error → teacher-facing text (one code per rule, 0010 / 0001 triggers). */
-export function confirmErrorMessage(error: { code?: string; message?: string }): string {
+/**
+ * confirm_lesson error → why, for «Не удалось провести занятие: …» (one code per rule, 0010 / 0001
+ * triggers). Lower case — it follows the colon.
+ */
+export function confirmErrorReason(error: { code?: string; message?: string }): string {
   const m = error.message ?? ''
-  if (error.code === '42501') return 'Провести занятие может только учитель группы'
-  if (m.includes('already confirmed')) return 'Занятие уже проведено'
-  if (m.includes('freeze limit')) return 'Лимит заморозок: 2 на абонемент — отметьте «Не был»'
-  if (m.includes('not started')) return 'Занятие ещё не началось'
-  if (m.includes('closed period')) return 'Период закрыт — исправления через администратора'
-  if (m.includes('cancelled')) return 'Занятие отменено'
+  if (!error.code) return 'нет связи с сервером — проверьте интернет'
+  if (error.code === '42501') return 'отметить может только учитель группы'
+  // PostgREST: no such function — the database lacks the migration (dev 12.10, #41)
+  if (error.code === 'PGRST202' || error.code === '42883')
+    return 'сервер не обновлён — сообщите администратору'
+  if (m.includes('already confirmed')) return 'занятие уже проведено'
+  if (m.includes('freeze limit')) return 'лимит заморозок 2 на абонемент — отметьте «Не был»'
+  if (m.includes('not started')) return 'занятие ещё не началось'
+  if (m.includes('closed period')) return 'период закрыт — исправления через администратора'
+  if (m.includes('cancelled')) return 'занятие отменено'
   if (m.includes('not marked') || m.includes('not enrolled'))
-    return 'Состав группы изменился — обновите страницу'
-  return 'Не удалось провести занятие. Попробуйте ещё раз.'
+    return 'состав группы изменился — обновите страницу'
+  return 'ошибка сервера — попробуйте ещё раз'
 }
 
-/** One RPC, one transaction: marks of the whole roster + lesson → held. Returns confirmed_at. */
+/**
+ * One RPC, one transaction: marks of the whole roster + lesson → held. Returns confirmed_at;
+ * null — the lesson was already held (a retry after a lost response), the marks are in the database.
+ */
 export async function confirmLesson(
   lessonId: string,
   marks: { student_id: string; status: Mark }[],
-): Promise<string> {
+): Promise<string | null> {
   const { data, error } = await supabase.rpc('confirm_lesson', {
     p_lesson_id: lessonId,
     p_marks: marks,
   })
   if (error) {
+    if (error.message.includes('already confirmed')) return null
     // supabase-js reports a failed fetch as an error without a Postgres code
-    const kind = !error.code
-      ? 'offline'
-      : error.message.includes('already confirmed')
-        ? 'already_confirmed'
-        : 'rejected'
-    throw new LessonsApiError(confirmErrorMessage(error), kind)
+    throw new LessonsApiError(confirmErrorReason(error), error.code ? 'rejected' : 'offline')
   }
   return z.string().parse(data)
 }
