@@ -449,7 +449,7 @@ function MobileStudent({
         <BackButton />
         <form
           role="search"
-          className="flex min-h-11 flex-1 items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-card px-3.5 focus-within:border-ink"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-[14px] border-[1.5px] border-line-strong bg-card px-3.5 focus-within:border-ink"
           onSubmit={(e) => {
             e.preventDefault()
             void navigate({ to: '/admin/students', search: { q: q.trim() || undefined } })
