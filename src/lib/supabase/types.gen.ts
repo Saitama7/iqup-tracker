@@ -728,6 +728,7 @@ export type Database = {
           hours: number | null
           lessons_held: number | null
           month: string | null
+          no_subscription: number | null
           student_lessons: number | null
           teacher_id: string | null
         }
@@ -861,6 +862,10 @@ export type Database = {
       tariff_duration: {
         Args: { p_date: string; p_group_type: Database['public']['Enums']['group_type'] }
         Returns: number
+      }
+      tariff_min_valid_from: {
+        Args: { p_group_type: Database['public']['Enums']['group_type'] }
+        Returns: string
       }
       teaches_enrollment: { Args: { p_enrollment_id: string }; Returns: boolean }
       teaches_group: { Args: { p_group_id: string }; Returns: boolean }
