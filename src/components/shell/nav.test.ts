@@ -59,6 +59,7 @@ describe('NAV / TABS', () => {
       '/admin/groups',
       '/admin/users',
       '/admin/settings',
+      '/admin/audit',
       '/profile',
     ])
   })
@@ -71,6 +72,16 @@ describe('NAV / TABS', () => {
   it('admin «Расписание» opens А2 from the sidebar and the «Ещё» sheet', () => {
     expect(NAV.admin.find((i) => i.label === 'Расписание')?.to).toBe('/admin/schedule')
     expect(MORE.admin.find((i) => i.label === 'Расписание')?.to).toBe('/admin/schedule')
+  })
+
+  it('«Журнал изменений» opens А10 for admin (sidebar, «Ещё») and accountant (#45)', () => {
+    const audit = (items: { label: string; to: string | null }[]) =>
+      items.find((i) => i.label === 'Журнал изменений')?.to
+    expect(audit(NAV.admin)).toBe('/admin/audit')
+    expect(audit(MORE.admin)).toBe('/admin/audit')
+    expect(audit(NAV.accountant)).toBe('/admin/audit')
+    // the accountant keeps their own menu on /admin/audit
+    expect(resolveView('/admin/audit', ['accountant'], null)).toBe('accountant')
   })
 
   it('accountant has no tab bar (БМ1)', () => {
