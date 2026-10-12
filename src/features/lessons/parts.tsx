@@ -4,6 +4,7 @@ import { AlertCircle, Check } from 'lucide-react'
 import { groupLabel } from '@/features/students/model'
 import { GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { addDays } from '@/features/groups/model'
+import { trialsCaption, type Trial } from '@/features/trials/model'
 import { formatDayMonth } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import type { TeacherLesson } from './api'
@@ -56,6 +57,27 @@ export function rowCaption(l: TeacherLesson, { desktop = false } = {}): string {
   ]
     .filter(Boolean)
     .join(' · ')
+}
+
+/** «+1 пробный · Розаина» — dashed pill on the deck card (the count of students never includes it). */
+export function TrialPill({
+  trials,
+  className,
+}: {
+  trials: readonly Trial[] | undefined
+  className?: string
+}) {
+  if (!trials || trials.length === 0) return null
+  return (
+    <span
+      className={cn(
+        'rounded-full border-[1.5px] border-dashed border-ink px-2 py-0.5 text-[11px] font-extrabold whitespace-nowrap',
+        className,
+      )}
+    >
+      {trialsCaption(trials)}
+    </span>
+  )
 }
 
 const CHIP: Record<LessonState, string> = {

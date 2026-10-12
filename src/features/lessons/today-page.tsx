@@ -3,7 +3,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { AlertCircle } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
+import { addDays } from '@/features/groups/model'
 import { PageHeader } from '@/components/page'
 import { firstName, useDisplayName } from '@/components/shell/shell-parts'
 import { useSession } from '@/lib/auth'
@@ -14,6 +15,9 @@ import { cn } from '@/lib/utils'
 import { myPreviewQuery } from '@/features/payroll/api'
 import { monthOf } from '@/features/payroll/model'
 import { formatSom } from '@/features/tariffs/model'
+import { trialsQuery, useTrialsRealtime } from '@/features/trials/api'
+import { TrialChip } from '@/features/trials/parts'
+import { trialsCaption, type Trial } from '@/features/trials/model'
 import { myTeacherQuery, useLessonsRealtime, useTodayLessons, type TeacherLesson } from './api'
 import { CurrentLessonCard, Deck } from './deck'
 import { lessonTitle, pastLessonWhen, rowCaption, StatusChip, UnconfirmedBanner } from './parts'
@@ -32,6 +36,7 @@ import {
   type DaySplit,
   type Unconfirmed,
 } from './select'
+import { ownTrialsByLesson, tomorrowTrialCaption } from './trials-view'
 
 export function TodayPage() {
   const now = useNow()
@@ -43,6 +48,13 @@ export function TodayPage() {
   const teacher = useQuery(myTeacherQuery(userId))
   useLessonsRealtime(teacher.data)
   const lessons = useTodayLessons(teacher.data?.id, date)
+  // Ж3: today's and tomorrow's trials of own lessons (RLS shows an admin+teacher every trial)
+  const trialRows = useQuery(trialsQuery({ from: date, to: addDays(date, 1) }))
+  useTrialsRealtime()
+  const trials = useMemo(
+    () => ownTrialsByLesson(trialRows.data ?? [], lessons.data ?? []),
+    [trialRows.data, lessons.data],
+  )
 
   const eyebrow = formatDayLong(now)
   const title = name ? `Сегодня, ${name}` : 'Сегодня'
@@ -58,9 +70,9 @@ export function TodayPage() {
     const days = splitDays(lessons.data, date)
     const unconfirmed = unconfirmedInMonth(lessons.data, now)
     body = isDesktop ? (
-      <DesktopToday days={days} unconfirmed={unconfirmed} today={date} now={now} />
+      <DesktopToday days={days} unconfirmed={unconfirmed} today={date} now={now} trials={trials} />
     ) : (
-      <MobileToday days={days} unconfirmed={unconfirmed} today={date} now={now} />
+      <MobileToday days={days} unconfirmed={unconfirmed} today={date} now={now} trials={trials} />
     )
   }
 
@@ -113,9 +125,11 @@ interface DayProps {
   unconfirmed: Unconfirmed<TeacherLesson>
   today: string
   now: number
+  /** Trials of own lessons by lesson id — never part of the students count. */
+  trials: ReadonlyMap<string, Trial[]>
 }
 
-function MobileToday({ days, unconfirmed, today, now }: DayProps) {
+function MobileToday({ days, unconfirmed, today, now, trials }: DayProps) {
   const deck = deckOrder(days.today, now)
   const counts = dayCounts(days.today)
 
@@ -129,7 +143,7 @@ function MobileToday({ days, unconfirmed, today, now }: DayProps) {
           )}
         </div>
         {deck.length > 0 ? (
-          <Deck lessons={deck} now={now} />
+          <Deck lessons={deck} now={now} trials={trials} />
         ) : (
           <Notice>
             {counts.total > 0 ? 'Все занятия на сегодня проведены.' : 'Сегодня занятий нет.'}
@@ -144,7 +158,7 @@ function MobileToday({ days, unconfirmed, today, now }: DayProps) {
             <ul aria-label="Расписание на сегодня" className="flex flex-col gap-2.5">
               {days.today.map((l) => (
                 <li key={l.id}>
-                  <DayRow lesson={l} now={now} />
+                  <DayRow lesson={l} now={now} trials={trials.get(l.id)} />
                 </li>
               ))}
             </ul>
@@ -168,7 +182,7 @@ function MobileToday({ days, unconfirmed, today, now }: DayProps) {
             <ul aria-label="Завтра" className="flex flex-col gap-2.5">
               {days.tomorrow.map((l) => (
                 <li key={l.id}>
-                  <DayRow lesson={l} now={now} tomorrow />
+                  <DayRow lesson={l} now={now} trials={trials.get(l.id)} tomorrow />
                 </li>
               ))}
             </ul>
@@ -182,10 +196,12 @@ function MobileToday({ days, unconfirmed, today, now }: DayProps) {
 function DayRow({
   lesson,
   now,
+  trials,
   tomorrow = false,
 }: {
   lesson: TeacherLesson
   now: number
+  trials: Trial[] | undefined
   tomorrow?: boolean
 }) {
   const state = lessonState(lesson, now)
@@ -204,8 +220,17 @@ function DayRow({
           {lessonTitle(lesson)}
         </span>
         <span className="text-xs font-bold text-ink-muted">{rowCaption(lesson)}</span>
+        {trials && (
+          <span className="text-xs font-bold text-trial-strong">
+            {tomorrowTrialCaption(trials)}
+          </span>
+        )}
       </span>
-      {!tomorrow && <StatusChip lesson={lesson} now={now} />}
+      {tomorrow ? (
+        trials && <TrialChip className="px-2 text-[11px]" />
+      ) : (
+        <StatusChip lesson={lesson} now={now} />
+      )}
     </>
   )
   const className = cn(
@@ -213,6 +238,7 @@ function DayRow({
     state === 'current'
       ? 'border-2 border-brand px-[15px] py-[11px]'
       : 'border border-line px-4 py-3',
+    tomorrow && trials && 'border-[1.5px] border-dashed border-trial',
     cancelled && 'opacity-70',
   )
   if (cancelled) return <div className={className}>{inner}</div>
@@ -225,7 +251,7 @@ function DayRow({
 
 // ─── УД1 · desktop ──────────────────────────────────────────────────────────
 
-function DesktopToday({ days, unconfirmed, today, now }: DayProps) {
+function DesktopToday({ days, unconfirmed, today, now, trials }: DayProps) {
   const deck = deckOrder(days.today, now)
   const counts = dayCounts(days.today)
   const top = deck[0]
@@ -234,7 +260,7 @@ function DesktopToday({ days, unconfirmed, today, now }: DayProps) {
     <>
       <div className="grid grid-cols-2 gap-6">
         {top ? (
-          <CurrentLessonCard lesson={top} now={now} />
+          <CurrentLessonCard lesson={top} now={now} trials={trials.get(top.id)} />
         ) : (
           <Notice>
             {counts.total > 0 ? 'Все занятия на сегодня проведены.' : 'Сегодня занятий нет.'}
@@ -258,13 +284,15 @@ function DesktopToday({ days, unconfirmed, today, now }: DayProps) {
             className="flex flex-col overflow-hidden rounded-[20px] border border-line bg-card"
           >
             {days.today.map((l) => (
-              <DesktopRow key={l.id} lesson={l} now={now} />
+              <DesktopRow key={l.id} lesson={l} now={now} trials={trials.get(l.id)} />
             ))}
           </ul>
         ) : (
           <Notice>Сегодня занятий нет.</Notice>
         )}
       </section>
+
+      <TomorrowTrials lessons={days.tomorrow} trials={trials} />
 
       {unconfirmed.lessons.length > 0 && (
         <section className="flex flex-col gap-3">
@@ -347,7 +375,51 @@ function MonthCard({ now }: { now: number }) {
   )
 }
 
-function DesktopRow({ lesson, now }: { lesson: TeacherLesson; now: number }) {
+/** УД1: tomorrow's trials in advance (Ж3); nothing when tomorrow has none. */
+function TomorrowTrials({
+  lessons,
+  trials,
+}: {
+  lessons: TeacherLesson[]
+  trials: ReadonlyMap<string, Trial[]>
+}) {
+  const withTrials = lessons.filter((l) => trials.has(l.id))
+  if (withTrials.length === 0) return null
+  return (
+    <section className="flex flex-col gap-3" aria-label="Завтра пробные">
+      <h2 className="text-base font-extrabold">Завтра · пробные</h2>
+      <ul className="grid grid-cols-3 gap-3.5">
+        {withTrials.map((l) => (
+          <li
+            key={l.id}
+            className="flex items-center gap-3 rounded-2xl border-[1.5px] border-dashed border-trial bg-card px-4 py-3"
+          >
+            <span className="font-display text-[15px] font-bold">
+              {l.planned_start.slice(0, 5)}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-sm font-extrabold">{lessonTitle(l)}</span>
+              <span className="text-xs font-bold text-trial-strong">
+                {tomorrowTrialCaption(trials.get(l.id) ?? [])}
+              </span>
+            </span>
+            <TrialChip className="px-2 text-[11px]" />
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function DesktopRow({
+  lesson,
+  now,
+  trials,
+}: {
+  lesson: TeacherLesson
+  now: number
+  trials: Trial[] | undefined
+}) {
   const state = lessonState(lesson, now)
   const toMark = state === 'current' || state === 'ended_unconfirmed'
   const lessonsCount =
@@ -374,6 +446,9 @@ function DesktopRow({ lesson, now }: { lesson: TeacherLesson; now: number }) {
         <span className="text-[13px] font-bold text-ink-muted">
           {rowCaption(lesson, { desktop: true })}
         </span>
+        {trials && (
+          <span className="text-xs font-bold text-trial-strong">{trialsCaption(trials)}</span>
+        )}
       </span>
       <span className="text-[13px] font-bold whitespace-nowrap text-ink-muted">{lessonsCount}</span>
       {toMark ? (
