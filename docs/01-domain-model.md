@@ -51,12 +51,16 @@ erDiagram
 
     TRIAL {
         uuid id
-        uuid student_id "создаётся как лид: имя, класс, телефон родителя"
-        uuid group_id
+        uuid student_id "существующий ученик; лиду ставится при зачислении"
+        string full_name "лид: имя, класс, телефон родителя — в самой строке (И35)"
+        int grade
+        string parent_phone
+        uuid group_id "= группа занятия"
         uuid lesson_id "занятие, на которое записан"
-        enum status "scheduled | attended | no_show | converted | declined"
+        enum status "scheduled | attended | no_show | enrolled | closed"
+        bool came "отметка учителя, сохраняется после решения"
         enum source "instagram | referral | 2gis | other"
-        uuid converted_enrollment_id
+        uuid enrollment_id "при enrolled"
         uuid created_by
         timestamp created_at
         timestamp marked_at "когда учитель отметил"
@@ -300,12 +304,12 @@ stateDiagram-v2
     scheduled --> attended : учитель отметил «был»
     scheduled --> no_show : учитель отметил «не пришёл»
     scheduled --> scheduled : перенос на другое занятие
-    attended --> converted : оплата → «Оплатил → зачислить»<br/>создаются ENROLLMENT + SUBSCRIPTION
-    attended --> declined : отказ
+    attended --> enrolled : оплата → «Оплатил → зачислить»<br/>создаются ENROLLMENT + SUBSCRIPTION
+    attended --> closed : отказ
     no_show --> scheduled : записать заново
-    no_show --> declined : закрыть
-    converted --> [*]
-    declined --> [*]
+    no_show --> closed : закрыть
+    enrolled --> [*]
+    closed --> [*]
 ```
 
 - Пробный виден учителю заранее («Завтра · +1 пробный · Нурай Ж.») и в списке на занятии отдельной секцией с двумя кнопками: **Был / Не пришёл**.
@@ -362,7 +366,7 @@ stateDiagram-v2
 | 15 | Вся группа предупредила о пропуске | `cancelled / all_frozen`, не оплачивается, доп. урок в конце месяца |
 | 16 | На занятии только пробные (группа на наборе) | Занятие `held`, 0 ученико-уроков, учителю **не начисляется** (подтверждено: пробные полностью бесплатные) |
 | 18 | Пробный не пришёл | `no_show` → на экране пробных у админа в списке «Позвонить» с телефоном; «Записать заново» на другое занятие или «Закрыть» |
-| 17 | Пробный оплатил в тот же день после урока | `converted`; абонемент начинается со **следующего** занятия, пробное остаётся бесплатным |
+| 17 | Пробный оплатил в тот же день после урока | `enrolled`; абонемент начинается со **следующего** занятия, пробное остаётся бесплатным |
 | 12 | Продлёнка: пришёл на час | `present`, учителю 3 часа / полный ученико-урок |
 | 13 | Аванс | `PAYROLL_ADJUSTMENT kind=advance`, минус из выплаты 15-го |
 | 14 | Группа «появилась и исчезла» при наборе | Статус `forming` → `active` при первом занятии; `archived` без занятий можно удалить |

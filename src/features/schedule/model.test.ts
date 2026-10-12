@@ -226,9 +226,16 @@ describe('week grid', () => {
       lesson_date: '2026-10-10',
       planned_start: '18:00',
       group: { ...current.group, status: 'forming' },
+      students: 0,
     })
-    expect(cardTone(forming, NOW)).toBe('forming')
-    expect(cardText(forming, NOW).title).toBe('Математика · 8 класс Б · набор')
+    expect(cardTone(forming, NOW, 2)).toBe('forming')
+    expect(cardText(forming, NOW, 2)).toEqual({
+      title: 'Математика · 8 класс Б · набор',
+      caption: 'Гульзат · 2 на пробном',
+    })
+    // no trials, or someone already enrolled → an ordinary upcoming card
+    expect(cardTone(forming, NOW)).toBe('upcoming')
+    expect(cardTone({ ...forming, students: 3 }, NOW, 2)).toBe('upcoming')
   })
 
   it('filters by teacher and «не подтверждено»', () => {

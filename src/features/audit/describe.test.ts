@@ -365,7 +365,59 @@ describe('subjects', () => {
   })
 })
 
-describe('tables without a describer (payments, trials — R2)', () => {
+describe('trials', () => {
+  const t = {
+    id: 't1',
+    full_name: 'Розаина Бекова',
+    group_id: GROUP,
+    lesson_id: LESSON,
+    status: 'scheduled',
+    came: null,
+    student_id: null,
+  }
+
+  it('booked, marked, rebooked, decided', () => {
+    expect(text(row({ entity: 'trials', action: 'insert', after: t }))).toBe(
+      'Розаина Бекова — записан(а) на пробное: Математика · 8 класс Б, 10.10 в 09:00',
+    )
+    const attended = { ...t, status: 'attended', came: true }
+    expect(text(row({ entity: 'trials', before: t, after: attended }))).toBe(
+      'Розаина Бекова — на пробном: был(а)',
+    )
+    expect(
+      text(row({ entity: 'trials', before: t, after: { ...t, status: 'no_show', came: false } })),
+    ).toBe('Розаина Бекова — на пробном: не пришёл(ла)')
+    expect(
+      text(
+        row({
+          entity: 'trials',
+          before: { ...t, status: 'no_show' },
+          after: { ...t, lesson_id: 'x' },
+        }),
+      ),
+    ).toBe('Розаина Бекова — записан(а) заново: Математика · 8 класс Б')
+    expect(text(row({ entity: 'trials', before: t, after: { ...t, lesson_id: 'x' } }))).toBe(
+      'Розаина Бекова — пробное перенесено: Математика · 8 класс Б',
+    )
+    const enrolled = describeAuditRow(
+      row({
+        entity: 'trials',
+        before: attended,
+        after: { ...attended, status: 'enrolled', student_id: ALINA },
+      }),
+      lookups,
+    )
+    expect(plain(enrolled.parts)).toBe(
+      'Розаина Бекова — оплатил(а) после пробного, зачислен(а) в Математика · 8 класс Б',
+    )
+    expect(enrolled.link).toMatchObject({ params: { studentId: ALINA } })
+    expect(
+      text(row({ entity: 'trials', before: attended, after: { ...attended, status: 'closed' } })),
+    ).toBe('Розаина Бекова — отказ после пробного')
+  })
+})
+
+describe('tables without a describer (payments — R2)', () => {
   it('fall back to the table and the action', () => {
     const e = describeAuditRow(row({ entity: 'payments', action: 'insert', after: {} }), lookups)
     expect(plain(e.parts)).toBe('payments: запись добавлена')

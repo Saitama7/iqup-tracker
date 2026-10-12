@@ -14,14 +14,23 @@ import {
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import type { Trial } from '@/features/trials/model'
 import type { TeacherLesson } from './api'
-import { groupCaption } from './parts'
+import { groupCaption, TrialPill } from './parts'
 import { lessonState, minutesLeft, timeRange, untilLabel } from './select'
 
 const SWIPE_PX = 80
 const SWIPE_VELOCITY = 500
 
-export function Deck({ lessons, now }: { lessons: TeacherLesson[]; now: number }) {
+export function Deck({
+  lessons,
+  now,
+  trials,
+}: {
+  lessons: TeacherLesson[]
+  now: number
+  trials: ReadonlyMap<string, Trial[]>
+}) {
   const reduce = useReducedMotion() ?? false
   // Selected card by id: when the order changes (a lesson got held or cancelled) we either keep it
   // or fall back to the top — the current lesson.
@@ -55,6 +64,7 @@ export function Deck({ lessons, now }: { lessons: TeacherLesson[]; now: number }
           <TopCard
             key={top.id}
             lesson={top}
+            trials={trials.get(top.id)}
             now={now}
             reduce={reduce}
             direction={direction}
@@ -148,6 +158,7 @@ function BackStrip({
 
 function TopCard({
   lesson,
+  trials,
   now,
   reduce,
   direction,
@@ -155,6 +166,7 @@ function TopCard({
   onSwipe,
 }: {
   lesson: TeacherLesson
+  trials: Trial[] | undefined
   now: number
   reduce: boolean
   direction: 1 | -1
@@ -221,7 +233,10 @@ function TopCard({
             <br />
             {lesson.group.name}
           </span>
-          <span className="text-sm font-bold opacity-75">{groupCaption(lesson)}</span>
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold opacity-75">{groupCaption(lesson)}</span>
+            <TrialPill trials={trials} />
+          </span>
         </span>
         <span className="flex items-center justify-between rounded-2xl bg-ink px-[18px] py-3.5 text-[15px] font-extrabold text-paper">
           Отметить посещаемость
@@ -255,7 +270,15 @@ function cardLabels(lesson: TeacherLesson, now: number) {
 }
 
 /** УД1: the deck's top card, static — the day table sits right below it. */
-export function CurrentLessonCard({ lesson, now }: { lesson: TeacherLesson; now: number }) {
+export function CurrentLessonCard({
+  lesson,
+  now,
+  trials,
+}: {
+  lesson: TeacherLesson
+  now: number
+  trials?: Trial[] | undefined
+}) {
   const { chip, right } = cardLabels(lesson, now)
   return (
     <Link
@@ -276,7 +299,10 @@ export function CurrentLessonCard({ lesson, now }: { lesson: TeacherLesson; now:
         <span className="font-display text-[28px] leading-[1.1] font-bold tracking-tight text-balance">
           {lesson.group.subject} · {lesson.group.name}
         </span>
-        <span className="text-[15px] font-bold opacity-75">{groupCaption(lesson)}</span>
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-[15px] font-bold opacity-75">{groupCaption(lesson)}</span>
+          <TrialPill trials={trials} className="text-xs" />
+        </span>
       </span>
       <span className="flex items-center justify-between rounded-2xl bg-ink px-5 py-4 text-base font-extrabold text-paper">
         Отметить посещаемость

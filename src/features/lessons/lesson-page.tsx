@@ -1,6 +1,6 @@
 // У3 «Посещаемость» (docs/design/Attendance.dc.html) and УД2 (docs/design/TeacherAttendance.dc.html).
 // Marks live in local state until «Провести занятие» sends the whole roster in one RPC (0010).
-// Trials (R2) get their own section under the roster — see the «Пробные» placeholders below.
+// Trials (Ж2/Ж3) get their own section under the roster; they never count in «Отмечено N из M».
 import { useQuery } from '@tanstack/react-query'
 import { Link, useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router'
 import { Check, ChevronLeft } from 'lucide-react'
@@ -9,9 +9,11 @@ import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
 import { rateOn } from '@/features/payroll/calc'
 import { PRELIMINARY_NOTE } from '@/features/payroll/model'
+import { trialsQuery, useTrialsRealtime } from '@/features/trials/api'
+import { lessonTrials, trialsWord, type Trial } from '@/features/trials/model'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { useNow } from '@/lib/now'
-import { formatDayLong } from '@/lib/time'
+import { bishkekDate, formatDayLong } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import { lessonSheetQuery, type LessonSheet } from './api'
@@ -34,6 +36,7 @@ import {
   type Tone,
 } from './attendance'
 import { clearDraft, loadDraft, saveDraft } from './draft'
+import { DesktopTrials, MobileTrials } from './lesson-trials'
 import { studentsWord } from './parts'
 import {
   bishkekTime,
@@ -45,6 +48,7 @@ import {
   type ConfirmCopy,
   type LessonState,
 } from './select'
+import { trialsSuffix } from './trials-view'
 import { useConfirmLesson } from './use-confirm-lesson'
 
 export function LessonPage({ lessonId }: { lessonId: string }) {
@@ -86,6 +90,10 @@ interface SheetModel {
   copy: ConfirmCopy
   /** Teacher's pay of the lesson by the students' subscriptions (К6); null — no percent on that date. */
   accrual: LessonAccrual | null
+  /** Trials of this lesson (scheduled / marked) — outside every count and the payroll. */
+  trials: Trial[]
+  /** Trials can be marked: the lesson day has come and the lesson is not cancelled. */
+  trialsMarkable: boolean
   setMark: (studentId: string, mark: Mark) => void
   allPresent: () => void
   confirm: () => void
@@ -96,6 +104,12 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
   const isDesktop = useIsDesktop()
   const navigate = useNavigate()
   const mutation = useConfirmLesson(sheet.id, sheet.group.id)
+  const trialRows = useQuery(trialsQuery({ lessonId: sheet.id }))
+  useTrialsRealtime()
+  const trials = useMemo(
+    () => lessonTrials(trialRows.data ?? [], sheet.id),
+    [trialRows.data, sheet.id],
+  )
 
   const roster = useMemo(() => lessonRoster(sheet.enrollments, sheet, sheet.marks), [sheet])
   // The draft outlives the page (И19, #29): restored from localStorage, dropped once the lesson
@@ -132,6 +146,8 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
     canConfirm: editable && counts.unmarked === 0 && !mutation.isPending,
     copy,
     accrual,
+    trials,
+    trialsMarkable: sheet.lesson_date <= bishkekDate(now) && sheet.status !== 'cancelled',
     setMark: (studentId, mark) => {
       const row = roster.find((r) => r.studentId === studentId)
       if (!editable || mutation.isPending || !row) return
@@ -346,7 +362,10 @@ function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
             />
           </div>
           <p className="text-[13px] font-extrabold whitespace-nowrap">
-            {counts.marked} из {counts.total}
+            <span>
+              {counts.marked} из {counts.total}
+            </span>
+            <span>{trialsSuffix(m.trials.length)}</span>
           </p>
         </div>
       </header>
@@ -376,7 +395,7 @@ function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
           ))}
         </ul>
       )}
-      {/* «Пробные · N» (не списывается · не в ЗП) — R2, trials table comes later. */}
+      <MobileTrials trials={m.trials} markable={m.trialsMarkable} />
 
       <footer className="sticky bottom-0 -mx-5 mt-auto -mb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col gap-2.5 border-t border-line bg-card px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         <p className="flex justify-between text-[13px] font-extrabold">
@@ -456,7 +475,7 @@ function DesktopSheet({ m, now }: { m: SheetModel; now: number }) {
   const caption = [
     formatDayLong(lessonStartMs(sheet)),
     GROUP_TYPE_LABEL[sheet.group.group_type].toLowerCase(),
-    studentsWord(m.roster.length),
+    `${studentsWord(m.roster.length)}${m.trials.length > 0 ? ` + ${trialsWord(m.trials.length)}` : ''}`,
     sheet.group.room ? `каб. ${sheet.group.room}` : null,
     m.accrual?.perStudentLesson != null
       ? `${som(m.accrual.perStudentLesson)} за ученико-урок`
@@ -522,7 +541,7 @@ function DesktopSheet({ m, now }: { m: SheetModel; now: number }) {
               ))}
             </ul>
           )}
-          {/* «Пробные · N» row group (бесплатно · не списывается · в ЗП не входит) — R2. */}
+          <DesktopTrials trials={m.trials} markable={m.trialsMarkable} />
         </div>
         <Summary m={m} />
       </div>
@@ -575,7 +594,10 @@ function Summary({ m }: { m: SheetModel }) {
           />
         </div>
         <p className="text-[13px] font-bold text-ink-muted">
-          Отмечено {counts.marked} из {counts.total}
+          <span>
+            Отмечено {counts.marked} из {counts.total}
+          </span>
+          <span>{trialsSuffix(m.trials.length)}</span>
         </p>
         <dl className="flex flex-col gap-2 text-sm font-extrabold">
           {lines.map(([label, value, tone]) => (

@@ -8,7 +8,7 @@ import { ErrorText, Field, inputClass, labelClass, SubmitButton } from '@/featur
 import { formatDateLong, formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { enrollForm, enrollStudent, tariffsQuery } from './api'
+import { enrollForm, enrollStudent, tariffsQuery, type EnrollInput } from './api'
 import {
   defaultDiscount,
   discountAvailability,
@@ -37,6 +37,9 @@ export function EnrollDialog({
   groups,
   groupId: fixedGroupId,
   today,
+  startDate,
+  submit,
+  description,
   onEnrolled,
 }: {
   open: boolean
@@ -48,6 +51,11 @@ export function EnrollDialog({
   groups: readonly GroupBrief[]
   groupId?: string
   today: string
+  /** Prefilled start date (ISO); default — today or the group's first day. */
+  startDate?: string
+  /** Replaces enroll_student — «Оплатил → зачислить» enrolls a trial (enroll_trial, Ж5). */
+  submit?: (input: EnrollInput) => Promise<unknown>
+  description?: string
   onEnrolled?: () => void
 }) {
   const ids = { student: useId(), group: useId(), date: useId() }
@@ -58,7 +66,9 @@ export function EnrollDialog({
   const fixedGroup = groups.find((g) => g.id === fixedGroupId)
   // a group that starts later: its first day, not today (enroll_student rejects earlier dates)
   const [date, setDate] = useState(
-    formatDateRu(fixedGroup && fixedGroup.start_date > today ? fixedGroup.start_date : today),
+    formatDateRu(
+      startDate ?? (fixedGroup && fixedGroup.start_date > today ? fixedGroup.start_date : today),
+    ),
   )
   const student = fixedStudent ?? students.find((s) => s.id === studentId) ?? null
   const [discount, setDiscount] = useState<DiscountPct>(() =>
@@ -77,7 +87,7 @@ export function EnrollDialog({
       : null
 
   const mutation = useMutation({
-    mutationFn: enrollStudent,
+    mutationFn: (input: EnrollInput) => (submit ?? enrollStudent)(input),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: STUDENTS_KEY })
       toast.success(`${student?.fullName ?? 'Ученик'} зачислен(а) в группу`)
@@ -118,9 +128,10 @@ export function EnrollDialog({
       }}
       title="Зачислить в группу"
       description={
-        fixedStudent
+        description ??
+        (fixedStudent
           ? `${fixedStudent.fullName} · абонемент создаётся сразу по тарифу группы на дату начала`
-          : 'Абонемент создаётся сразу по тарифу группы на дату начала'
+          : 'Абонемент создаётся сразу по тарифу группы на дату начала')
       }
     >
       <form

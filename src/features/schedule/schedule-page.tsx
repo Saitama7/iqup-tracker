@@ -7,6 +7,8 @@ import { PageHeader, PageTitle } from '@/components/page'
 import { addDays } from '@/features/groups/model'
 import { Segmented } from '@/features/groups/parts'
 import { firstName } from '@/features/students/model'
+import { trialsQuery, useTrialsRealtime } from '@/features/trials/api'
+import { trialsByLesson, type Trial } from '@/features/trials/model'
 import { useNow } from '@/lib/now'
 import { bishkekDate, formatDayLong } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -61,7 +63,10 @@ export function SchedulePage({
   const unconfirmedOnly = search.filter === 'unconfirmed'
 
   useAdminLessonsRealtime()
+  useTrialsRealtime()
   const week = useQuery(adminLessonsQuery(monday, sunday))
+  const trials = useQuery(trialsQuery({ from: monday, to: sunday }))
+  const byLesson = trialsByLesson(trials.data ?? [])
   const pending = useQuery({ ...adminUnconfirmedQuery(today), enabled: unconfirmedOnly })
   const teachers = useTeacherOptions()
 
@@ -146,7 +151,7 @@ export function SchedulePage({
       lessons.length === 0 ? (
         <Notice>{empty}</Notice>
       ) : (
-        <WeekGrid lessons={lessons} days={days} today={today} now={now} />
+        <WeekGrid lessons={lessons} days={days} today={today} now={now} byLesson={byLesson} />
       )
     ) : (
       <DayList
@@ -155,6 +160,7 @@ export function SchedulePage({
         date={date}
         today={today}
         now={now}
+        byLesson={byLesson}
         onDate={(d) => {
           set({ date: d })
         }}
@@ -249,11 +255,13 @@ function WeekGrid({
   days,
   today,
   now,
+  byLesson,
 }: {
   lessons: AdminLesson[]
   days: string[]
   today: string
   now: number
+  byLesson: Map<string, Trial[]>
 }) {
   const cols = { gridTemplateColumns: `64px repeat(${days.length}, minmax(0, 1fr))` }
   return (
@@ -294,7 +302,7 @@ function WeekGrid({
                 {lessons
                   .filter((l) => l.lesson_date === d && inHour(l, hour))
                   .map((l) => (
-                    <LessonCard key={l.id} lesson={l} now={now} />
+                    <LessonCard key={l.id} lesson={l} now={now} trials={byLesson.get(l.id)} />
                   ))}
               </div>
             ))}
@@ -315,6 +323,7 @@ function DayList({
   date,
   today,
   now,
+  byLesson,
   onDate,
   empty,
 }: {
@@ -323,6 +332,7 @@ function DayList({
   date: string
   today: string
   now: number
+  byLesson: Map<string, Trial[]>
   onDate: (date: string) => void
   empty: string
 }) {
@@ -384,7 +394,7 @@ function DayList({
                   {l.planned_start.slice(0, 5)}
                 </span>
                 <div className="min-w-0 flex-1 [&>a]:min-h-11 [&>a]:text-sm">
-                  <LessonCard lesson={l} now={now} />
+                  <LessonCard lesson={l} now={now} trials={byLesson.get(l.id)} />
                 </div>
               </li>
             ))}

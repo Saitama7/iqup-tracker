@@ -108,7 +108,9 @@ async function select<T>(
 /** Names behind the page's rows. Two steps: lessons / enrollments first, then who and which group. */
 async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['lookups']> {
   const lessonIds = ids(
-    rows.filter((r) => r.entity === 'attendance').map((r) => field(r, 'lesson_id')),
+    rows
+      .filter((r) => r.entity === 'attendance' || r.entity === 'trials')
+      .map((r) => field(r, 'lesson_id')),
   )
   const enrollmentIds = ids(
     rows.filter((r) => r.entity === 'subscriptions').map((r) => field(r, 'enrollment_id')),
@@ -146,7 +148,7 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
   ])
   const groupIds = ids([
     ...rows
-      .filter((r) => r.entity === 'lessons' || r.entity === 'enrollments')
+      .filter((r) => r.entity === 'lessons' || r.entity === 'enrollments' || r.entity === 'trials')
       .map((r) => field(r, 'group_id')),
     ...lessons.map((l) => l.group_id),
     ...enrollments.map((e) => e.group_id),

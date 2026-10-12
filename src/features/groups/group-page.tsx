@@ -14,6 +14,7 @@ import {
   shortName,
   type StudentsSource,
 } from '@/features/students/model'
+import { fillCaption } from '@/features/trials/model'
 import { EnrollDialog, type EnrollStudent } from '@/features/subscriptions/enroll-dialog'
 import { tariffFor } from '@/features/tariffs/current'
 import { GROUP_TYPE_LABEL } from '@/features/tariffs/model'
@@ -43,6 +44,7 @@ import {
   type LessonTone,
   type LessonView,
 } from './model'
+import { TrialCards, TrialTableRows, useGroupTrials, useTrialActions } from './group-trials'
 import { GroupStatusChip } from './parts'
 
 interface MemberRow {
@@ -116,6 +118,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
   const groups = useQuery(groupsQuery())
   const students = useQuery(studentsQuery())
   const lessons = useQuery(lessonsQuery(groupId))
+  const trials = useGroupTrials(groupId)
   const [tab, setTab] = useState('students')
   const [dialog, setDialog] = useState<Dialog | null>(null)
 
@@ -132,6 +135,8 @@ export function GroupPage({ groupId }: { groupId: string }) {
     () => (students.data ? members(students.data, groupId) : []),
     [students.data, groupId],
   )
+
+  const trialActions = useTrialActions(group, today)
 
   if (groups.isPending) {
     return <div className={cn(cardClass, 'h-64 animate-pulse')} aria-label="Загрузка" />
@@ -186,6 +191,13 @@ export function GroupPage({ groupId }: { groupId: string }) {
       >
         Доп. урок
       </ActionButton>
+      <Link
+        to="/admin/trials"
+        search={{ group: group.id }}
+        className="flex min-h-11 items-center rounded-xl border-[1.5px] border-dashed border-trial px-4 text-[13px] font-extrabold whitespace-nowrap text-trial-strong"
+      >
+        + На пробное
+      </Link>
       <ActionButton
         onClick={() => {
           setDialog({ kind: 'archive' })
@@ -207,11 +219,14 @@ export function GroupPage({ groupId }: { groupId: string }) {
     </div>
   )
 
+  const fill = fillCaption(group.students, tariff?.max_students ?? null, trials.length)
   const stats = (
     <div className="grid grid-cols-2 gap-3 min-[900px]:grid-cols-4">
       <StatCard label="Учеников">
-        {group.students}
-        {tariff ? ` / ${tariff.max_students}` : ''}
+        {fill.fill}
+        {fill.trials && (
+          <span className="ml-1.5 text-[13px] font-bold text-trial-strong">{fill.trials}</span>
+        )}
       </StatCard>
       <StatCard label={`${monthName(today)} · занятий`}>
         {lessons.isPending ? '…' : `${progress.held} из ${progress.total}`}
@@ -226,12 +241,27 @@ export function GroupPage({ groupId }: { groupId: string }) {
       </div>
       {students.isPending ? (
         <div className="h-40 animate-pulse" aria-label="Загрузка" />
-      ) : roster.length === 0 ? (
+      ) : roster.length === 0 && trials.length === 0 ? (
         <p className="p-5 font-bold text-ink-muted">В группе пока нет учеников</p>
       ) : isDesktop ? (
-        <MembersTable rows={roster} />
+        <MembersTable rows={roster}>
+          <TrialTableRows
+            trials={trials}
+            today={today}
+            fill={fill.fill}
+            onAction={trialActions.onAction}
+          />
+        </MembersTable>
       ) : (
-        <MembersList rows={roster} />
+        <>
+          <MembersList rows={roster} />
+          <TrialCards
+            trials={trials}
+            today={today}
+            fill={fill.fill}
+            onAction={trialActions.onAction}
+          />
+        </>
       )}
     </section>
   )
@@ -299,6 +329,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
         <TabsContent value="lessons">{lessonsTab}</TabsContent>
       </Tabs>
 
+      {trialActions.dialog}
       {dialog?.kind === 'edit' && (
         <EditGroupDialog
           open
@@ -432,7 +463,7 @@ const leftClass = (r: MemberRow) =>
 const leftText = (r: MemberRow) =>
   r.left === null ? '—' : r.left < 0 ? `−${-r.left}` : `${r.left} / ${r.total ?? ''}`
 
-function MembersTable({ rows }: { rows: MemberRow[] }) {
+function MembersTable({ rows, children }: { rows: MemberRow[]; children?: ReactNode }) {
   return (
     <table className="w-full min-w-[560px] border-collapse" aria-label="Ученики группы">
       <thead>
@@ -480,6 +511,7 @@ function MembersTable({ rows }: { rows: MemberRow[] }) {
             </td>
           </tr>
         ))}
+        {children}
       </tbody>
     </table>
   )
