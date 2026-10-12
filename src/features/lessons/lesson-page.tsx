@@ -80,6 +80,8 @@ interface SheetModel {
   editable: boolean
   /** The marks are being sent — buttons wait for the database. */
   busy: boolean
+  /** Offline: the confirm waits for the network (TanStack paused mutation). */
+  paused: boolean
   canConfirm: boolean
   copy: ConfirmCopy
   /** Teacher's pay of the lesson by the students' subscriptions (К6); null — no percent on that date. */
@@ -126,6 +128,7 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
     counts,
     editable,
     busy: mutation.isPending,
+    paused: mutation.isPaused,
     canConfirm: editable && counts.unmarked === 0 && !mutation.isPending,
     copy,
     accrual,
@@ -424,7 +427,7 @@ function ConfirmAction({ m, desktop = false }: { m: SheetModel; desktop?: boolea
           size,
         )}
       >
-        {reason ?? (m.busy ? m.copy.busy : m.copy.hint)}
+        {reason ?? (m.busy ? (m.paused ? m.copy.waiting : m.copy.busy) : m.copy.hint)}
       </p>
     )
   }

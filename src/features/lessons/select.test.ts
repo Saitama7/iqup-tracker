@@ -92,6 +92,13 @@ describe('confirmCopy (#41)', () => {
       failed: 'Не удалось провести занятие',
     })
   })
+
+  it('offline the sheet waits for the network, not «Проводим…»', () => {
+    for (const state of ['current', 'ended_unconfirmed'] as const) {
+      expect(confirmCopy(state).waiting).toBe('Ждём связь… отметки сохранены')
+    }
+    expect(confirmCopy('current').busy).toBe('Проводим…')
+  })
 })
 
 describe('inCurrentWindow', () => {

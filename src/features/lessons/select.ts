@@ -50,11 +50,15 @@ export interface ConfirmCopy {
   hint: string
   /** While the database answers. */
   busy: string
+  /** The mutation is paused offline — it is sent once the network is back. */
+  waiting: string
   /** Success toast, «· HH:MM» is appended. */
   done: string
   /** Error toast, «: <reason>» is appended. */
   failed: string
 }
+
+const WAITING = 'Ждём связь… отметки сохранены'
 
 /**
  * Words of the sheet's action (#41): a lesson that is over (an earlier day or past its end) is
@@ -66,6 +70,7 @@ export function confirmCopy(state: LessonState): ConfirmCopy {
         action: 'Подтвердить занятие',
         hint: 'Отметьте всех, чтобы подтвердить',
         busy: 'Подтверждаем…',
+        waiting: WAITING,
         done: 'Занятие подтверждено',
         failed: 'Не удалось подтвердить занятие',
       }
@@ -73,6 +78,7 @@ export function confirmCopy(state: LessonState): ConfirmCopy {
         action: 'Провести занятие',
         hint: 'Отметьте всех, чтобы провести',
         busy: 'Проводим…',
+        waiting: WAITING,
         done: 'Занятие проведено',
         failed: 'Не удалось провести занятие',
       }
