@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router'
 import { Check, ChevronLeft } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useId, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
 import { calcLessonPay, roundSom, termsOn, type PayTerms } from '@/features/payroll/calc'
 import { PRELIMINARY_NOTE } from '@/features/payroll/model'
@@ -31,6 +31,7 @@ import {
   type Tally,
   type Tone,
 } from './attendance'
+import { clearDraft, loadDraft, saveDraft } from './draft'
 import { studentsWord } from './parts'
 import {
   bishkekTime,
@@ -87,10 +88,22 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
   const now = useNow()
   const isDesktop = useIsDesktop()
   const navigate = useNavigate()
-  const [draft, setDraft] = useState<Map<string, Mark> | null>(null)
   const mutation = useConfirmLesson(sheet.id, sheet.group.id)
 
   const roster = useMemo(() => lessonRoster(sheet.enrollments, sheet, sheet.marks), [sheet])
+  // The draft outlives the page (И19, #29): restored from localStorage, dropped once the lesson
+  // is held / cancelled — not on the optimistic «held», a failed confirm keeps it.
+  const [draft, setDraftState] = useState<Map<string, Mark> | null>(() =>
+    sheet.status === 'planned' ? loadDraft(sheet.id, roster, now) : null,
+  )
+  const setDraft = (next: Map<string, Mark>) => {
+    setDraftState(next)
+    saveDraft(sheet.id, next, now)
+  }
+  const settled = !mutation.isPending
+  useEffect(() => {
+    if (settled && sheet.status !== 'planned') clearDraft(sheet.id)
+  }, [settled, sheet.id, sheet.status])
   const state = lessonState(sheet, now)
   const editable = sheet.status === 'planned' && state !== 'upcoming'
   const marks: ReadonlyMap<string, Mark> = editable ? (draft ?? sheet.marks) : sheet.marks
