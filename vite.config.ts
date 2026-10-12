@@ -13,7 +13,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // autoUpdate = skipWaiting + clientsClaim: a new deploy takes over at once, a new tab gets the
+      // new bundle; open tabs get the «Доступна новая версия» toast (src/lib/sw-update.ts, #56).
       registerType: 'autoUpdate',
+      // Registered from src/main.tsx via virtual:pwa-register.
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon-180.png'],
       manifest: {
         name: 'IQ UP Tracker',
@@ -38,11 +42,20 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/index.html',
+        // Supabase is another origin today; keep its paths out of the SPA fallback regardless.
+        navigateFallbackDenylist: [/^\/rest\//, /^\/auth\//],
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         // Precache only latin + cyrillic font subsets; others load on demand.
         globPatterns: ['**/*.{js,css,html,svg,png}', '**/*-{latin,cyrillic}-wght-*.woff2'],
       },
     }),
   ],
+  define: {
+    // Which bundle a user runs — shown in the profile (#56).
+    'import.meta.env.VITE_BUILD_SHA': JSON.stringify(process.env.CF_PAGES_COMMIT_SHA ?? ''),
+  },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
