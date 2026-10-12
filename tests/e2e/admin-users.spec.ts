@@ -54,8 +54,7 @@ test('А8: tables, phone under the name, nowrap badges', async ({ page }, testIn
       .click()
     const more = page.getByRole('dialog', { name: 'Ещё' })
     await expect(more).toBeVisible()
-    await expect(more.getByRole('listitem').filter({ hasText: 'Пробные' })).toContainText('скоро')
-    await expect(more.getByRole('link', { name: 'Пробные' })).toHaveCount(0)
+    await expect(more.getByRole('link', { name: 'Пробные' })).toBeVisible()
     await expect(more.getByRole('link', { name: 'Журнал изменений' })).toBeVisible()
     await expect(more.getByRole('link', { name: 'Профиль' })).toBeVisible()
     // let the slide-in finish before the screenshot

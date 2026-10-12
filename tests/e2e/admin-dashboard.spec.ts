@@ -75,8 +75,8 @@ test('dashboard: KPI, today of all teachers, «Не подтверждено» 3
     )
     await expect(widget.getByRole('link', { name: 'Все 28 →' })).toBeVisible()
     await expect(widget.getByText('ещё 25 занятий · самое старое 1 окт →')).toBeVisible()
-    // Money and trials wait for R2: same places, no numbers.
-    await expect(page.getByText('Пробные занятия — появится в R2')).toBeVisible()
+    // Money waits for R2; trials (#46) are relative to the real date — admin-trials.spec.ts.
+    await expect(page.getByRole('region', { name: 'Пробные' })).toBeVisible()
     await expect(page.getByText('Сентябрь · ЗП')).toBeVisible()
     await page.screenshot({ path: shot(testInfo, 'dashboard'), fullPage: true })
     await widget.getByText('ещё 25 занятий').click()
