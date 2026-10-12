@@ -596,7 +596,7 @@ function MobileStudent({
           disabled={view.enrollable.length === 0}
           className="flex min-h-[52px] flex-1 items-center justify-center rounded-2xl border-[1.5px] border-ink text-sm font-extrabold text-ink disabled:opacity-50"
         >
-          Зачислить
+          Зачислить в группу
         </button>
         <Link
           to="/admin/payments"

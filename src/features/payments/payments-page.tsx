@@ -336,7 +336,7 @@ export function PaymentsPage({
         {monthBar}
       </header>
       <Kpis monthName={monthLabel(month, today)} sum={sum} isDesktop />
-      <div className="grid grid-cols-[minmax(0,1fr)_400px] items-start gap-6">
+      <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6">
         <div className="flex min-w-0 flex-col gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             {tabBar}
@@ -422,7 +422,7 @@ function Journal({ rows, isDesktop }: { rows: JournalRow[]; isDesktop: boolean }
               </Link>
               <span className="text-[13px] font-bold text-ink-muted">{r.caption}</span>
               <span className="text-xs font-bold text-ink-muted">
-                {r.date} · {r.method} · {r.author}
+                {r.date} · {r.package} · {r.method} · {r.author}
               </span>
             </div>
             <span
@@ -953,7 +953,7 @@ function RecordPanel({
       )}
 
       {line && (
-        <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 rounded-xl bg-sand px-3 py-2.5 text-[13px] font-bold">
+        <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 rounded-xl bg-band px-3 py-2.5 text-[13px] font-bold">
           <span className="text-ink-muted">{line.text}</span>
           <span
             className={cn(

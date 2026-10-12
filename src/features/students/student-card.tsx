@@ -56,11 +56,11 @@ export const debtTextClass = (debtLessons: number) =>
 
 function Tile({ label, value, caption }: { label: string; value: ReactNode; caption: ReactNode }) {
   return (
-    <div className="rounded-[14px] bg-muted px-3.5 py-3">
+    <div className="min-w-0 rounded-[14px] bg-muted px-3.5 py-3">
       <div className="text-[11px] font-extrabold tracking-[0.06em] text-ink-muted uppercase">
         {label}
       </div>
-      <div className="font-display text-lg font-bold whitespace-nowrap">{value}</div>
+      <div className="font-display text-lg leading-tight font-bold">{value}</div>
       <div className="text-xs font-bold text-ink-muted">{caption}</div>
     </div>
   )
