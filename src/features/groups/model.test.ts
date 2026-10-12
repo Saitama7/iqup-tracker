@@ -3,6 +3,7 @@ import {
   addDays,
   attendanceSummary,
   currentRules,
+  extraLessonDateError,
   filterGroups,
   groupListRows,
   horizon,
@@ -347,5 +348,18 @@ describe('А4 lessons', () => {
       { lesson_date: '2026-11-03', status: 'planned' as const },
     ]
     expect(monthProgress(rows, '2026-10-11')).toEqual({ held: 1, total: 2 })
+  })
+})
+
+describe('extraLessonDateError (И16)', () => {
+  it('blocks a teacher from dates before today', () => {
+    expect(extraLessonDateError('2026-10-07', '2026-10-08')).toMatch(/сегодня или позже/)
+    expect(extraLessonDateError('2026-10-08', '2026-10-08')).toBeNull()
+    expect(extraLessonDateError('2026-10-09', '2026-10-08')).toBeNull()
+  })
+
+  it('does not limit the admin or an incomplete date', () => {
+    expect(extraLessonDateError('2020-01-01', undefined)).toBeNull()
+    expect(extraLessonDateError(null, '2026-10-08')).toBeNull()
   })
 })
