@@ -6,6 +6,14 @@ import {
   subscriptionLessonPrice,
   type PaySubscription,
 } from '@/features/payroll/calc'
+import {
+  availableLessons,
+  debtOverLimit,
+  payState,
+  subscriptionBalances,
+  totalDebt,
+  type PayState,
+} from '@/features/payments/balance'
 import { initials } from '@/features/students/model'
 import { pluralRu } from './select'
 import { formatSom } from '@/features/tariffs/model'
@@ -32,6 +40,8 @@ export interface SubscriptionSource {
   price_full: number
   price_final: number
   freeze_limit: number
+  /** Σ payments.amount of the subscription (refunds are negative). */
+  paid: number
   /** Every mark charged to this subscription. */
   marks: readonly { lesson_id: string; status: Mark }[]
 }
@@ -76,6 +86,52 @@ function balanceOf(s: SubscriptionSource, lessonId: string | null): Balance {
   }
 }
 
+/** Money side of a student in one group (В7, В7.1): debt, paid lessons, the pay state. */
+export interface StudentPay {
+  /** debt — lessons «в долг»; soon — ≤ 2 paid lessons left; partial — not all paid; paid — all paid. */
+  state: PayState
+  /** Paid lessons of the current subscription (floor(paid × total / price_final)). */
+  paidLessons: number
+  /** Paid and not used yet on the current subscription. */
+  available: number
+  /** Lessons «в долг» over all subscriptions of the student in the group. */
+  debtLessons: number
+  debtSom: number
+}
+
+/**
+ * Balances of all subscriptions of one student in a group (same math as v_student_balance);
+ * used = consuming marks, without the marks of `lessonId`. Null — no live subscription.
+ * Which subscription a mark is charged to stays with pickSubscription (mirrors the SQL).
+ */
+export function studentPay(
+  subscriptions: readonly SubscriptionSource[],
+  lessonId: string | null,
+): StudentPay | null {
+  const balances = subscriptionBalances(
+    subscriptions.map((s) => ({
+      id: s.id,
+      status: s.status,
+      started_at: s.started_at,
+      created_at: s.created_at,
+      lessons_total: s.lessons_total,
+      price_final: s.price_final,
+      paid: s.paid,
+      used: s.marks.filter((m) => m.lesson_id !== lessonId && consumesCredit(m.status)).length,
+    })),
+  )
+  const current = balances.find((b) => b.isCurrent)
+  if (!current) return null
+  const debt = totalDebt(balances)
+  return {
+    state: debt.lessons > 0 ? 'debt' : payState(current),
+    paidLessons: current.paidLessons,
+    available: availableLessons(current),
+    debtLessons: debt.lessons,
+    debtSom: debt.som,
+  }
+}
+
 const byStart = (a: SubscriptionSource, b: SubscriptionSource) =>
   a.started_at.localeCompare(b.started_at) ||
   a.created_at.localeCompare(b.created_at) ||
@@ -105,6 +161,8 @@ export interface RosterRow {
   initials: string
   parentPhone: string | null
   balance: Balance | null
+  /** Money: debt and pay state over the student's subscriptions in the group. */
+  pay: StudentPay | null
   /**
    * The subscription the mark is charged to — of a held lesson the one holding the mark — whose
    * full price is the teacher's base (К6); null — no subscription, the mark pays 0.
@@ -140,6 +198,7 @@ export function lessonRoster(
       initials: initials(e.student.full_name),
       parentPhone: e.student.parent_phone,
       balance,
+      pay: studentPay(subs, lesson.id),
       paySubscription: charged
         ? { price_full: charged.price_full, lessons_total: charged.lessons_total }
         : null,
@@ -158,44 +217,61 @@ export function freezeBlocked(row: Pick<RosterRow, 'balance'>, mark: Mark | unde
 export const freezeLimitHint = (b: Pick<Balance, 'freezeLimit'>) =>
   `лимит ${b.freezeLimit} на абонемент`
 
-/** Lessons taken «в долг» beyond the last subscription (В7). */
-export const debtLessons = (b: Pick<Balance, 'left'>) => Math.max(0, -b.left)
-
 const LESSONS_GEN = ['урок', 'урока', 'уроков'] as const
 const som = (n: number) => `${formatSom(n)} сом`
 
 export type Tone = 'muted' | 'warn' | 'debt'
 
+type Meta = Pick<RosterRow, 'balance' | 'pay'>
+
+/** Up to 3 lessons «в долг» are a warning, beyond — red (В7). */
+const debtTone = (lessons: number): Tone => (debtOverLimit(lessons) ? 'debt' : 'warn')
+
+/** Paid ahead only partly (the package is not fully paid). */
+const partlyPaid = (b: Balance, p: StudentPay) => p.paidLessons < b.total
+
 /**
- * Second line under the name (У3): «Долг 2 ур. · абонемент не оплачен» / «Осталось 1 ур. · пора
- * оплачивать» / «Осталось 4 ур. · заморозок 1/2».
+ * Second line under the name (У3): «Долг 2 ур. · 533 сом» / «Осталось 1 ур. · пора оплачивать» /
+ * «Частично · оплачено 6 ур · заморозок 1/2» / «Осталось 4 ур. · заморозок 1/2».
  */
-export function mobileMeta(row: Pick<RosterRow, 'balance'>): { text: string; tone: Tone } {
+export function mobileMeta(row: Meta): { text: string; tone: Tone } {
   const b = row.balance
-  if (!b) return { text: 'Нет абонемента', tone: 'debt' }
-  const debt = debtLessons(b)
-  if (debt > 0) return { text: `Долг ${debt} ур. · абонемент не оплачен`, tone: 'debt' }
-  if (b.left <= 2) return { text: `Осталось ${b.left} ур. · пора оплачивать`, tone: 'warn' }
-  return { text: `Осталось ${b.left} ур. · заморозок ${b.freezes}/${b.freezeLimit}`, tone: 'muted' }
+  const p = row.pay
+  if (!b || !p) return { text: 'Нет абонемента', tone: 'debt' }
+  const freezes = `заморозок ${b.freezes}/${b.freezeLimit}`
+  if (p.state === 'debt') {
+    return { text: `Долг ${p.debtLessons} ур. · ${som(p.debtSom)}`, tone: debtTone(p.debtLessons) }
+  }
+  if (p.state === 'soon') {
+    const text = partlyPaid(b, p) ? `Оплачено ещё ${p.available} ур.` : `Осталось ${b.left} ур.`
+    return { text: `${text} · пора оплачивать`, tone: 'warn' }
+  }
+  if (p.state === 'partial') {
+    return { text: `Частично · оплачено ${p.paidLessons} ур · ${freezes}`, tone: 'warn' }
+  }
+  return { text: `Осталось ${b.left} ур. · ${freezes}`, tone: 'muted' }
 }
 
 /** «Абонемент» column (УД2): «4 из 12 · заморозок 1/2», «долг 2 урока · 533 сом», «… — лимит». */
-export function desktopMeta(row: Pick<RosterRow, 'balance'>): { text: string; tone: Tone } {
+export function desktopMeta(row: Meta): { text: string; tone: Tone } {
   const b = row.balance
-  if (!b) return { text: 'нет абонемента', tone: 'debt' }
-  const debt = debtLessons(b)
-  if (debt > 0) {
+  const p = row.pay
+  if (!b || !p) return { text: 'нет абонемента', tone: 'debt' }
+  if (p.state === 'debt') {
     return {
-      text: `долг ${debt} ${pluralRu(debt, LESSONS_GEN)} · ${som(debt * b.lessonPrice)}`,
-      tone: 'debt',
+      text: `долг ${p.debtLessons} ${pluralRu(p.debtLessons, LESSONS_GEN)} · ${som(p.debtSom)}`,
+      tone: debtTone(p.debtLessons),
     }
   }
-  if (b.left <= 2) return { text: `${b.left} из ${b.total} · пора оплачивать`, tone: 'warn' }
-  const limit = b.freezes >= b.freezeLimit ? ' — лимит' : ''
-  return {
-    text: `${b.left} из ${b.total} · заморозок ${b.freezes}/${b.freezeLimit}${limit}`,
-    tone: 'muted',
+  if (p.state === 'soon') {
+    const text = partlyPaid(b, p) ? `оплачено ещё ${p.available} ур.` : `${b.left} из ${b.total}`
+    return { text: `${text} · пора оплачивать`, tone: 'warn' }
   }
+  const freezes = `заморозок ${b.freezes}/${b.freezeLimit}${b.freezes >= b.freezeLimit ? ' — лимит' : ''}`
+  if (p.state === 'partial') {
+    return { text: `частично · оплачено ${p.paidLessons} ур · ${freezes}`, tone: 'warn' }
+  }
+  return { text: `${b.left} из ${b.total} · ${freezes}`, tone: 'muted' }
 }
 
 export interface Tally {

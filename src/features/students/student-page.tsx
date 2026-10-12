@@ -3,8 +3,11 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { ChevronLeft, Phone, Search } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
+import { balancesQuery, studentPaymentsQuery, type PaymentRow } from '@/features/payments/api'
+import { availableLessons, totalDebt } from '@/features/payments/balance'
 import { EnrollDialog, type EnrollStudent } from '@/features/subscriptions/enroll-dialog'
-import { cardClass, chipClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
+import { formatSom } from '@/features/tariffs/model'
+import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
 import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -12,7 +15,6 @@ import { cn } from '@/lib/utils'
 import { attendanceQuery, studentsQuery, type AttendanceRecord } from './api'
 import {
   ATTENDANCE_LABEL,
-  discountCaption,
   displayPhone,
   enrollableGroups,
   enrollmentViews,
@@ -22,20 +24,24 @@ import {
   formatMarkedAt,
   groupLabel,
   initials,
-  priceCaption,
-  scheduleCaption,
   shortName,
+  type Balance,
   type EnrollmentView,
   type GroupBrief,
   type StudentRow,
   type StudentsSource,
 } from './model'
+import { debtCaption } from './pay-view'
+import { EnrollmentCard, MobileEnrollment } from './student-card'
 import { StudentFormDialog } from './student-form-dialog'
+import { PaymentsSection } from './student-payments'
 
 interface StudentView {
   student: StudentRow
   enrollments: EnrollmentView[]
   active: EnrollmentView[]
+  /** Balances of every subscription of the student (old ones too). */
+  balances: Balance[]
   referrer: StudentRow | null
   groupsById: Map<string, GroupBrief>
   /** Groups the student can still join. */
@@ -43,18 +49,26 @@ interface StudentView {
   enroll: EnrollStudent
 }
 
-function buildView(data: StudentsSource, studentId: string): StudentView | null {
+function buildView(
+  data: StudentsSource,
+  allBalances: readonly Balance[],
+  studentId: string,
+): StudentView | null {
   const student = data.students.find((s) => s.id === studentId)
   if (!student) return null
   const groupsById = new Map(data.groups.map((g) => [g.id, g]))
-  const balances = new Map(data.balances.map((b) => [b.subscription_id, b]))
+  const balances = new Map(allBalances.map((b) => [b.subscriptionId, b]))
   const enrollments = enrollmentViews(student, groupsById, balances)
+  const own = student.enrollments.flatMap((e) =>
+    e.subscriptions.flatMap((s) => balances.get(s.id) ?? []),
+  )
   const active = enrollments.filter((e) => e.active)
   const activeGroupIds = new Set(active.map((e) => e.group?.id))
   return {
     student,
     enrollments,
     active,
+    balances: own,
     referrer: data.students.find((s) => s.id === student.referred_by_student_id) ?? null,
     groupsById,
     enrollable: enrollableGroups(data.groups).filter((g) => !activeGroupIds.has(g.id)),
@@ -69,16 +83,24 @@ function buildView(data: StudentsSource, studentId: string): StudentView | null 
 }
 
 // А6 Ученик (docs/design/AdminStudent.dc.html), phone — АМ2 (AdminMobileStudent.dc.html).
-// R1 without payments: «Оплачено», «Платежи», «Итого · долг», «Записать оплату» come with R2.
+// Money: balances from v_student_balance (features/payments), «Платежи» from payments.
 export function StudentPage({ studentId }: { studentId: string }) {
   const isDesktop = useIsDesktop()
   const now = useNow()
   const today = bishkekDate(now)
-  const query = useQuery(studentsQuery())
+  const students = useQuery(studentsQuery())
+  const balances = useQuery(balancesQuery())
   const attendance = useQuery(attendanceQuery(studentId))
+  const paymentsQuery = useQuery(studentPaymentsQuery(studentId))
+  const query = {
+    isPending: students.isPending || balances.isPending,
+    isError: students.isError || balances.isError,
+    data: students.data,
+  }
   const view = useMemo(
-    () => (query.data ? buildView(query.data, studentId) : null),
-    [query.data, studentId],
+    () =>
+      students.data && balances.data ? buildView(students.data, balances.data, studentId) : null,
+    [students.data, balances.data, studentId],
   )
   const [editing, setEditing] = useState(false)
   const [enrolling, setEnrolling] = useState(false)
@@ -111,20 +133,28 @@ export function StudentPage({ studentId }: { studentId: string }) {
     },
   }
   const records = attendance.data ?? []
+  const payments = {
+    payments: paymentsQuery.data ?? [],
+    paymentsState: paymentsQuery.isError
+      ? ('error' as const)
+      : paymentsQuery.isPending
+        ? ('pending' as const)
+        : ('ready' as const),
+  }
 
   return (
     <>
       {isDesktop ? (
-        <DesktopStudent view={view} today={today} records={records} {...actions} />
+        <DesktopStudent view={view} today={today} records={records} {...payments} {...actions} />
       ) : (
-        <MobileStudent view={view} today={today} records={records} {...actions} />
+        <MobileStudent view={view} today={today} records={records} {...payments} {...actions} />
       )}
       {editing && (
         <StudentFormDialog
           open={editing}
           onOpenChange={setEditing}
           student={view.student}
-          students={query.data.students}
+          students={students.data?.students ?? []}
         />
       )}
       {enrolling && (
@@ -144,6 +174,8 @@ interface ScreenProps {
   view: StudentView
   today: string
   records: AttendanceRecord[]
+  payments: PaymentRow[]
+  paymentsState: 'pending' | 'error' | 'ready'
   onEdit: () => void
   onEnroll: () => void
 }
@@ -163,14 +195,9 @@ function headerCaption(view: StudentView): string {
     .join(' · ')
 }
 
-function enrollmentCaption(e: EnrollmentView, today: string): string {
-  return [
-    e.group?.teacher ? firstName(e.group.teacher.full_name) : null,
-    e.group ? scheduleCaption(e.group.schedule_rules, today) || null : null,
-    `зачислен ${formatDayMonth(e.startDate)}`,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+function groupName(view: StudentView, groupId: string): string | null {
+  const g = view.groupsById.get(groupId)
+  return g ? groupLabel(g) : null
 }
 
 function BackLink() {
@@ -192,7 +219,15 @@ const primaryButton =
 
 // ─── Desktop (А6) ───────────────────────────────────────────────────────────
 
-function DesktopStudent({ view, today, records, onEdit, onEnroll }: ScreenProps) {
+function DesktopStudent({
+  view,
+  today,
+  records,
+  payments,
+  paymentsState,
+  onEdit,
+  onEnroll,
+}: ScreenProps) {
   const s = view.student
   return (
     <div className="flex flex-col gap-5">
@@ -215,10 +250,13 @@ function DesktopStudent({ view, today, records, onEdit, onEnroll }: ScreenProps)
             type="button"
             onClick={onEnroll}
             disabled={view.enrollable.length === 0}
-            className={cn(primaryButton, 'disabled:opacity-50')}
+            className={cn(outlineButton, 'disabled:opacity-50')}
           >
             + Зачислить в группу
           </button>
+          <Link to="/admin/payments" search={{ student: s.id }} className={primaryButton}>
+            Записать оплату
+          </Link>
         </div>
       </header>
 
@@ -232,6 +270,12 @@ function DesktopStudent({ view, today, records, onEdit, onEnroll }: ScreenProps)
           <AttendanceTable view={view} records={records} />
         </div>
         <aside className="flex flex-col gap-3.5">
+          <PaymentsSection
+            studentId={s.id}
+            payments={payments}
+            state={paymentsState}
+            groupNameOf={(id) => (view.enrollments.length > 1 ? groupName(view, id) : null)}
+          />
           <Totals view={view} records={records} />
           <Notes notes={s.notes} />
         </aside>
@@ -257,86 +301,6 @@ function NotEnrolled({ onEnroll }: { onEnroll: () => void }) {
       <button type="button" onClick={onEnroll} className={primaryButton}>
         + Зачислить в группу
       </button>
-    </section>
-  )
-}
-
-function Tile({ label, value, caption }: { label: string; value: ReactNode; caption: ReactNode }) {
-  return (
-    <div className="rounded-[14px] bg-muted px-3.5 py-3">
-      <div className="text-[11px] font-extrabold tracking-[0.06em] text-ink-muted uppercase">
-        {label}
-      </div>
-      <div className="font-display text-lg font-bold whitespace-nowrap">{value}</div>
-      <div className="text-xs font-bold text-ink-muted">{caption}</div>
-    </div>
-  )
-}
-
-/** One segment per lesson: used — «Был»-green, left — line (А6 bar without the R2 «оплачен»). */
-function UsageBar({ total, used, thin }: { total: number; used: number; thin?: boolean }) {
-  return (
-    <div
-      className={cn('flex gap-[3px]', thin ? 'h-2' : 'h-2.5')}
-      role="img"
-      aria-label={`Использовано ${used} из ${total}`}
-    >
-      {Array.from({ length: total }, (_, i) => (
-        <div key={i} className={cn('flex-1 rounded-[3px]', i < used ? 'bg-present' : 'bg-line')} />
-      ))}
-    </div>
-  )
-}
-
-function EnrollmentCard({ e, today }: { e: EnrollmentView; today: string }) {
-  const sub = e.subscription
-  const used = e.balance?.lessons_used ?? 0
-  const left = e.balance?.lessons_left ?? sub?.lessons_total ?? 0
-  return (
-    <section
-      aria-label={e.groupLabel}
-      className={cn(cardClass, 'flex flex-col gap-3.5 px-[22px] py-5')}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="text-base font-extrabold">{e.groupLabel}</h2>
-          <p className="text-xs font-bold text-ink-muted">{enrollmentCaption(e, today)}</p>
-        </div>
-        <span className={cn(chipClass, 'bg-present-soft text-present-strong')}>Активен</span>
-      </div>
-      {sub ? (
-        <>
-          <div className="grid grid-cols-3 gap-2.5">
-            <Tile
-              label="Абонемент"
-              value={`${sub.lessons_total} уроков`}
-              caption={priceCaption(sub)}
-            />
-            <Tile
-              label="Использовано"
-              value={`${used} из ${sub.lessons_total}`}
-              caption={`заморозок ${e.balance?.freezes_used ?? 0} / ${e.balance?.freeze_limit ?? 2}`}
-            />
-            <Tile
-              label="Осталось уроков"
-              value={left}
-              caption={`с ${formatDayMonth(sub.started_at)}`}
-            />
-          </div>
-          <UsageBar total={sub.lessons_total} used={used} />
-          <div className="flex gap-3.5 text-xs font-bold text-ink-muted">
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block size-2.5 rounded-[3px] bg-present" /> использован
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="inline-block size-2.5 rounded-[3px] bg-line" /> осталось
-            </span>
-            {discountCaption(sub) && <span className="ml-auto">{discountCaption(sub)}</span>}
-          </div>
-        </>
-      ) : (
-        <p className="text-sm font-bold text-ink-muted">Абонемента нет</p>
-      )}
     </section>
   )
 }
@@ -411,11 +375,22 @@ function AttendanceTable({ view, records }: { view: StudentView; records: Attend
 }
 
 function Totals({ view, records }: { view: StudentView; records: AttendanceRecord[] }) {
+  const paid = view.balances.reduce((n, b) => n + b.paidSom, 0)
+  const debt = totalDebt(view.balances)
   const rows: [string, ReactNode][] = [
     ['Групп', view.active.length],
     ['Посещений', records.filter((r) => r.status === 'present').length],
     ['Использовано уроков', records.filter((r) => r.consumes_credit).length],
     ['Заморозок', records.filter((r) => r.status === 'absent_frozen').length],
+    ['Оплачено всего', formatSom(paid)],
+    [
+      'Долг',
+      debt.lessons > 0 ? (
+        <span className={debtOnDark(debt.lessons)}>{debtCaption(debt.lessons, debt.som)}</span>
+      ) : (
+        'нет'
+      ),
+    ],
   ]
   return (
     <section className="flex flex-col gap-2.5 rounded-[20px] bg-ink px-[18px] py-4 text-paper">
@@ -423,14 +398,18 @@ function Totals({ view, records }: { view: StudentView; records: AttendanceRecor
         Итого по ученику
       </h2>
       {rows.map(([label, value]) => (
-        <div key={label} className="flex justify-between text-[13px] font-bold">
+        <div key={label} className="flex justify-between gap-3 text-[13px] font-bold">
           <span className="opacity-75">{label}</span>
-          <span>{value}</span>
+          <span className="text-right">{value}</span>
         </div>
       ))}
     </section>
   )
 }
+
+/** Light tints on the dark card; the text («долг …») carries the meaning, the tint the severity. */
+const debtOnDark = (lessons: number) =>
+  lessons > 3 ? 'font-extrabold text-burned-soft' : 'font-extrabold text-warn-soft'
 
 function Notes({ notes }: { notes: string | null }) {
   return (
@@ -445,17 +424,26 @@ function Notes({ notes }: { notes: string | null }) {
 
 // ─── Phone (АМ2) ────────────────────────────────────────────────────────────
 
-function MobileStudent({ view, today, records, onEdit, onEnroll }: ScreenProps) {
+function MobileStudent({
+  view,
+  today,
+  records,
+  payments,
+  paymentsState,
+  onEdit,
+  onEnroll,
+}: ScreenProps) {
   const s = view.student
   const navigate = useNavigate()
   const [q, setQ] = useState('')
   const first = view.active[0]
-  const left = view.active.reduce(
-    (n, e) => n + (e.balance?.lessons_left ?? e.subscription?.lessons_total ?? 0),
+  const debt = totalDebt(view.balances)
+  const available = view.active.reduce(
+    (n, e) => n + (e.balance ? Math.max(0, availableLessons(e.balance)) : 0),
     0,
   )
   const freezes = first?.balance
-    ? `${first.balance.freezes_used} / ${first.balance.freeze_limit}`
+    ? `${first.balance.freezesUsed} / ${first.balance.freezeLimit}`
     : '—'
   const caption = [
     s.grade ? `${s.grade} класс` : null,
@@ -509,13 +497,33 @@ function MobileStudent({ view, today, records, onEdit, onEnroll }: ScreenProps) 
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <DarkTile value={view.active.length ? left : '—'} label="осталось уроков" accent />
-          <DarkTile value={freezes} label="заморозок" />
+          {debt.lessons > 0 ? (
+            <>
+              <DarkTile value={`−${debt.lessons}`} label="уроков в долг" accent />
+              <DarkTile value={formatSom(debt.som)} label="сом долг" />
+            </>
+          ) : (
+            <>
+              <DarkTile
+                value={view.active.length ? available : '—'}
+                label="доступно уроков"
+                accent
+              />
+              <DarkTile value={freezes} label="заморозок" />
+            </>
+          )}
           <DarkTile
             value={records.filter((r) => r.status === 'present').length}
             label="посещений"
           />
         </div>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex min-h-11 items-center justify-center rounded-xl border border-paper/30 px-3 text-[13px] font-extrabold text-paper"
+        >
+          Изменить
+        </button>
         {phone ? (
           <a
             href={`tel:${phone.replace(/\s/g, '')}`}
@@ -543,38 +551,15 @@ function MobileStudent({ view, today, records, onEdit, onEnroll }: ScreenProps) 
           Ещё не зачислен в группу — абонемент создаётся при зачислении.
         </section>
       ) : (
-        view.active.map((e) => {
-          const sub = e.subscription
-          const used = e.balance?.lessons_used ?? 0
-          return (
-            <section
-              key={e.enrollmentId}
-              aria-label={e.groupLabel}
-              className={cn(cardClass, 'flex flex-col gap-2.5 rounded-[18px] px-4 py-3.5')}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="text-sm font-extrabold">Абонемент · {e.groupLabel}</h2>
-                <span className={cn(chipClass, 'bg-present-soft text-[11px] text-present-strong')}>
-                  Активен
-                </span>
-              </div>
-              <p className="text-xs font-bold text-ink-muted">
-                {sub
-                  ? `${sub.lessons_total} уроков · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
-                  : enrollmentCaption(e, today)}
-              </p>
-              {sub && (
-                <>
-                  <UsageBar total={sub.lessons_total} used={used} thin />
-                  <p className="text-xs font-extrabold">
-                    Использовано {used} из {sub.lessons_total}
-                  </p>
-                </>
-              )}
-            </section>
-          )
-        })
+        view.active.map((e) => <MobileEnrollment key={e.enrollmentId} e={e} today={today} />)
       )}
+
+      <PaymentsSection
+        studentId={s.id}
+        payments={payments}
+        state={paymentsState}
+        groupNameOf={(id) => (view.enrollments.length > 1 ? groupName(view, id) : null)}
+      />
 
       <section aria-label="Посещаемость" className={cn(cardClass, 'flex flex-col rounded-[18px]')}>
         <h2 className="border-b border-line px-4 py-3 text-sm font-extrabold">Посещаемость</h2>
@@ -607,19 +592,19 @@ function MobileStudent({ view, today, records, onEdit, onEnroll }: ScreenProps) 
       <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2.5 border-t border-line bg-card px-5 pt-3 pb-[max(1.875rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
-          onClick={onEdit}
-          className="flex min-h-[52px] flex-1 items-center justify-center rounded-2xl border-[1.5px] border-ink text-sm font-extrabold text-ink"
-        >
-          Изменить
-        </button>
-        <button
-          type="button"
           onClick={onEnroll}
           disabled={view.enrollable.length === 0}
-          className="flex min-h-[52px] flex-[1.5] items-center justify-center rounded-2xl bg-ink text-sm font-extrabold text-brand disabled:opacity-50"
+          className="flex min-h-[52px] flex-1 items-center justify-center rounded-2xl border-[1.5px] border-ink text-sm font-extrabold text-ink disabled:opacity-50"
         >
-          Зачислить в группу
+          Зачислить
         </button>
+        <Link
+          to="/admin/payments"
+          search={{ student: s.id }}
+          className="flex min-h-[52px] flex-[1.5] items-center justify-center rounded-2xl bg-ink text-sm font-extrabold text-brand"
+        >
+          Записать оплату
+        </Link>
       </div>
     </div>
   )

@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { balancesQuery } from '@/features/payments/api'
 import { studentsQuery } from '@/features/students/api'
 import {
   currentSubscription,
@@ -12,6 +13,7 @@ import {
   formatDayMonth,
   groupLabel,
   shortName,
+  type Balance,
   type StudentsSource,
 } from '@/features/students/model'
 import { fillCaption } from '@/features/trials/model'
@@ -58,8 +60,12 @@ interface MemberRow {
 }
 
 /** Students actively enrolled in the group with their current subscription (А4 table). */
-function members(data: StudentsSource, groupId: string): MemberRow[] {
-  const balances = new Map(data.balances.map((b) => [b.subscription_id, b]))
+function members(
+  data: StudentsSource,
+  balanceRows: readonly Balance[],
+  groupId: string,
+): MemberRow[] {
+  const balances = new Map(balanceRows.map((b) => [b.subscriptionId, b]))
   const byId = new Map(data.students.map((s) => [s.id, s]))
   return data.students
     .flatMap((s) => {
@@ -78,9 +84,9 @@ function members(data: StudentsSource, groupId: string): MemberRow[] {
           fullName: s.full_name,
           caption,
           startDate: e.start_date,
-          left: sub ? (balance?.lessons_left ?? sub.lessons_total) : null,
+          left: sub ? (balance?.lessonsLeft ?? sub.lessons_total) : null,
           total: sub?.lessons_total ?? null,
-          freezes: balance ? `${balance.freezes_used} / ${balance.freeze_limit}` : '—',
+          freezes: balance ? `${balance.freezesUsed} / ${balance.freezeLimit}` : '—',
         },
       ]
     })
@@ -109,7 +115,7 @@ type Dialog =
   | { kind: 'substitute'; lesson: LessonRow }
 
 // А4 Группа (docs/design/AdminGroup.dc.html): header, «Ученики» (R1-4 enrollments) and «Занятия»
-// (cancel / extra lesson / substitute). R2 parts — payments, debts, trials — are not drawn yet.
+// (cancel / extra lesson / substitute). payments and debts live on А5 / А6 / А7.
 export function GroupPage({ groupId }: { groupId: string }) {
   const isDesktop = useIsDesktop()
   const now = useNow()
@@ -117,6 +123,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
   const queryClient = useQueryClient()
   const groups = useQuery(groupsQuery())
   const students = useQuery(studentsQuery())
+  const balances = useQuery(balancesQuery())
   const lessons = useQuery(lessonsQuery(groupId))
   const trials = useGroupTrials(groupId)
   const [tab, setTab] = useState('students')
@@ -132,8 +139,8 @@ export function GroupPage({ groupId }: { groupId: string }) {
     [lessons.data, today, teacherNames],
   )
   const roster = useMemo(
-    () => (students.data ? members(students.data, groupId) : []),
-    [students.data, groupId],
+    () => (students.data ? members(students.data, balances.data ?? [], groupId) : []),
+    [students.data, balances.data, groupId],
   )
 
   const trialActions = useTrialActions(group, today)

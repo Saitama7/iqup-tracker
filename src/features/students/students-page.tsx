@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { Search } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { PageHeader, PageTitle } from '@/components/page'
+import { balancesQuery } from '@/features/payments/api'
+import { formatSom } from '@/features/tariffs/model'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
@@ -13,19 +15,23 @@ import {
   filterRows,
   groupLabel,
   listCaption,
+  needsPayment,
+  payCounts,
   studentListRows,
   type GroupBrief,
+  type PayFilter,
   type StudentFilter,
   type StudentListRow,
 } from './model'
-import { NativeSelect, StatusChip } from './parts'
+import { NativeSelect, PayChip } from './parts'
+import { debtCaption, debtTone } from './pay-view'
 import { StudentFormDialog } from './student-form-dialog'
 
 const chipBase =
   'inline-flex min-h-9 items-center rounded-full px-3.5 text-[13px] font-extrabold whitespace-nowrap'
 
 // А5 Ученики (docs/design/AdminStudents.dc.html). Phone: same route, table → cards.
-// R1: no payments yet — «Оплата», «Долг» and the debt chips come with R2 (issue #8 «Не делать»).
+// Balances come from v_student_balance (features/payments): «Оплата» chip, «Долг» in som.
 export function StudentsPage({
   search,
   onSearchChange,
@@ -35,18 +41,32 @@ export function StudentsPage({
 }) {
   const isDesktop = useIsDesktop()
   const navigate = useNavigate()
-  const query = useQuery(studentsQuery())
-  const data = query.data
+  const studentsResult = useQuery(studentsQuery())
+  const balancesResult = useQuery(balancesQuery())
+  const query = {
+    isPending: studentsResult.isPending || balancesResult.isPending,
+    isError: studentsResult.isError || balancesResult.isError,
+  }
+  const data = studentsResult.data
+  const balances = balancesResult.data
   const [creating, setCreating] = useState(false)
 
-  const rows = useMemo(() => (data ? studentListRows(data) : []), [data])
+  const rows = useMemo(
+    () => (data && balances ? studentListRows(data, balances) : []),
+    [data, balances],
+  )
+  const counts = useMemo(() => payCounts(rows), [rows])
   const groups = useMemo(() => (data ? enrollableGroups(data.groups) : []), [data])
   const shown = useMemo(() => filterRows(rows, search), [rows, search])
   const caption = data ? listCaption(rows) : ' '
 
   const set = (patch: StudentFilter) => {
     const next = { ...search, ...patch }
-    onSearchChange({ q: next.q || undefined, group: next.group || undefined })
+    onSearchChange({
+      q: next.q || undefined,
+      group: next.group || undefined,
+      pay: next.pay || undefined,
+    })
   }
 
   const searchBox = (
@@ -117,23 +137,15 @@ export function StudentsPage({
         </>
       )}
 
-      {isDesktop && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            aria-pressed={!search.group}
-            onClick={() => {
-              set({ group: undefined })
-            }}
-            className={cn(
-              chipBase,
-              !search.group
-                ? 'bg-ink text-brand'
-                : 'border-[1.5px] border-line-strong bg-card text-ink-muted',
-            )}
-          >
-            Все · {rows.length}
-          </button>
+      <PayChips
+        total={rows.length}
+        counts={counts}
+        value={search.pay}
+        onChange={(pay) => {
+          set({ pay })
+        }}
+      >
+        {isDesktop && (
           <GroupFilter
             groups={groups}
             value={search.group}
@@ -142,8 +154,8 @@ export function StudentsPage({
             }}
             className="w-64"
           />
-        </div>
-      )}
+        )}
+      </PayChips>
 
       {query.isPending ? (
         <div className={cn(cardClass, 'h-64 animate-pulse')} aria-label="Загрузка" />
@@ -172,6 +184,97 @@ export function StudentsPage({
         />
       )}
     </div>
+  )
+}
+
+const PAY_CHIPS: { value: PayFilter; label: string }[] = [
+  { value: 'debt', label: 'Долг' },
+  { value: 'soon', label: 'Пора оплачивать' },
+  { value: 'partial', label: 'Частично' },
+]
+
+function PayChips({
+  total,
+  counts,
+  value,
+  onChange,
+  children,
+}: {
+  total: number
+  counts: Record<PayFilter, number>
+  value: PayFilter | undefined
+  onChange: (value: PayFilter | undefined) => void
+  children?: ReactNode
+}) {
+  const chip = (active: boolean) =>
+    cn(
+      chipBase,
+      active ? 'bg-ink text-brand' : 'border-[1.5px] border-line-strong bg-card text-ink-muted',
+    )
+  return (
+    <div className="-mx-5 flex items-center gap-2 overflow-x-auto px-5 min-[900px]:mx-0 min-[900px]:flex-wrap min-[900px]:overflow-visible min-[900px]:px-0">
+      <button
+        type="button"
+        aria-pressed={!value}
+        onClick={() => {
+          onChange(undefined)
+        }}
+        className={chip(!value)}
+      >
+        Все · {total}
+      </button>
+      {PAY_CHIPS.map((c) => (
+        <button
+          key={c.value}
+          type="button"
+          aria-pressed={value === c.value}
+          onClick={() => {
+            onChange(value === c.value ? undefined : c.value)
+          }}
+          className={chip(value === c.value)}
+        >
+          {c.label} · {counts[c.value]}
+        </button>
+      ))}
+      {children}
+    </div>
+  )
+}
+
+function DebtCell({ row }: { row: StudentListRow }) {
+  if (row.debtLessons === 0) return <span className="text-ink-muted">—</span>
+  return (
+    <span
+      className={cn(
+        'font-extrabold',
+        debtTone(row.debtLessons) === 'burned' ? 'text-burned' : 'text-warn',
+      )}
+    >
+      {formatSom(row.debtSom)}
+    </span>
+  )
+}
+
+function ActionLink({ row }: { row: StudentListRow }) {
+  const cls = 'text-xs font-extrabold whitespace-nowrap text-teal'
+  return needsPayment(row) ? (
+    <Link
+      to="/admin/payments"
+      search={{ student: row.id }}
+      className={cls}
+      aria-label={`Оплата: ${row.fullName}`}
+    >
+      Оплата
+    </Link>
+  ) : (
+    <Link
+      to="/admin/students/$studentId"
+      params={{ studentId: row.id }}
+      className={cls}
+      aria-label={`Открыть: ${row.fullName}`}
+    >
+      Открыть
+    </Link>
   )
 }
 
@@ -208,7 +311,7 @@ function GroupFilter({
 function StudentsTable({ rows }: { rows: StudentListRow[] }) {
   return (
     <div className={cn(cardClass, 'overflow-x-auto')}>
-      <table className="w-full min-w-[900px] border-collapse" aria-label="Ученики">
+      <table className="w-full min-w-[960px] border-collapse" aria-label="Ученики">
         <thead>
           <tr className="border-b border-line">
             <th className={thClass}>Ученик</th>
@@ -216,7 +319,8 @@ function StudentsTable({ rows }: { rows: StudentListRow[] }) {
             <th className={thClass}>Группы</th>
             <th className={thClass}>Родитель</th>
             <th className={cn(thClass, 'text-right')}>Осталось уроков</th>
-            <th className={thClass}>Статус</th>
+            <th className={thClass}>Оплата</th>
+            <th className={cn(thClass, 'text-right')}>Долг</th>
             <th className={thClass}>
               <span className="sr-only">Действия</span>
             </th>
@@ -224,10 +328,7 @@ function StudentsTable({ rows }: { rows: StudentListRow[] }) {
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr
-              key={r.id}
-              className={cn('[&:last-child>td]:border-0', r.status === 'exhausted' && 'bg-accent')}
-            >
+            <tr key={r.id} className="[&:last-child>td]:border-0">
               <td className={tdClass}>
                 <Link
                   to="/admin/students/$studentId"
@@ -242,27 +343,17 @@ function StudentsTable({ rows }: { rows: StudentListRow[] }) {
               <td className={cn(tdClass, 'whitespace-nowrap text-ink-muted')}>
                 {displayPhone(r.parentPhone) ?? '—'}
               </td>
-              <td
-                className={cn(
-                  tdClass,
-                  numClass,
-                  r.status === 'exhausted' && 'font-extrabold text-warn',
-                )}
-              >
+              <td className={cn(tdClass, numClass)}>
                 {r.remaining || <span className="text-ink-muted">—</span>}
               </td>
               <td className={tdClass}>
-                <StatusChip status={r.status} />
+                <PayChip row={r} />
+              </td>
+              <td className={cn(tdClass, numClass)}>
+                <DebtCell row={r} />
               </td>
               <td className={tdClass}>
-                <Link
-                  to="/admin/students/$studentId"
-                  params={{ studentId: r.id }}
-                  className="text-xs font-extrabold whitespace-nowrap text-teal"
-                  aria-label={`Открыть: ${r.fullName}`}
-                >
-                  Открыть
-                </Link>
+                <ActionLink row={r} />
               </td>
             </tr>
           ))}
@@ -280,15 +371,11 @@ function StudentCards({ rows }: { rows: StudentListRow[] }) {
           <Link
             to="/admin/students/$studentId"
             params={{ studentId: r.id }}
-            className={cn(
-              cardClass,
-              'flex flex-col gap-1.5 rounded-[18px] px-4 py-3.5',
-              r.status === 'exhausted' && 'bg-accent',
-            )}
+            className={cn(cardClass, 'flex flex-col gap-1.5 rounded-[18px] px-4 py-3.5')}
           >
             <div className="flex items-start justify-between gap-3">
               <span className="font-extrabold text-ink">{r.fullName}</span>
-              <StatusChip status={r.status} />
+              <PayChip row={r} />
             </div>
             <div className="text-[13px] font-bold text-ink-muted">
               {[r.grade ? `${r.grade} класс` : null, r.groups || 'без группы']
@@ -300,16 +387,19 @@ function StudentCards({ rows }: { rows: StudentListRow[] }) {
                 {displayPhone(r.parentPhone) ?? 'нет телефона'}
               </span>
               {r.remaining && (
-                <span
-                  className={cn(
-                    'whitespace-nowrap tabular-nums',
-                    r.status === 'exhausted' && 'font-extrabold text-warn',
-                  )}
-                >
-                  осталось {r.remaining}
-                </span>
+                <span className="whitespace-nowrap tabular-nums">осталось {r.remaining}</span>
               )}
             </div>
+            {r.debtLessons > 0 && (
+              <div
+                className={cn(
+                  'text-[13px] font-extrabold',
+                  debtTone(r.debtLessons) === 'burned' ? 'text-burned' : 'text-warn',
+                )}
+              >
+                {debtCaption(r.debtLessons, r.debtSom)}
+              </div>
+            )}
           </Link>
         </li>
       ))}

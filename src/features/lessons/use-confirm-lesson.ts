@@ -6,6 +6,7 @@ import { onlineManager, useMutation, useQueryClient, type QueryClient } from '@t
 import { toast } from 'sonner'
 import { lessonsKey } from '@/features/groups/api'
 import { TEACHER_GROUPS_KEY } from '@/features/groups/teacher-api'
+import { BALANCES_KEY } from '@/features/payments/api'
 import { PAYROLL_KEY } from '@/features/payroll/api'
 import { ADMIN_LESSONS_KEY } from '@/features/schedule/api'
 import { STUDENTS_KEY } from '@/features/students/api'
@@ -70,6 +71,7 @@ function refresh(qc: QueryClient, lessonId: string, groupId: string) {
     [ADMIN_LESSONS_KEY],
     [PAYROLL_KEY],
     STUDENTS_KEY,
+    [BALANCES_KEY],
     ['teacher-summary'],
     ['student-attendance'],
   ]) {

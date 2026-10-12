@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId, useState, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
+import { BALANCES_KEY } from '@/features/payments/api'
 import { STUDENTS_KEY } from '@/features/students/api'
 import { firstName, formatDayMonth, groupLabel, type GroupBrief } from '@/features/students/model'
 import { FormDialog, NativeSelect } from '@/features/students/parts'
@@ -89,7 +90,10 @@ export function EnrollDialog({
   const mutation = useMutation({
     mutationFn: (input: EnrollInput) => (submit ?? enrollStudent)(input),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: STUDENTS_KEY })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: STUDENTS_KEY }),
+        queryClient.invalidateQueries({ queryKey: [BALANCES_KEY] }),
+      ])
       toast.success(`${student?.fullName ?? 'Ученик'} зачислен(а) в группу`)
       onOpenChange(false)
       onEnrolled?.()
