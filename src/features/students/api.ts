@@ -4,6 +4,7 @@ import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { normalizePhone } from '@/lib/phone'
+import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import type { StudentsSource } from './model'
 
@@ -44,7 +45,7 @@ const studentSchema = z.object({
 const groupSchema = z.object({
   id: z.uuid(),
   name: z.string(),
-  subject: z.string(),
+  subject: subjectName,
   group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
   status: z.enum(['forming', 'active', 'archived']),
   start_date: z.string(),
@@ -84,7 +85,7 @@ export const studentsQuery = () =>
         supabase
           .from('groups')
           .select(
-            'id, name, subject, group_type, status, start_date, end_date, teacher:teachers(full_name), schedule_rules(weekday, start_time, valid_from, valid_to)',
+            'id, name, subject:subjects(name), group_type, status, start_date, end_date, teacher:teachers(full_name), schedule_rules(weekday, start_time, valid_from, valid_to)',
           ),
         supabase
           .from('v_subscription_balances')

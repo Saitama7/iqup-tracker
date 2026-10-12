@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { ENROLLMENT_FIELDS, enrollmentSchema, toEnrollment } from '@/features/lessons/api'
 import { PAY_ATTENDANCE, PAY_ATTENDANCE_FIELDS } from '@/features/payroll/api'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
+import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import { addDays } from './model'
 import type { TeacherGroupsSource } from './teacher-model'
@@ -18,7 +19,7 @@ const sourceSchema = z.object({
     z.object({
       id: z.uuid(),
       name: z.string(),
-      subject: z.string(),
+      subject: subjectName,
       group_type: GROUP_TYPE,
       status: z.enum(['forming', 'active', 'archived']),
       room: z.string().nullable(),
@@ -71,7 +72,7 @@ export const teacherGroupsQuery = (userId: string, today: string) =>
         supabase
           .from('teachers')
           .select(
-            `rates:teacher_rates(percent, valid_from), groups(id, name, subject, group_type, status, room, schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(${ENROLLMENT_FIELDS}), lessons(id, lesson_date, planned_start, duration_min, status, ${PAY_ATTENDANCE_FIELDS}))`,
+            `rates:teacher_rates(percent, valid_from), groups(id, name, subject:subjects(name), group_type, status, room, schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(${ENROLLMENT_FIELDS}), lessons(id, lesson_date, planned_start, duration_min, status, ${PAY_ATTENDANCE_FIELDS}))`,
           )
           .eq('user_id', userId)
           .neq('groups.status', 'archived')

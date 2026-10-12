@@ -23,6 +23,7 @@ export interface ScheduleRule {
 export interface GroupRow {
   id: string
   name: string
+  subject_id: string
   subject: string
   grade: number | null
   group_type: GroupType
@@ -82,6 +83,85 @@ export const isoWeekday = (iso: string) => ((new Date(utc(iso)).getUTCDay() + 6)
 /** Lessons are generated 8 weeks ahead (issue #9, ensure_lessons from the dashboard). */
 export const HORIZON_DAYS = 56
 export const horizon = (today: string) => addDays(today, HORIZON_DAYS)
+
+// ─── Auto name (А3, #42) ────────────────────────────────────────────────────
+
+/** Letters for parallel groups of one class: «8 класс А», «8 класс Б»… (Ё, Й, Ъ, Ы, Ь skipped). */
+export const NAME_LETTERS: readonly string[] = [
+  'А',
+  'Б',
+  'В',
+  'Г',
+  'Д',
+  'Е',
+  'Ж',
+  'З',
+  'И',
+  'К',
+  'Л',
+  'М',
+  'Н',
+  'О',
+  'П',
+  'Р',
+  'С',
+  'Т',
+  'У',
+  'Ф',
+  'Х',
+  'Ц',
+  'Ч',
+  'Ш',
+  'Щ',
+  'Э',
+  'Ю',
+  'Я',
+]
+
+const TYPE_NAME_SUFFIX: Partial<Record<GroupType, string>> = { pair: 'пара', individual: 'инд.' }
+
+/** Name part of «Математика · 7 класс»: class, letter if any, «пара»/«инд.» for those types. */
+export function groupNameTemplate(grade: number, type: GroupType, letter = ''): string {
+  return [`${grade} класс${letter ? ` ${letter}` : ''}`, TYPE_NAME_SUFFIX[type]]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+const nameKey = (name: string) => name.trim().toLowerCase()
+
+/**
+ * First free name for a new group of the subject: the template while neither it nor a lettered
+ * variant runs, otherwise the first free letter from А. Archived groups free their names — same
+ * rule as the unique index groups_active_name_key (0013).
+ */
+export function autoGroupName(
+  input: { subjectId: string; grade: number; groupType: GroupType },
+  groups: readonly Pick<GroupRow, 'name' | 'subject_id' | 'status'>[],
+): string {
+  const taken = new Set(
+    groups
+      .filter((g) => g.subject_id === input.subjectId && g.status !== 'archived')
+      .map((g) => nameKey(g.name)),
+  )
+  const name = (letter = '') => groupNameTemplate(input.grade, input.groupType, letter)
+  if (!taken.has(nameKey(name())) && NAME_LETTERS.every((l) => !taken.has(nameKey(name(l))))) {
+    return name()
+  }
+  const free = NAME_LETTERS.find((l) => !taken.has(nameKey(name(l))))
+  return free ? name(free) : name()
+}
+
+/** A running group of the subject already has this name (checked again by the database). */
+export function groupNameTaken(
+  name: string,
+  subjectId: string,
+  groups: readonly Pick<GroupRow, 'name' | 'subject_id' | 'status'>[],
+): boolean {
+  return groups.some(
+    (g) =>
+      g.subject_id === subjectId && g.status !== 'archived' && nameKey(g.name) === nameKey(name),
+  )
+}
 
 /** ISO weekday → «ПН» … «ВС». */
 export const WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'] as const

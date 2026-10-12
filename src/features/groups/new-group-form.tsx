@@ -1,15 +1,18 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useId, useState, type SubmitEvent } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useId, useState, type KeyboardEvent, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { STUDENTS_KEY } from '@/features/students/api'
 import { firstName, formatDayMonth, groupLabel } from '@/features/students/model'
 import { NativeSelect } from '@/features/students/parts'
+import { createSubject, subjectForm, subjectsQuery, SUBJECTS_KEY } from '@/features/subjects/api'
 import { GROUP_TYPES, tariffFor, type GroupType } from '@/features/tariffs/current'
 import { ErrorText, Field, inputClass, SubmitButton } from '@/features/tariffs/parts'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { createGroup, groupForm, GROUPS_KEY, type GroupsSource } from './api'
 import {
+  autoGroupName,
+  groupNameTaken,
   horizon,
   planLessonDates,
   teacherConflicts,
@@ -19,8 +22,8 @@ import {
 } from './model'
 import { WeekdayPicker } from './parts'
 
-/** Subjects of the center (А3) plus any already used by a group. */
-const SUBJECTS = ['Математика', 'Химия', 'ОРТ', 'Продлёнка']
+/** Value of the «+ Новый предмет…» option in the subject select. */
+const NEW_SUBJECT = 'new'
 
 function typeOption(type: GroupType, tariff: TariffRow | null): string {
   const label = GROUP_TYPE_LABEL[type]
@@ -57,6 +60,7 @@ export function NewGroupForm({
   const ids = {
     name: useId(),
     subject: useId(),
+    newSubject: useId(),
     grade: useId(),
     type: useId(),
     teacher: useId(),
@@ -66,8 +70,10 @@ export function NewGroupForm({
     room: useId(),
   }
   const queryClient = useQueryClient()
-  const [name, setName] = useState('')
-  const [subject, setSubject] = useState('Математика')
+  // null until the admin edits the name — then auto naming no longer overwrites it.
+  const [nameInput, setNameInput] = useState<string | null>(null)
+  const [subjectInput, setSubjectInput] = useState<string | null>(null)
+  const [newSubject, setNewSubject] = useState<string | null>(null)
   const [grade, setGrade] = useState('')
   const [groupType, setGroupType] = useState<GroupType>('group')
   const [teacherId, setTeacherId] = useState('')
@@ -78,7 +84,16 @@ export function NewGroupForm({
   const [error, setError] = useState<string | null>(null)
 
   const until = horizon(today)
-  const subjects = [...new Set([...SUBJECTS, ...data.groups.map((g) => g.subject)])]
+  const subjectsQ = useQuery(subjectsQuery())
+  const subjects = subjectsQ.data ?? []
+  const subjectId = subjectInput ?? subjects.find((s) => s.is_active)?.id ?? ''
+  // Hidden subjects stay selectable only if already picked (e.g. hidden in another tab).
+  const subjectOptions = subjects.filter((s) => s.is_active || s.id === subjectId)
+  const autoName =
+    subjectId && grade !== ''
+      ? autoGroupName({ subjectId, grade: Number(grade), groupType }, data.groups)
+      : ''
+  const name = nameInput ?? autoName
   const teacher = data.teachers.find((t) => t.id === teacherId) ?? null
   const startIso = parseDateRu(start)
   const timeOk = /^([01]?\d|2[0-3]):[0-5]\d$/.test(time.trim())
@@ -117,11 +132,46 @@ export function NewGroupForm({
     },
   })
 
+  const addSubject = useMutation({
+    mutationFn: (subjectName: string) => createSubject(subjectName, subjects),
+    onSuccess: async (created) => {
+      queryClient.setQueryData(SUBJECTS_KEY, [...subjects, created])
+      await queryClient.invalidateQueries({ queryKey: SUBJECTS_KEY })
+      setSubjectInput(created.id)
+      setNewSubject(null)
+      toast.success(`Предмет «${created.name}» добавлен`)
+    },
+    onError: (e) => {
+      setError(e.message)
+    },
+  })
+
+  function onAddSubject() {
+    const parsed = subjectForm.safeParse({ name: newSubject ?? '' })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Введите название предмета')
+      return
+    }
+    setError(null)
+    addSubject.mutate(parsed.data.name)
+  }
+
+  function onNewSubjectKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      onAddSubject()
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      setNewSubject(null)
+    }
+  }
+
   function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     const parsed = groupForm.safeParse({
       name,
-      subject,
+      subjectId,
       grade,
       groupType,
       teacherId,
@@ -136,6 +186,10 @@ export function NewGroupForm({
     }
     if (!tariff) {
       setError('На дату старта нет тарифа для этого типа группы')
+      return
+    }
+    if (groupNameTaken(parsed.data.name, parsed.data.subjectId, data.groups)) {
+      setError('Группа с таким названием по этому предмету уже есть')
       return
     }
     setError(null)
@@ -170,11 +224,11 @@ export function NewGroupForm({
         <input
           id={ids.name}
           className={inputClass}
-          placeholder="7 класс"
+          placeholder="Выберите предмет и класс"
           autoComplete="off"
           value={name}
           onChange={(e) => {
-            setName(e.target.value)
+            setNameInput(e.target.value)
           }}
         />
       </Field>
@@ -182,16 +236,23 @@ export function NewGroupForm({
         <Field id={ids.subject} label="Предмет">
           <NativeSelect
             id={ids.subject}
-            value={subject}
+            value={newSubject !== null ? NEW_SUBJECT : subjectId}
             onChange={(e) => {
-              setSubject(e.target.value)
+              if (e.target.value === NEW_SUBJECT) {
+                setNewSubject('')
+              } else {
+                setNewSubject(null)
+                setSubjectInput(e.target.value)
+              }
             }}
           >
-            {subjects.map((s) => (
-              <option key={s} value={s}>
-                {s}
+            {subjectsQ.isPending && <option value="">Загрузка…</option>}
+            {subjectOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
               </option>
             ))}
+            <option value={NEW_SUBJECT}>+ Новый предмет…</option>
           </NativeSelect>
         </Field>
         <Field id={ids.grade} label="Класс">
@@ -211,6 +272,36 @@ export function NewGroupForm({
           </NativeSelect>
         </Field>
       </div>
+      {newSubject !== null && (
+        <div className="flex flex-col gap-2 rounded-xl bg-muted p-3">
+          <Field id={ids.newSubject} label="Новый предмет">
+            <input
+              id={ids.newSubject}
+              className={inputClass}
+              placeholder="Физика"
+              autoComplete="off"
+              value={newSubject}
+              onChange={(e) => {
+                setNewSubject(e.target.value)
+              }}
+              onKeyDown={onNewSubjectKey}
+            />
+          </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <SubmitButton
+              variant="outline"
+              onClick={() => {
+                setNewSubject(null)
+              }}
+            >
+              Отмена
+            </SubmitButton>
+            <SubmitButton pending={addSubject.isPending} onClick={onAddSubject}>
+              Добавить предмет
+            </SubmitButton>
+          </div>
+        </div>
+      )}
       <Field id={ids.type} label="Тип и тариф">
         <NativeSelect
           id={ids.type}

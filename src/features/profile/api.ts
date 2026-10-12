@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
+import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import { bishkekDate } from '@/lib/time'
 
@@ -53,7 +54,7 @@ const teacherRowSchema = z.object({
   teacher_rates: z.array(rateSchema),
   groups: z.array(
     z.object({
-      subject: z.string(),
+      subject: subjectName,
       status: z.enum(['forming', 'active', 'archived']),
       enrollments: z.array(
         z.object({ student_id: z.uuid(), status: z.enum(['active', 'finished']) }),
@@ -103,7 +104,7 @@ export const teacherSummaryQuery = (userId: string, nowMs: number) => {
       const { data, error } = await supabase
         .from('teachers')
         .select(
-          'created_at, teacher_rates(percent, valid_from), groups(subject, status, enrollments(student_id, status))',
+          'created_at, teacher_rates(percent, valid_from), groups(subject:subjects(name), status, enrollments(student_id, status))',
         )
         .eq('user_id', userId)
         .maybeSingle()
