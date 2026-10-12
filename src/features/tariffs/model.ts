@@ -1,6 +1,6 @@
 // А9 / А9а view model: pure functions of (rows, today) — no fetching, no clock.
 import { plural } from '@/features/users/model'
-import { bishkekDate } from '@/lib/time'
+import { bishkekDate, formatDayMonth } from '@/lib/time'
 import { GROUP_TYPES, tariffFor, type GroupType } from './current'
 
 export interface Tariff {
@@ -62,10 +62,38 @@ export const RULES = [
   { title: 'День выплаты ЗП', caption: 'за календарный месяц', value: '15-е' },
 ] as const
 
-/** Default date for a new version: tariffs change once a year in September (В6). */
-export function nextSeptember(today: string): string {
-  const year = Number(today.slice(0, 4))
-  return today < `${year}-09-01` ? `${year}-09-01` : `${year + 1}-09-01`
+/** 1st of the month after `today` (`YYYY-MM-DD`). */
+export function nextMonthStart(today: string): string {
+  const [y = 0, m = 1] = today.split('-').map(Number)
+  return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10)
+}
+
+export interface PlanMinDate {
+  /** Earliest valid_from of a new version — also the form's default. */
+  date: string
+  /** Some group type already has subscriptions → the 1st of next month (К6). */
+  paid: boolean
+}
+
+/**
+ * Earliest start of a new tariff version (К6, А9; tariffs_guard 0012 checks the same per type):
+ * a type with subscriptions — the 1st of next month, bought subscriptions keep their price;
+ * none — today. The version is one date for every type (И8), so any paid type moves it.
+ */
+export function planMinDate(
+  source: Pick<SettingsSource, 'tariffs' | 'subscriptions'>,
+  today: string,
+): PlanMinDate {
+  const tariffIds = new Set(source.tariffs.map((t) => t.id))
+  const paid = source.subscriptions.some((s) => tariffIds.has(s.tariff_id))
+  return { date: paid ? nextMonthStart(today) : today, paid }
+}
+
+/** Under the date field (А9): «Для действующих групп новый тариф начнёт действовать с 1 ноября. …». */
+export function planMinDateHint(min: PlanMinDate): string | null {
+  return min.paid
+    ? `Для действующих групп новый тариф начнёт действовать с ${formatDayMonth(min.date)}. Купленные абонементы остаются по старой цене`
+    : null
 }
 
 // ─── Formatting ─────────────────────────────────────────────────────────────

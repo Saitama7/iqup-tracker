@@ -3,9 +3,9 @@
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { supabase } from '@/lib/supabase/client'
-import { parseDateRu } from '@/lib/time'
+import { formatDayMonth, parseDateRu } from '@/lib/time'
 import { GROUP_TYPES, tariffFor, type GroupType } from './current'
-import type { SettingsSource, Tariff } from './model'
+import type { PlanMinDate, SettingsSource, Tariff } from './model'
 
 const groupTypeSchema = z.enum(GROUP_TYPES as [GroupType, ...GroupType[]])
 
@@ -89,10 +89,16 @@ const priceField = z
       .positive('Цена должна быть больше нуля'),
   )
 
-/** «Запланировать новый тариф с даты…»: one date for every group type, strictly after today. */
-export const planTariffsForm = (today: string) =>
+/** Form error for a date before `min` (planMinDate, К6). */
+export const planMinDateMessage = (min: PlanMinDate) =>
+  min.paid
+    ? `Для действующих групп — не раньше ${formatDayMonth(min.date)}`
+    : 'Новый тариф — не раньше сегодняшнего дня'
+
+/** «Запланировать новый тариф с даты…»: one date for every group type, from `min` on (К6). */
+export const planTariffsForm = (min: PlanMinDate) =>
   z.object({
-    validFrom: dateField.refine((d) => d > today, 'Новый тариф — только с будущей даты'),
+    validFrom: dateField.refine((d) => d >= min.date, planMinDateMessage(min)),
     prices: z.object(
       Object.fromEntries(GROUP_TYPES.map((t) => [t, priceField])) as Record<
         GroupType,
@@ -153,7 +159,7 @@ export async function planTariffs(input: PlanTariffsInput, tariffs: readonly Tar
   if (error) {
     fail(error, {
       '23505': 'С этой даты тариф уже запланирован — удалите его в истории и создайте заново',
-      '23514': 'Новый тариф — только с будущей даты',
+      '23514': 'Дата раньше допустимой: для типов с абонементами — с 1-го числа следующего месяца',
       '42501': 'Менять тарифы может только администратор',
     })
   }

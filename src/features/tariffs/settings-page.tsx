@@ -135,6 +135,7 @@ export function SettingsPage() {
             open={planOpen}
             onOpenChange={setPlanOpen}
             tariffs={data.tariffs}
+            subscriptions={data.subscriptions}
             today={today}
           />
         </>
