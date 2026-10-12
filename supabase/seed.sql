@@ -289,3 +289,34 @@ set session_replication_role = origin;
 
 drop table seed_september;
 drop table seed_marks;
+
+-- Trials — А11 / У2 / УД2 / А1 / А4 (names from the artboards). Dates follow bishkek_today(): Розаина on
+-- Гульзат's next lesson (today if she teaches today), Адема and Амина from tomorrow on; Бермет was on a
+-- past lesson and waits for the decision, Бакай did not come — «Позвонить» (Ж8). Written with triggers
+-- off (trials_guard books only today or later; the seed has no admin to be created_by).
+set session_replication_role = replica;
+
+insert into public.trials (full_name, grade, parent_phone, group_id, lesson_id, status, came, source, note, created_at, marked_at)
+select t.full_name, t.grade, t.phone, l.group_id, l.id, t.status::public.trial_status, t.came,
+       t.source::public.trial_source, t.note, now() - interval '5 days',
+       case when t.came is not null then ((l.lesson_date + l.planned_start) at time zone 'Asia/Bishkek') + interval '1 hour' end
+from (values
+  ('Розаина Бекова',     8,  '996995857758', 'scheduled', null::boolean, 'instagram', null,                    array['00000000-0000-4000-b000-000000000001', '00000000-0000-4000-b000-000000000002', '00000000-0000-4000-b000-000000000003', '00000000-0000-4000-b000-000000000004']::uuid[], 0, false),
+  ('Адема Кадырова',     8,  '996707998406', 'scheduled', null,          'referral',  'подруга Айжан Б.',      array['00000000-0000-4000-b000-000000000001', '00000000-0000-4000-b000-000000000003']::uuid[], 1, false),
+  ('Амина Садыкова',     9,  '996504210313', 'scheduled', null,          '2gis',      null,                    array['00000000-0000-4000-b000-000000000008']::uuid[], 1, false),
+  ('Бермет Токтогулова', 8,  '996555404404', 'attended',  true,          'instagram', null,                    array['00000000-0000-4000-b000-000000000001']::uuid[], -1, true),
+  ('Бакай Осмонов',      11, '996555303303', 'no_show',   false,         'other',     null,                    array['00000000-0000-4000-b000-000000000006']::uuid[], -1, true)
+) as t (full_name, grade, phone, status, came, source, note, groups, from_day, past)
+cross join lateral (
+  select l.* from public.lessons l
+  where l.group_id = any (t.groups) and l.status <> 'cancelled'
+    and case when t.past then l.lesson_date < public.bishkek_today()
+             else l.lesson_date >= public.bishkek_today() + t.from_day and l.status = 'planned' end
+  order by
+    case when t.past then l.lesson_date end desc,
+    case when not t.past then l.lesson_date end,
+    l.planned_start
+  limit 1
+) l;
+
+set session_replication_role = origin;

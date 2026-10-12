@@ -655,6 +655,114 @@ export type Database = {
           },
         ]
       }
+      trials: {
+        Row: {
+          came: boolean | null
+          created_at: string
+          created_by: string | null
+          enrollment_id: string | null
+          full_name: string
+          grade: number | null
+          group_id: string
+          id: string
+          lesson_id: string
+          marked_at: string | null
+          marked_by: string | null
+          note: string | null
+          parent_phone: string | null
+          source: Database['public']['Enums']['trial_source'] | null
+          status: Database['public']['Enums']['trial_status']
+          student_id: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          came?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          enrollment_id?: string | null
+          full_name: string
+          grade?: number | null
+          group_id: string
+          id?: string
+          lesson_id: string
+          marked_at?: string | null
+          marked_by?: string | null
+          note?: string | null
+          parent_phone?: string | null
+          source?: Database['public']['Enums']['trial_source'] | null
+          status?: Database['public']['Enums']['trial_status']
+          student_id?: string | null
+        }
+        Update: {
+          came?: boolean | null
+          created_at?: string
+          created_by?: string | null
+          enrollment_id?: string | null
+          full_name?: string
+          grade?: number | null
+          group_id?: string
+          id?: string
+          lesson_id?: string
+          marked_at?: string | null
+          marked_by?: string | null
+          note?: string | null
+          parent_phone?: string | null
+          source?: Database['public']['Enums']['trial_source'] | null
+          status?: Database['public']['Enums']['trial_status']
+          student_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'trials_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'trials_enrollment_id_fkey'
+            columns: ['enrollment_id']
+            isOneToOne: false
+            referencedRelation: 'enrollments'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'trials_group_id_fkey'
+            columns: ['group_id']
+            isOneToOne: false
+            referencedRelation: 'groups'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'trials_lesson_id_fkey'
+            columns: ['lesson_id']
+            isOneToOne: false
+            referencedRelation: 'lessons'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'trials_lesson_id_fkey'
+            columns: ['lesson_id']
+            isOneToOne: false
+            referencedRelation: 'v_lesson_status'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'trials_marked_by_fkey'
+            columns: ['marked_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'trials_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          },
+        ]
+      }
     }
     Views: {
       v_audit_feed: {
@@ -914,6 +1022,19 @@ export type Database = {
           subscription_id: string
         }[]
       }
+      enroll_trial: {
+        Args: {
+          p_discount_pct?: number
+          p_discount_reason?: Database['public']['Enums']['discount_reason']
+          p_start_date: string
+          p_trial_id: string
+        }
+        Returns: {
+          enrollment_id: string
+          student_id: string
+          subscription_id: string
+        }[]
+      }
       ensure_lessons: { Args: { p_until: string }; Returns: number }
       generate_lessons: { Args: { p_group_id: string; p_until: string }; Returns: number }
       is_accountant: { Args: Record<PropertyKey, never>; Returns: boolean }
@@ -964,6 +1085,8 @@ export type Database = {
       lesson_status: 'planned' | 'held' | 'cancelled'
       role: 'teacher' | 'admin' | 'accountant'
       subscription_status: 'active' | 'exhausted' | 'refunded'
+      trial_source: 'instagram' | 'referral' | '2gis' | 'other'
+      trial_status: 'scheduled' | 'attended' | 'no_show' | 'enrolled' | 'closed'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1087,6 +1210,8 @@ export const Constants = {
       lesson_status: ['planned', 'held', 'cancelled'],
       role: ['teacher', 'admin', 'accountant'],
       subscription_status: ['active', 'exhausted', 'refunded'],
+      trial_source: ['instagram', 'referral', '2gis', 'other'],
+      trial_status: ['scheduled', 'attended', 'no_show', 'enrolled', 'closed'],
     },
   },
 } as const
