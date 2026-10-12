@@ -14,6 +14,7 @@ import {
   payrollView,
   periodCaption,
   pickMonth,
+  ROUNDING_NOTE,
   shiftMonth,
   type MyMonthGroup,
   type MyMonthLesson,
@@ -193,6 +194,38 @@ describe('myMonthView', () => {
     )
   })
 
+  it('no rounding note when the lines add up (120 сом per student-lesson)', () => {
+    expect(view.roundingNote).toBeNull()
+  })
+
+  it('rounding note: 3 × 158,33 = 475 in the total, 3 × 158 in the lines', () => {
+    const mini = group('m', 'Мини', [
+      lesson({ lesson_date: '2026-10-05' }),
+      lesson({ lesson_date: '2026-10-06' }),
+      lesson({ lesson_date: '2026-10-07' }),
+    ])
+    const v = myMonthView(
+      {
+        teacherId: 't',
+        rates: [{ percent: 50, valid_from: '2026-09-01' }],
+        groups: [mini],
+        tariffs: [
+          {
+            group_type: 'group',
+            valid_from: '2026-09-01',
+            lessons_in_package: 12,
+            package_price: 3800,
+          },
+        ],
+      },
+      '2026-10',
+      NOW,
+    )
+    expect(v.lessons.map((l) => l.amount)).toEqual([158, 158, 158])
+    expect(v.pay.amount).toBe(475)
+    expect(v.roundingNote).toBe(ROUNDING_NOTE)
+  })
+
   it('no common price → no «за ученико-урок»', () => {
     const solo = { ...group('c', 'Бекзат', [], 1), group_type: 'individual' as const }
     const mixed = myMonthView(
@@ -247,6 +280,31 @@ describe('payrollView (Б1)', () => {
       ['Аман Новый', '0 групп', 0, null],
     ])
     expect(view.total).toEqual({ lessonsHeld: 74, hours: 118, studentLessons: 340, amount: 41_823 })
+  })
+
+  it('total hours are rounded to 2 decimals, not float noise', () => {
+    const v = payrollView(
+      {
+        preview: [0.1, 0.2, 1.33].map((hours, i) => ({
+          teacherId: `t${i}`,
+          lessonsHeld: 1,
+          hours,
+          studentLessons: 1,
+          amount: 100,
+        })),
+        teachers: [0, 1, 2].map((i) => ({
+          id: `t${i}`,
+          full_name: `T${i}`,
+          rates: [],
+          groups: [],
+        })),
+        planned: [],
+      },
+      '2026-09',
+      NOW,
+    )
+    expect(v.total.hours).toBe(1.63)
+    expect(hoursCaption(v.total.hours)).toBe('1,63 ч')
   })
 
   it('unconfirmed — planned lessons that are over by now', () => {

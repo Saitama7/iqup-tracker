@@ -215,7 +215,13 @@ export interface MyMonthView {
   /** Newest first. */
   lessons: MonthLessonLine[]
   unconfirmed: MonthLessonLine[]
+  /** Shown when the rounded lesson or group sums do not add up to the total (У6 / УД4). */
+  roundingNote: string | null
 }
+
+export const ROUNDING_NOTE = 'Суммы занятий и групп округлены до сома, итог — по точной сумме'
+
+const sum = (ns: readonly number[]) => ns.reduce((n, x) => n + x, 0)
 
 export function myMonthView(source: MyMonthSource, month: string, now: number): MyMonthView {
   const today = bishkekDate(now)
@@ -281,6 +287,11 @@ export function myMonthView(source: MyMonthSource, month: string, now: number): 
     groups,
     lessons,
     unconfirmed: lessons.filter((l) => l.state === 'unconfirmed'),
+    roundingNote:
+      sum(lessons.map((l) => l.amount)) !== pay.amount ||
+      sum(groups.map((g) => g.amount)) !== pay.amount
+        ? ROUNDING_NOTE
+        : null,
   }
 }
 
@@ -358,7 +369,8 @@ export function payrollView(source: PayrollSource, month: string, now: number): 
     rows,
     total: {
       lessonsHeld: rows.reduce((n, r) => n + r.lessonsHeld, 0),
-      hours: rows.reduce((n, r) => n + r.hours, 0),
+      // hours come with 2 decimals (1,33 ч) — cut the float noise of the sum the same way
+      hours: Math.round(sum(rows.map((r) => r.hours)) * 100) / 100,
       studentLessons: rows.reduce((n, r) => n + r.studentLessons, 0),
       amount: rows.reduce((n, r) => n + r.amount, 0),
     },

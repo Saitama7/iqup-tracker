@@ -64,6 +64,8 @@
   --shadow-float: 0 16px 32px color-mix(in srgb, var(--ink) 18%, transparent);
   --shadow-sheet: 0 -16px 40px color-mix(in srgb, var(--ink) 12%, transparent);
   --shadow-cta: 0 12px 28px color-mix(in srgb, var(--ink) 22%, transparent);
+  /* У6 / УД4: dark pay card */
+  --shadow-pay: 0 20px 44px color-mix(in srgb, var(--ink) 22%, transparent);
   --shadow-brand: 0 12px 28px color-mix(in srgb, var(--brand) 35%, transparent);
 
   --color-background: var(--background);

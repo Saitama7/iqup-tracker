@@ -136,7 +136,7 @@ function MobileMonth({ view, month, today }: { view: MyMonthView; month: string;
   ] as const
   return (
     <>
-      <TiltCard className="flex flex-col gap-3.5 rounded-[24px] bg-ink px-[22px] pt-5 pb-[18px] text-paper shadow-[0_20px_44px_rgba(20,20,20,0.22)]">
+      <TiltCard className="flex flex-col gap-3.5 rounded-[24px] bg-ink px-[22px] pt-5 pb-[18px] text-paper shadow-pay">
         <div className="flex items-center justify-between gap-3">
           <span className="text-xs font-extrabold tracking-[0.06em] text-brand uppercase">
             {periodCaption(month, today)}
@@ -246,6 +246,9 @@ function MobileMonth({ view, month, today }: { view: MyMonthView; month: string;
             >
               ещё {lessonsWord(more)}
             </button>
+          )}
+          {view.roundingNote && (
+            <p className="text-xs font-bold text-ink-muted">{view.roundingNote}</p>
           )}
         </section>
       )}
@@ -367,6 +370,11 @@ function DesktopMonth({ view, month }: { view: MyMonthView; month: string }) {
                 )}
               </tbody>
             </table>
+          )}
+          {view.roundingNote && (
+            <p className="border-t border-line px-5 py-3 text-xs font-bold text-ink-muted">
+              {view.roundingNote}
+            </p>
           )}
         </div>
 

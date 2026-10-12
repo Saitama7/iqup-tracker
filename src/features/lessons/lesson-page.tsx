@@ -407,7 +407,7 @@ function ConfirmAction({ m, desktop = false }: { m: SheetModel; desktop?: boolea
       type="button"
       onClick={m.confirm}
       className={cn(
-        'flex items-center justify-center gap-2.5 bg-ink font-extrabold text-brand shadow-[0_12px_28px_rgb(20_20_20/0.25)]',
+        'flex items-center justify-center gap-2.5 bg-ink font-extrabold text-brand shadow-cta',
         size,
         !desktop && 'text-base',
       )}
