@@ -10,6 +10,7 @@ export class ForbiddenError extends Error {
   }
 }
 
-export function requireRole(auth: Auth, role: Role): void {
-  if (!hasRole(auth.roles, role)) throw new ForbiddenError()
+/** Passes when the user has any of the roles: `requireRole(auth, 'accountant', 'admin')`. */
+export function requireRole(auth: Auth, ...roles: [Role, ...Role[]]): void {
+  if (!roles.some((role) => hasRole(auth.roles, role))) throw new ForbiddenError()
 }

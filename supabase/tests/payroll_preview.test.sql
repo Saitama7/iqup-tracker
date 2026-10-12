@@ -1,14 +1,15 @@
 -- Issue #13: v_payroll_preview (0011) — the formula and RLS through security_invoker.
 -- Self-contained fixtures in 2001 (no seed data there), rolled back.
 begin;
-select plan(16);
+select plan(19);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
--- users: …1 teacher A, …2 teacher B, …3 accountant
+-- users: …1 teacher A, …2 teacher B, …3 accountant, …4 admin
 insert into auth.users (id, email) values
   ('ad000000-0000-4000-8000-000000000001', 'teacher13a@test.local'),
   ('ad000000-0000-4000-8000-000000000002', 'teacher13b@test.local'),
-  ('ad000000-0000-4000-8000-000000000003', 'accountant13@test.local');
+  ('ad000000-0000-4000-8000-000000000003', 'accountant13@test.local'),
+  ('ad000000-0000-4000-8000-000000000004', 'admin13@test.local');
 
 insert into public.teachers (id, full_name, phone) values
   ('bd000000-0000-4000-8000-000000000001', 'Teacher A', '996000001301'),
@@ -16,7 +17,8 @@ insert into public.teachers (id, full_name, phone) values
 insert into public.profiles (id, phone, full_name, roles) values
   ('ad000000-0000-4000-8000-000000000001', '996000001301', 'Teacher A', '{teacher}'),
   ('ad000000-0000-4000-8000-000000000002', '996000001302', 'Teacher B', '{teacher}'),
-  ('ad000000-0000-4000-8000-000000000003', '996000001303', 'Accountant', '{accountant}');
+  ('ad000000-0000-4000-8000-000000000003', '996000001303', 'Accountant', '{accountant}'),
+  ('ad000000-0000-4000-8000-000000000004', '996000001304', 'Admin', '{admin}');
 
 -- A: 45 %, 50 % from 16 March; B: 50 %
 insert into public.teacher_rates (teacher_id, percent, valid_from) values
@@ -172,6 +174,27 @@ select results_eq(
   $$ select * from pg_temp.row_of('bd000000-0000-4000-8000-000000000002', '2001-03-01') $$,
   $$ values (1, 3.00::numeric, 1, 185) $$,
   'accountant gets the same numbers'
+);
+
+-- ─── Admin: everyone, read-only (И2) ───────────────────────────────────────
+set local request.jwt.claims = '{"sub":"ad000000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"roles":["admin"]}}';
+
+select is(
+  (select count(*)::integer from public.v_payroll_preview
+   where teacher_id in ('bd000000-0000-4000-8000-000000000001', 'bd000000-0000-4000-8000-000000000002')),
+  4,
+  'admin sees every teacher (И2)'
+);
+select results_eq(
+  $$ select * from pg_temp.row_of('bd000000-0000-4000-8000-000000000001', '2001-03-01') $$,
+  $$ values (2, 2.00::numeric, 5, 640) $$,
+  'admin gets the same numbers as the accountant'
+);
+select throws_ok(
+  $$ delete from public.v_payroll_preview $$,
+  null,
+  null,
+  'admin cannot change v_payroll_preview — read-only'
 );
 
 -- ─── Seed: Гульзат, September 2026 = 38 160 (Б1 / Б2) ───────────────────────
