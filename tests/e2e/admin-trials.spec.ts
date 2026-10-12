@@ -3,15 +3,19 @@ import { expect, test, type Browser, type Page, type TestInfo } from '@playwrigh
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { GULZAT, KANYKEI, login } from './support/auth'
+import { lockSeed } from './support/seed-lock'
 
 // #46 · Пробные занятия, the whole Ж1–Ж8 flow on the phone and on the desktop:
 // А11 «Записать на пробное» on Гульзат's lesson tomorrow → Гульзат sees it in «Завтра» (Ж3) →
 // the next day (the trial is moved to her lesson today by the service role: the database books and
 // marks by its own date, no clock pinning) she marks «Был» on У3 / УД2 → А11 «Прошли, ждут
 // решения» → «Оплатил → зачислить» (Ж5) → the lead is a student with a subscription.
-// Needs the local stack + `pnpm seed:users`. No lessons or marks are changed — no seed lock.
+// Needs the local stack + `pnpm seed:users`. No lessons or marks are changed, but the trial sits on
+// Гульзат's 8 класс А lessons (Вт/Чт/Сб) that teacher-attendance marks — a write lock.
 
 test.use({ serviceWorkers: 'block' })
+
+lockSeed('write')
 
 const GULZAT_TEACHER = '00000000-0000-4000-a000-000000000001'
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900

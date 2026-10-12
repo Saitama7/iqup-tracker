@@ -321,3 +321,57 @@ begin
   return query select v_deleted, public.generate_lessons(p_group_id, p_until);
 end;
 $$;
+
+-- ─── archive_group ──────────────────────────────────────────────────────────
+
+-- Same as 0009 plus trials (PR #53 review): a forming group «на пробном» that is not opened (Ж1).
+-- Booked trials are closed (the lead stays in the funnel); a future planned lesson that a trial points
+-- to cannot be deleted (trials.lesson_id), so it is cancelled by the center instead (И35).
+create or replace function public.archive_group(p_group_id uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_deleted integer;
+begin
+  perform public.assert_admin();
+
+  update public.groups set status = 'archived' where id = p_group_id;
+  if not found then
+    raise exception 'group % not found', p_group_id using errcode = 'foreign_key_violation';
+  end if;
+
+  update public.enrollments e
+  set status = 'finished',
+      end_date = greatest(e.start_date, public.bishkek_today())
+  where e.group_id = p_group_id and e.status = 'active';
+
+  update public.trials t
+  set status = 'closed'
+  where t.group_id = p_group_id and t.status = 'scheduled';
+
+  perform set_config('iqup.audit_reason', 'archive_group', true);
+  update public.lessons l
+  set status = 'cancelled', cancel_reason = 'center'
+  where l.group_id = p_group_id
+    and l.status = 'planned'
+    and public.lesson_starts_at(l.lesson_date, l.planned_start) > now()
+    and not exists (select 1 from public.attendance a where a.lesson_id = l.id)
+    and exists (select 1 from public.trials t where t.lesson_id = l.id);
+  perform set_config('iqup.audit_reason', '', true);
+
+  with gone as (
+    delete from public.lessons l
+    where l.group_id = p_group_id
+      and l.status = 'planned'
+      and public.lesson_starts_at(l.lesson_date, l.planned_start) > now()
+      and not exists (select 1 from public.attendance a where a.lesson_id = l.id)
+      and not exists (select 1 from public.trials t where t.lesson_id = l.id)
+    returning 1
+  )
+  select count(*) into v_deleted from gone;
+  return v_deleted;
+end;
+$$;

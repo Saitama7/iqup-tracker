@@ -2,7 +2,7 @@
 -- trials_guard transitions, enroll_trial, and Ж2/Ж6 — a trial never writes attendance, never consumes
 -- a lesson and never counts in v_payroll_preview. Self-contained fixtures, rolled back.
 begin;
-select plan(39);
+select plan(43);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 -- a…1 teacher A (group A), a…2 teacher B (group B), a…3 admin, a…4 accountant
@@ -37,13 +37,14 @@ select '14600000-0000-4000-8000-000000000001', 'f4600000-0000-4000-8000-00000000
 from public.tariffs t where t.group_type = 'group' order by t.valid_from desc limit 1;
 
 -- …01 group A today 00:00 (started), …02 group A tomorrow, …03 group A yesterday, …04 group B tomorrow,
--- …05 group A in a week
+-- …05 group A in a week, …06 group B in two days (no trials)
 insert into public.lessons (id, group_id, lesson_date, planned_start, duration_min) values
   ('24600000-0000-4000-8000-000000000001', 'd4600000-0000-4000-8000-000000000001', public.bishkek_today(), '00:00', 60),
   ('24600000-0000-4000-8000-000000000002', 'd4600000-0000-4000-8000-000000000001', public.bishkek_today() + 1, '09:00', 60),
   ('24600000-0000-4000-8000-000000000003', 'd4600000-0000-4000-8000-000000000001', public.bishkek_today() - 1, '09:00', 60),
   ('24600000-0000-4000-8000-000000000004', 'd4600000-0000-4000-8000-000000000002', public.bishkek_today() + 1, '09:00', 60),
-  ('24600000-0000-4000-8000-000000000005', 'd4600000-0000-4000-8000-000000000001', public.bishkek_today() + 7, '09:00', 60);
+  ('24600000-0000-4000-8000-000000000005', 'd4600000-0000-4000-8000-000000000001', public.bishkek_today() + 7, '09:00', 60),
+  ('24600000-0000-4000-8000-000000000006', 'd4600000-0000-4000-8000-000000000002', public.bishkek_today() + 2, '09:00', 60);
 
 -- ─── Admin books trials ─────────────────────────────────────────────────────
 set local role authenticated;
@@ -262,6 +263,27 @@ select lives_ok(
 select ok(
   exists (select 1 from public.lessons where id = '24600000-0000-4000-8000-000000000002'),
   'tomorrow''s lesson with Адема''s trial stays'
+);
+
+-- Ж1: the forming group B «на пробном» is not opened — archiving closes its booked trial and keeps the
+-- trial's lesson (cancelled by the center, trials.lesson_id), the other future lessons are deleted
+select lives_ok(
+  $$ select public.archive_group('d4600000-0000-4000-8000-000000000002') $$,
+  'admin archives a forming group with a booked trial'
+);
+select is(
+  (select status::text from public.trials where id = '74600000-0000-4000-8000-000000000004'),
+  'closed',
+  'the booked trial is closed'
+);
+select is(
+  (select row(status::text, cancel_reason::text) from public.lessons where id = '24600000-0000-4000-8000-000000000004'),
+  row('cancelled'::text, 'center'::text),
+  'the trial''s lesson stays, cancelled by the center'
+);
+select ok(
+  not exists (select 1 from public.lessons where id = '24600000-0000-4000-8000-000000000006'),
+  'a future lesson without trials is deleted'
 );
 
 reset role;

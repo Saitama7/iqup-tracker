@@ -71,8 +71,10 @@ export interface TrialsSearch {
 const denseTable =
   'w-full min-w-[560px] border-collapse [&_td]:px-2.5 [&_td]:text-[13px] [&_th]:px-2.5'
 
+// min-h-9 fits the dense desktop tables; phone cards get the 44 px tap target (smallBtnPhone)
 const smallBtn =
   'inline-flex min-h-9 items-center justify-center rounded-[10px] px-3 text-xs font-extrabold whitespace-nowrap'
+const smallBtnPhone = cn(smallBtn, 'min-h-11')
 
 // А11 Пробные занятия (docs/design/AdminTrials.dc.html; 05-decisions Ж1–Ж8, 01-domain-model §5.1).
 // Tabs show one list each (the artboard's canvas shows both tables under «Предстоящие»).
@@ -423,7 +425,7 @@ function UpcomingSection({
                     <PhoneLink phone={t.parent_phone} />
                     <button
                       type="button"
-                      className={cn(smallBtn, 'text-teal')}
+                      className={cn(smallBtnPhone, 'text-teal')}
                       aria-label={`Перенести: ${t.full_name}`}
                       onClick={() => {
                         actions.onRebook(t)
@@ -632,12 +634,13 @@ function WaitingSection({
     </>
   )
 
+  const btn = isDesktop ? smallBtn : smallBtnPhone
   const decision = (t: Trial) => (
     <div className="flex flex-wrap gap-1.5">
       {t.status === 'attended' ? (
         <button
           type="button"
-          className={cn(smallBtn, 'bg-ink text-brand')}
+          className={cn(btn, 'bg-ink text-brand')}
           aria-label={`Оплатил → зачислить: ${t.full_name}`}
           onClick={() => {
             actions.onEnroll(t)
@@ -648,7 +651,7 @@ function WaitingSection({
       ) : (
         <button
           type="button"
-          className={cn(smallBtn, 'border-[1.5px] border-ink text-ink')}
+          className={cn(btn, 'border-[1.5px] border-ink text-ink')}
           aria-label={`${t.status === 'no_show' ? 'Записать заново' : 'Перенести'}: ${t.full_name}`}
           onClick={() => {
             actions.onRebook(t)
@@ -660,7 +663,7 @@ function WaitingSection({
       <button
         type="button"
         disabled={close.isPending}
-        className={cn(smallBtn, 'border-[1.5px] border-line-strong text-ink-muted')}
+        className={cn(btn, 'border-[1.5px] border-line-strong text-ink-muted')}
         aria-label={`${t.status === 'attended' ? 'Отказ' : 'Закрыть'}: ${t.full_name}`}
         onClick={() => {
           close.mutate(t)
