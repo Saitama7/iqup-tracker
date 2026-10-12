@@ -99,7 +99,7 @@ test('profile shows teacher percent; sign out returns to /login', async ({ page 
   }
   await page.screenshot({ path: testInfo.outputPath('profile.png'), fullPage: true })
 
-  await page.getByRole('button', { name: 'Выйти' }).click()
+  await main.getByRole('button', { name: 'Выйти' }).click()
   await expect(page).toHaveURL(/\/login$/)
   await page.goto('/today')
   await expect(page).toHaveURL(/\/login$/)
