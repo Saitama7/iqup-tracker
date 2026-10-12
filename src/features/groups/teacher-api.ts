@@ -2,6 +2,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { ENROLLMENT_FIELDS, enrollmentSchema, toEnrollment } from '@/features/lessons/api'
+import { PAY_ATTENDANCE, PAY_ATTENDANCE_FIELDS } from '@/features/payroll/api'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { supabase } from '@/lib/supabase/client'
 import { addDays } from './model'
@@ -37,9 +38,7 @@ const sourceSchema = z.object({
           planned_start: z.string(),
           duration_min: z.number().int(),
           status: z.enum(['planned', 'held', 'cancelled']),
-          attendance: z.array(
-            z.object({ status: z.enum(['present', 'absent_frozen', 'absent_burned']) }),
-          ),
+          attendance: z.array(PAY_ATTENDANCE),
         }),
       ),
     }),
@@ -72,7 +71,7 @@ export const teacherGroupsQuery = (userId: string, today: string) =>
         supabase
           .from('teachers')
           .select(
-            `rates:teacher_rates(percent, valid_from), groups(id, name, subject, group_type, status, room, schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(${ENROLLMENT_FIELDS}), lessons(id, lesson_date, planned_start, duration_min, status, attendance(status)))`,
+            `rates:teacher_rates(percent, valid_from), groups(id, name, subject, group_type, status, room, schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(${ENROLLMENT_FIELDS}), lessons(id, lesson_date, planned_start, duration_min, status, ${PAY_ATTENDANCE_FIELDS}))`,
           )
           .eq('user_id', userId)
           .neq('groups.status', 'archived')

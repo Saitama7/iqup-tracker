@@ -17,6 +17,13 @@ const POLL_MS = 60_000
 const GROUP_TYPE = z.enum(GROUP_TYPES as [GroupType, ...GroupType[]])
 const MARK = z.enum(['present', 'absent_frozen', 'absent_burned'])
 const RATE = z.object({ percent: z.number(), valid_from: z.string() })
+/** A mark with the subscription it was written off — its price is the teacher's base (К6). */
+export const PAY_ATTENDANCE = z.object({
+  status: MARK,
+  subscription: z.object({ price_full: z.number(), lessons_total: z.number().int() }).nullable(),
+})
+export const PAY_ATTENDANCE_FIELDS =
+  'attendance(status, subscription:subscriptions(price_full, lessons_total))'
 
 const tariffSchema = z.object({
   group_type: GROUP_TYPE,
@@ -51,7 +58,7 @@ const myMonthSchema = z.object({
           status: z.enum(['planned', 'held', 'cancelled']),
           confirmed_at: z.string().nullable(),
           confirmed_late: z.boolean(),
-          attendance: z.array(z.object({ status: MARK })),
+          attendance: z.array(PAY_ATTENDANCE),
         }),
       ),
     }),
@@ -78,7 +85,7 @@ export const myMonthQuery = (userId: string, month: string) =>
         supabase
           .from('teachers')
           .select(
-            'id, rates:teacher_rates(percent, valid_from), groups(id, name, subject, group_type, enrollments(student_id, start_date, end_date, status), lessons(id, lesson_date, planned_start, duration_min, status, confirmed_at, confirmed_late, attendance(status)))',
+            `id, rates:teacher_rates(percent, valid_from), groups(id, name, subject, group_type, enrollments(student_id, start_date, end_date, status), lessons(id, lesson_date, planned_start, duration_min, status, confirmed_at, confirmed_late, ${PAY_ATTENDANCE_FIELDS}))`,
           )
           .eq('user_id', userId)
           .gte('groups.lessons.lesson_date', monthStart(month))
@@ -101,13 +108,14 @@ const previewSchema = z.object({
   hours: z.number(),
   student_lessons: z.number().int(),
   base_amount: z.number().int(),
+  no_subscription: z.number().int(),
 })
 
 /** v_payroll_preview rows of `month`; RLS leaves a teacher only her own. */
 async function fetchPreview(month: string, teacherId?: string): Promise<PreviewRow[]> {
   let query = supabase
     .from('v_payroll_preview')
-    .select('teacher_id, month, lessons_held, hours, student_lessons, base_amount')
+    .select('teacher_id, month, lessons_held, hours, student_lessons, base_amount, no_subscription')
     .eq('month', monthStart(month))
   if (teacherId) query = query.eq('teacher_id', teacherId)
   const { data, error } = await query
@@ -120,6 +128,7 @@ async function fetchPreview(month: string, teacherId?: string): Promise<PreviewR
       lessonsHeld: r.lessons_held,
       hours: r.hours,
       studentLessons: r.student_lessons,
+      noSubscription: r.no_subscription,
       amount: r.base_amount,
     }))
 }

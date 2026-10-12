@@ -1,11 +1,9 @@
-// Teacher's pay — docs/01-domain-model.md §6, 05-decisions А1–А3, А6–А7, Ж2, И18.
+// Teacher's pay — docs/01-domain-model.md §6, 05-decisions А1–А3, А6–А7, Ж2, И18, К6.
 // The one place the formula lives in TS (У5 / УД2 / УД3 / У6 / УД4 / А1 / Б1). The same rules are
 // the SQL view v_payroll_preview (0011) — change both together; tests/integration/payroll.test.ts
 // compares them on the seed.
 //
 // Pure: callers pass the rows they already have, nothing here reads the database.
-import { tariffFor, type GroupType, type TariffTerms } from '@/features/tariffs/current'
-
 export type PayLessonStatus = 'planned' | 'held' | 'cancelled'
 export type PayMark = 'present' | 'absent_frozen' | 'absent_burned'
 
@@ -42,14 +40,43 @@ export const consumesCredit = (status: PayMark) => status !== 'absent_frozen'
 export const consumedCount = (marks: readonly { status: PayMark }[]) =>
   marks.filter((m) => consumesCredit(m.status)).length
 
+/** The subscription a mark was written off (attendance.subscription_id) — its full price (К6). */
+export interface PaySubscription {
+  price_full: number
+  lessons_total: number
+}
+
+export interface PayAttendance {
+  status: PayMark
+  /** null — no subscription behind the mark (И5 breach): the mark pays 0, flagged on У6 / Б1. */
+  subscription: PaySubscription | null
+}
+
+/** Full price of one lesson of a subscription: price_full / lessons_total (А1.1, К3, К6). */
+export const subscriptionLessonPrice = (s: PaySubscription) => s.price_full / s.lessons_total
+
+/**
+ * Exact pay for one consumed mark: the price of the subscription it was written off — not the
+ * tariff of the lesson date, so a tariff changed after the purchase never reprices it (К6) —
+ * × the teacher's percent on the lesson date. No subscription or no percent → 0.
+ */
+export function markPay(subscription: PaySubscription | null, percent: number | null): number {
+  if (!subscription || percent === null) return 0
+  return calcLessonPay({
+    consumedCount: 1,
+    packagePrice: subscription.price_full,
+    lessonsInPackage: subscription.lessons_total,
+    percent,
+  })
+}
+
 export interface PayLesson {
   id: string
   group_id: string
-  group_type: GroupType
   lesson_date: string
   duration_min: number
   status: PayLessonStatus
-  attendance: readonly { status: PayMark }[]
+  attendance: readonly PayAttendance[]
 }
 
 export interface PayRate {
@@ -67,27 +94,12 @@ export function rateOn(rates: readonly PayRate[], date: string): number | null {
   return found?.percent ?? null
 }
 
-/** The tariff and percent of a lesson date as calcLessonPay() terms (without the count). */
-export function termsOn(
-  groupType: GroupType,
-  date: string,
-  rates: readonly PayRate[],
-  tariffs: readonly TariffTerms[],
-): Omit<PayTerms, 'consumedCount'> | null {
-  const tariff = tariffFor(groupType, date, tariffs)
-  const percent = rateOn(rates, date)
-  if (!tariff || percent === null) return null
-  return {
-    packagePrice: tariff.package_price,
-    lessonsInPackage: tariff.lessons_in_package,
-    percent,
-  }
-}
-
 export interface LessonPay {
   lesson: PayLesson
   studentLessons: number
-  /** Exact, not rounded. 0 when the date has no tariff or no percent. */
+  /** Consumed marks without a subscription — counted, paid 0. */
+  noSubscription: number
+  /** Exact, not rounded. 0 when the date has no percent. */
   pay: number
 }
 
@@ -96,6 +108,8 @@ export interface PayTotals {
   /** duration_min / 60 summed: 1 h a lesson, 3 h an after-school day (А3). */
   hours: number
   studentLessons: number
+  /** Student-lessons paid 0 for want of a subscription («нет абонемента», И5). */
+  noSubscription: number
   /** Whole som, rounded once (not per lesson). */
   amount: number
 }
@@ -108,23 +122,21 @@ export interface MonthPay extends PayTotals {
 /**
  * One teacher's pay for the lessons given — callers pass one calendar month of one teacher's groups
  * (groups.teacher_id; substitutes never matter, А7) and that teacher's rates. Only `held` lessons
- * count: planned (not confirmed yet) and cancelled ones pay nothing (А6, Б2). Tariff and percent are
- * taken on each lesson date (`valid_from`), so a rate changed mid-month splits the month.
+ * count: planned (not confirmed yet) and cancelled ones pay nothing (А6, Б2). Each consumed mark is
+ * priced by its subscription (markPay, К6); the percent is taken on each lesson date
+ * (`valid_from`), so a rate changed mid-month splits the month.
  */
-export function calcMonth(
-  lessons: readonly PayLesson[],
-  rates: readonly PayRate[],
-  tariffs: readonly TariffTerms[],
-): MonthPay {
+export function calcMonth(lessons: readonly PayLesson[], rates: readonly PayRate[]): MonthPay {
   const paid: LessonPay[] = []
   for (const lesson of lessons) {
     if (lesson.status !== 'held') continue
-    const studentLessons = consumedCount(lesson.attendance)
-    const terms = termsOn(lesson.group_type, lesson.lesson_date, rates, tariffs)
+    const percent = rateOn(rates, lesson.lesson_date)
+    const consumed = lesson.attendance.filter((m) => consumesCredit(m.status))
     paid.push({
       lesson,
-      studentLessons,
-      pay: terms ? calcLessonPay({ consumedCount: studentLessons, ...terms }) : 0,
+      studentLessons: consumed.length,
+      noSubscription: consumed.filter((m) => !m.subscription).length,
+      pay: consumed.reduce((sum, m) => sum + markPay(m.subscription, percent), 0),
     })
   }
   return { ...totals(paid), lessons: paid }
@@ -134,16 +146,19 @@ export function calcMonth(
 export function totals(paid: readonly LessonPay[]): PayTotals {
   let minutes = 0
   let studentLessons = 0
+  let noSubscription = 0
   let exact = 0
   for (const p of paid) {
     minutes += p.lesson.duration_min
     studentLessons += p.studentLessons
+    noSubscription += p.noSubscription
     exact += p.pay
   }
   return {
     lessonsHeld: paid.length,
     hours: Math.round((minutes / 60) * 100) / 100,
     studentLessons,
+    noSubscription,
     amount: roundSom(exact),
   }
 }

@@ -17,6 +17,7 @@ import {
   monthNom,
   monthOf,
   monthTitle,
+  noSubscriptionCaption,
   payday,
   payrollCaption,
   payrollView,
@@ -193,6 +194,11 @@ function DesktopPayroll({ view, month }: { view: PayrollView; month: string }) {
                     <div>
                       <div className="font-extrabold">{r.name}</div>
                       <div className="text-xs font-bold text-ink-muted">{r.caption}</div>
+                      {r.noSubscription > 0 && (
+                        <div className="text-xs font-bold text-burned-strong">
+                          {noSubscriptionCaption(r.noSubscription)}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -302,6 +308,12 @@ function MobilePayroll({ view, month }: { view: PayrollView; month: string }) {
                   ]
                     .filter(Boolean)
                     .join(' · ')}
+                  {r.noSubscription > 0 && (
+                    <span className="text-burned-strong">
+                      {' · '}
+                      {noSubscriptionCaption(r.noSubscription)}
+                    </span>
+                  )}
                 </span>
               </span>
               <span className="font-display text-sm font-bold whitespace-nowrap">

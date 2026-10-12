@@ -2,6 +2,7 @@ import {
   desktopMeta,
   enrolledOn,
   freezeBlocked,
+  lessonAccrual,
   lessonRoster,
   markAllPresent,
   marksPayload,
@@ -25,6 +26,7 @@ const sub = (
   started_at: '2026-09-01',
   created_at: '2026-09-01T10:00:00Z',
   lessons_total: 12,
+  price_full: 3200,
   price_final: 3200,
   freeze_limit: 2,
   marks: marks.map((status, i) => ({ lesson_id: `${id}-l${i}`, status })),
@@ -131,6 +133,61 @@ describe('lessonRoster', () => {
       new Map([['id-Улан Жээнбеков', 'present' as const]]),
     )
     expect(rows.map((r) => r.fullName)).toEqual(['Улан Жээнбеков'])
+  })
+})
+
+describe("lessonAccrual — «Начислится» by the students' subscriptions (К6, И18)", () => {
+  const lesson = { id: LESSON, lesson_date: '2026-10-08', status: 'planned' as const }
+
+  it('each consumed mark by the full price of its subscription; discount ignored (К3)', () => {
+    const rows = lessonRoster(
+      [
+        enrollment('А', [sub('a')]),
+        // −10 %: pays 2 880, the teacher still gets 3 200 / 12 × 45 % = 120
+        enrollment('Б', [sub('b', { price_final: 2880 })]),
+        // bought at 3 000 before the tariff change — stays 3 000 / 12 × 45 % = 112,5
+        enrollment('В', [sub('c', { price_full: 3000, price_final: 3000 })]),
+        enrollment('Г', [sub('d')]),
+      ],
+      lesson,
+      new Map(),
+    )
+    const marks = new Map<string, Mark>([
+      ['id-А', 'present'],
+      ['id-Б', 'absent_burned'],
+      ['id-В', 'present'],
+      ['id-Г', 'absent_frozen'],
+    ])
+    // 120 + 120 + 112,5 = 352,5 → 353; two prices → no «за ученико-урок»
+    expect(lessonAccrual(rows, marks, 45)).toEqual({ pay: 353, perStudentLesson: null })
+  })
+
+  it('one price → «120 сом за ученико-урок»; a student without a subscription pays 0', () => {
+    const rows = lessonRoster(
+      [enrollment('А', [sub('a')]), enrollment('Пробный', [])],
+      lesson,
+      new Map(),
+    )
+    const marks = new Map<string, Mark>([
+      ['id-А', 'present'],
+      ['id-Пробный', 'present'],
+    ])
+    expect(rows.find((r) => r.fullName === 'Пробный')?.paySubscription).toBeNull()
+    expect(lessonAccrual(rows, marks, 45)).toEqual({ pay: 120, perStudentLesson: 120 })
+  })
+
+  it('held: the subscription holding the mark, even if another one is picked next', () => {
+    const used = sub('old', { price_full: 3000, status: 'exhausted' }, times(12, 'present'))
+    const withMark = {
+      ...used,
+      marks: [...used.marks.slice(1), { lesson_id: LESSON, status: 'present' as const }],
+    }
+    const rows = lessonRoster(
+      [enrollment('А', [withMark, sub('new', { started_at: '2026-10-01' })])],
+      { ...lesson, status: 'held' },
+      new Map([['id-А', 'present' as const]]),
+    )
+    expect(rows[0]?.paySubscription).toEqual({ price_full: 3000, lessons_total: 12 })
   })
 })
 

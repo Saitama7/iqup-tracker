@@ -7,7 +7,7 @@ import { Check, ChevronLeft } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
-import { calcLessonPay, roundSom, termsOn, type PayTerms } from '@/features/payroll/calc'
+import { rateOn } from '@/features/payroll/calc'
 import { PRELIMINARY_NOTE } from '@/features/payroll/model'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { useNow } from '@/lib/now'
@@ -19,6 +19,7 @@ import {
   desktopMeta,
   freezeBlocked,
   freezeLimitHint,
+  lessonAccrual,
   lessonRoster,
   MARK_LABEL,
   markAllPresent,
@@ -26,6 +27,7 @@ import {
   marksPayload,
   mobileMeta,
   tally,
+  type LessonAccrual,
   type Mark,
   type RosterRow,
   type Tally,
@@ -75,9 +77,8 @@ interface SheetModel {
   /** Marks can be changed and the lesson held now (Б1: from the start; held — admin only, И4). */
   editable: boolean
   canConfirm: boolean
-  /** Teacher's pay per student-lesson, null — no tariff / percent on that date. */
-  /** Tariff and percent on the lesson date — payroll/calc.ts; null without them. */
-  terms: Omit<PayTerms, 'consumedCount'> | null
+  /** Teacher's pay of the lesson by the students' subscriptions (К6); null — no percent on that date. */
+  accrual: LessonAccrual | null
   setMark: (studentId: string, mark: Mark) => void
   allPresent: () => void
   confirm: () => void
@@ -109,7 +110,8 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
   const marks: ReadonlyMap<string, Mark> = editable ? (draft ?? sheet.marks) : sheet.marks
   const counts = tally(roster, marks)
 
-  const terms = termsOn(sheet.group.group_type, sheet.lesson_date, sheet.rates, sheet.tariffs)
+  const percent = rateOn(sheet.rates, sheet.lesson_date)
+  const accrual = percent !== null ? lessonAccrual(roster, marks, percent) : null
 
   const model: SheetModel = {
     sheet,
@@ -119,7 +121,7 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
     counts,
     editable,
     canConfirm: editable && counts.unmarked === 0 && !mutation.isPending,
-    terms,
+    accrual,
     setMark: (studentId, mark) => {
       const row = roster.find((r) => r.studentId === studentId)
       if (!editable || !row) return
@@ -161,10 +163,6 @@ function lockedReason({ sheet, state, editable }: SheetModel): string | null {
 }
 
 const som = (n: number) => `${formatSom(n)} сом`
-
-/** «Начислено / Начислится» of one lesson, whole som (payroll/calc.ts, И18). */
-const lessonPay = (terms: Omit<PayTerms, 'consumedCount'>, consumedCount: number) =>
-  roundSom(calcLessonPay({ ...terms, consumedCount }))
 
 function BackButton() {
   const router = useRouter()
@@ -442,7 +440,9 @@ function DesktopSheet({ m, now }: { m: SheetModel; now: number }) {
     GROUP_TYPE_LABEL[sheet.group.group_type].toLowerCase(),
     studentsWord(m.roster.length),
     sheet.group.room ? `каб. ${sheet.group.room}` : null,
-    m.terms ? `${som(lessonPay(m.terms, 1))} за ученико-урок` : null,
+    m.accrual?.perStudentLesson != null
+      ? `${som(m.accrual.perStudentLesson)} за ученико-урок`
+      : null,
   ]
     .filter(Boolean)
     .join(' · ')
@@ -569,13 +569,13 @@ function Summary({ m }: { m: SheetModel }) {
             <dt>Ученико-уроков</dt>
             <dd>{counts.studentLessons}</dd>
           </div>
-          {m.terms && (
+          {m.accrual && (
             <div className="flex justify-between">
               <dt>{m.sheet.status === 'held' ? 'Начислено' : 'Начислится'}</dt>
-              <dd className="font-display">{som(lessonPay(m.terms, counts.studentLessons))}</dd>
+              <dd className="font-display">{som(m.accrual.pay)}</dd>
             </div>
           )}
-          {m.terms && <p className="text-[11px] font-bold text-ink-muted">{PRELIMINARY_NOTE}</p>}
+          {m.accrual && <p className="text-[11px] font-bold text-ink-muted">{PRELIMINARY_NOTE}</p>}
         </dl>
         <ConfirmAction m={m} desktop />
       </div>
