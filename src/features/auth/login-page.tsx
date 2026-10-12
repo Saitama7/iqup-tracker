@@ -1,7 +1,9 @@
 import { ArrowRight, Eye, EyeOff, LoaderCircle } from 'lucide-react'
-import { useId, useState, type SubmitEvent } from 'react'
+import { useEffect, useId, useRef, useState, type ClipboardEvent, type SubmitEvent } from 'react'
 import { InvalidCredentialsError, signIn } from '@/lib/auth'
-import { maskPhoneInput } from '@/lib/phone-input'
+import { cleanPassword } from '@/lib/password-input'
+import { maskPhoneInput, pastedPhoneDigits } from '@/lib/phone-input'
+import { DESKTOP_QUERY } from '@/lib/use-is-desktop'
 
 // У1 Вход (docs/design/Login.dc.html): phone + password, no SMS (05-decisions Д1).
 export function LoginPage() {
@@ -13,10 +15,19 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const phoneRef = useRef<HTMLInputElement>(null)
+
+  // Desktop: type or paste right away. Phone: the keyboard would cover the form (#33).
+  useEffect(() => {
+    if (window.matchMedia(DESKTOP_QUERY).matches) phoneRef.current?.focus()
+  }, [])
 
   async function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
-    if (!phone || !password) {
+    // The disabled «Войти» already blocks Enter while signing in; this keeps it a single request.
+    if (pending) return
+    const cleanedPassword = cleanPassword(password)
+    if (!phone || !cleanedPassword) {
       setError('Введите телефон и пароль')
       return
     }
@@ -25,7 +36,7 @@ export function LoginPage() {
     try {
       // No navigate() here: SIGNED_IN re-runs the guards (main.tsx) and /login's beforeLoad
       // redirects to the role's home — a second navigation would race it (#27).
-      await signIn(phone, password)
+      await signIn(phone, cleanedPassword)
     } catch (err) {
       setError(
         err instanceof InvalidCredentialsError
@@ -34,6 +45,27 @@ export function LoginPage() {
       )
       setPending(false)
     }
+  }
+
+  // A copied number replaces whatever is in the field instead of being glued to it.
+  function onPhonePaste(e: ClipboardEvent<HTMLInputElement>) {
+    const digits = pastedPhoneDigits(e.clipboardData.getData('text'))
+    if (digits === null) return
+    e.preventDefault()
+    setPhone(maskPhoneInput(digits))
+  }
+
+  function onPasswordPaste(e: ClipboardEvent<HTMLInputElement>) {
+    e.preventDefault()
+    const { value, selectionStart, selectionEnd } = e.currentTarget
+    const text = e.clipboardData.getData('text')
+    setPassword(
+      cleanPassword(
+        value.slice(0, selectionStart ?? value.length) +
+          text +
+          value.slice(selectionEnd ?? value.length),
+      ),
+    )
   }
 
   return (
@@ -78,10 +110,12 @@ export function LoginPage() {
             <div className={fieldClass}>
               <span className="text-base font-extrabold text-ink-muted">+996</span>
               <input
+                ref={phoneRef}
                 id={phoneId}
                 name="phone"
                 type="tel"
                 inputMode="numeric"
+                enterKeyHint="next"
                 autoComplete="tel-national"
                 placeholder="552 775 771"
                 required
@@ -89,6 +123,7 @@ export function LoginPage() {
                 onChange={(e) => {
                   setPhone(maskPhoneInput(e.target.value))
                 }}
+                onPaste={onPhonePaste}
                 aria-invalid={error ? true : undefined}
                 className={inputClass}
               />
@@ -104,13 +139,15 @@ export function LoginPage() {
                 id={passwordId}
                 name="password"
                 type={showPassword ? 'text' : 'password'}
+                enterKeyHint="go"
                 autoComplete="current-password"
                 placeholder="••••••••"
                 required
                 value={password}
                 onChange={(e) => {
-                  setPassword(e.target.value)
+                  setPassword(cleanPassword(e.target.value))
                 }}
+                onPaste={onPasswordPaste}
                 aria-invalid={error ? true : undefined}
                 className={inputClass}
               />
