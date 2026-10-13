@@ -3,6 +3,8 @@ import {
   bishkekDaysBetween,
   formatDateRu,
   formatDayMonth,
+  isoToLocalDate,
+  localDateToIso,
   formatDayLong,
   formatMonthNom,
   formatMonthYearGen,
@@ -74,5 +76,14 @@ describe('formatDayMonth', () => {
   it('day and genitive month', () => {
     expect(formatDayMonth('2026-10-05')).toBe('5 октября')
     expect(formatDayMonth('2026-12-31')).toBe('31 декабря')
+  })
+})
+
+describe('isoToLocalDate / localDateToIso (#62)', () => {
+  it('round-trips a calendar day in the device zone', () => {
+    const d = isoToLocalDate('2026-09-01')
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 8, 1])
+    expect(localDateToIso(d)).toBe('2026-09-01')
+    expect(localDateToIso(new Date(2025, 11, 31, 23, 59))).toBe('2025-12-31')
   })
 })

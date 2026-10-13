@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useRef, type ReactNode } from 'react'
 import { PageHeader, PageTitle } from '@/components/page'
+import { DatePickerButton } from '@/components/ui/date-picker'
 import { addDays } from '@/features/groups/model'
 import { Segmented } from '@/features/groups/parts'
 import { firstName } from '@/features/students/model'
@@ -187,7 +188,15 @@ export function SchedulePage({
       </button>
       {isDesktop ? (
         <PageTitle className="min-[900px]:text-[26px]">
-          {weekTitle(weekDays(monday, week.data ?? []))}
+          <DatePickerButton
+            value={date}
+            title="Перейти к неделе"
+            onSelect={(d) => {
+              set({ date: d })
+            }}
+          >
+            {weekTitle(weekDays(monday, week.data ?? []))}
+          </DatePickerButton>
         </PageTitle>
       ) : null}
       <button
@@ -237,7 +246,17 @@ export function SchedulePage({
     <section className="flex flex-col gap-4">
       <PageHeader
         eyebrow="Расписание"
-        title={formatDayLong(Date.parse(`${date}T12:00:00+06:00`))}
+        title={
+          <DatePickerButton
+            value={date}
+            title="Перейти к дню"
+            onSelect={(d) => {
+              set({ date: d })
+            }}
+          >
+            {formatDayLong(Date.parse(`${date}T12:00:00+06:00`))}
+          </DatePickerButton>
+        }
       />
       {nav}
       {controls}

@@ -2,7 +2,8 @@
 // Sums — payroll/calc.ts over the month's lessons; everything time-dependent is a pure function of
 // (rows, now), now = useNow() (§7.1). Advances come with R3: «—» until then, «К выплате» = начислено.
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { MonthPickerButton } from '@/components/ui/date-picker'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useSession } from '@/lib/auth'
@@ -84,6 +85,7 @@ function Notice({ children }: { children: ReactNode }) {
 // ─── Header and month switch ────────────────────────────────────────────────
 
 function Header({ month, today, desktop }: { month: string; today: string; desktop: boolean }) {
+  const navigate = useNavigate()
   const prev = shiftMonth(month, -1)
   const next = month < monthOf(today) ? shiftMonth(month, 1) : null
   const pill = desktop
@@ -97,7 +99,15 @@ function Header({ month, today, desktop }: { month: string; today: string; deskt
         </p>
         <div className="flex flex-wrap items-center gap-3.5">
           <h1 className="font-display text-[26px] leading-[1.1] font-bold text-ink min-[900px]:text-[30px]">
-            {desktop ? monthTitle(month) : monthNom(month)}
+            <MonthPickerButton
+              value={month}
+              max={monthOf(today)}
+              onSelect={(m) => {
+                void navigate({ to: '/my-month', search: { month: m } })
+              }}
+            >
+              {desktop ? monthTitle(month) : monthNom(month)}
+            </MonthPickerButton>
           </h1>
           {desktop && (
             <span className="rounded-full bg-warn-soft px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-warn-strong">

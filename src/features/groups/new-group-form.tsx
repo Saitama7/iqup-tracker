@@ -8,7 +8,8 @@ import { createSubject, subjectForm, subjectsQuery, SUBJECTS_KEY } from '@/featu
 import { GROUP_TYPES, tariffFor, type GroupType } from '@/features/tariffs/current'
 import { ErrorText, Field, inputClass, SubmitButton } from '@/features/tariffs/parts'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
-import { maskDateInput, maskTimeInput } from '@/lib/date-input'
+import { DateInput } from '@/components/ui/date-picker'
+import { maskTimeInput } from '@/lib/date-input'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { createGroup, groupForm, GROUPS_KEY, type GroupsSource } from './api'
 import {
@@ -350,15 +351,12 @@ export function NewGroupForm({
           />
         </Field>
         <Field id={ids.start} label="Первое занятие">
-          <input
+          <DateInput
             id={ids.start}
             className={inputClass}
-            inputMode="numeric"
-            placeholder="ДД.ММ.ГГГГ"
-            autoComplete="off"
             value={start}
-            onChange={(e) => {
-              setStart(maskDateInput(e.target.value))
+            onChange={(v) => {
+              setStart(v)
             }}
           />
         </Field>

@@ -10,7 +10,7 @@ import {
   DialogFooter,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { maskDateInput } from '@/lib/date-input'
+import { DateInput } from '@/components/ui/date-picker'
 import { useSession } from '@/lib/auth'
 import { useNow } from '@/lib/now'
 import { formatPhone, formatPhoneIntl } from '@/lib/phone'
@@ -612,14 +612,12 @@ function NewUserForm({ onCreated }: { onCreated: (p: IssuedPassword) => void }) 
             />
           </Field>
           <Field id={ids.from} label="Действует с">
-            <input
+            <DateInput
               id={ids.from}
-              inputMode="numeric"
-              placeholder="ДД.ММ.ГГГГ"
               className={inputClass}
               value={validFrom}
-              onChange={(e) => {
-                setValidFrom(maskDateInput(e.target.value))
+              onChange={(v) => {
+                setValidFrom(v)
               }}
             />
           </Field>
@@ -978,14 +976,12 @@ function NewRateForm({ teacher }: { teacher: TeacherRow }) {
           />
         </Field>
         <Field id={fromId} label="Действует с">
-          <input
+          <DateInput
             id={fromId}
-            inputMode="numeric"
-            placeholder="ДД.ММ.ГГГГ"
             className={inputClass}
             value={validFrom}
-            onChange={(e) => {
-              setValidFrom(maskDateInput(e.target.value))
+            onChange={(v) => {
+              setValidFrom(v)
             }}
           />
         </Field>

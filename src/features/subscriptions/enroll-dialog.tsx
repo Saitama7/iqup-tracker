@@ -7,7 +7,7 @@ import { firstName, formatDayMonth, groupLabel, type GroupBrief } from '@/featur
 import { FormDialog, NativeSelect } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, labelClass, SubmitButton } from '@/features/tariffs/parts'
 import { formatDateLong, formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
-import { maskDateInput } from '@/lib/date-input'
+import { DateInput } from '@/components/ui/date-picker'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { enrollForm, enrollStudent, tariffsQuery, type EnrollInput } from './api'
@@ -186,15 +186,13 @@ export function EnrollDialog({
           </NativeSelect>
         </Field>
         <Field id={ids.date} label="Дата начала">
-          <input
+          <DateInput
             id={ids.date}
-            inputMode="numeric"
-            placeholder="ДД.ММ.ГГГГ"
-            autoComplete="off"
             className={inputClass}
             value={date}
-            onChange={(e) => {
-              setDate(maskDateInput(e.target.value))
+            min={group?.start_date}
+            onChange={(v) => {
+              setDate(v)
             }}
           />
         </Field>

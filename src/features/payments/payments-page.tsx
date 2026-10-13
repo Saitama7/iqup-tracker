@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useId, useMemo, useState, type ReactNode, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
+import { DateInput } from '@/components/ui/date-picker'
 import { PageHeader, PageTitle } from '@/components/page'
 import { TEACHER_GROUPS_KEY } from '@/features/groups/teacher-api'
 import { STUDENTS_KEY, studentsQuery } from '@/features/students/api'
@@ -1093,13 +1094,11 @@ function RecordPanel({
           </div>
 
           <Field id={`${id}-date`} label="Дата">
-            <input
+            <DateInput
               id={`${id}-date`}
-              inputMode="numeric"
               value={paidOn}
-              onChange={(e) => {
-                setPaidOn(e.target.value)
-              }}
+              max={today}
+              onChange={setPaidOn}
               className={inputClass}
             />
           </Field>

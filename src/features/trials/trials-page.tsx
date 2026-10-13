@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronLeft, ChevronRight, Phone } from 'lucide-react'
 import { Fragment, useId, useMemo, useState, type ReactNode, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
+import { MonthPickerButton } from '@/components/ui/date-picker'
 import { PageHeader, PageTitle } from '@/components/page'
 import { ADMIN_LESSONS_KEY } from '@/features/schedule/api'
 import { studentsQuery } from '@/features/students/api'
@@ -797,7 +798,15 @@ function ConversionSection({
           >
             <ChevronLeft className="size-4" aria-hidden />
           </button>
-          <span className="min-w-28 text-center text-sm font-extrabold text-ink">{monthLabel}</span>
+          <MonthPickerButton
+            value={month.slice(0, 7)}
+            onSelect={(m) => {
+              setMonth(`${m}-01`)
+            }}
+            className="min-w-28 justify-center text-sm font-extrabold [&>svg]:size-4"
+          >
+            {monthLabel}
+          </MonthPickerButton>
           <button
             type="button"
             aria-label="Следующий месяц"

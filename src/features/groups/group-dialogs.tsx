@@ -5,7 +5,8 @@ import { STUDENTS_KEY } from '@/features/students/api'
 import { firstName, formatDayMonth, formatLessonWhen } from '@/features/students/model'
 import { FormDialog, NativeSelect } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, labelClass, SubmitButton } from '@/features/tariffs/parts'
-import { maskDateInput, maskTimeInput } from '@/lib/date-input'
+import { DateInput } from '@/components/ui/date-picker'
+import { maskTimeInput } from '@/lib/date-input'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import {
@@ -247,17 +248,15 @@ export function ExtraLessonDialog({
         </Field>
         <div className="grid grid-cols-2 gap-2.5">
           <Field id={ids.date} label="Дата">
-            <input
+            <DateInput
               id={ids.date}
               className={inputClass}
-              inputMode="numeric"
-              placeholder="ДД.ММ.ГГГГ"
-              autoComplete="off"
               value={date}
+              min={minDate}
               aria-invalid={tooEarly || undefined}
               aria-describedby={minDate ? ids.hint : undefined}
-              onChange={(e) => {
-                setDate(maskDateInput(e.target.value))
+              onChange={(v) => {
+                setDate(v)
               }}
             />
           </Field>
@@ -488,17 +487,14 @@ export function EditGroupDialog({
           />
         </div>
         <Field id={ids.start} label="Старт группы">
-          <input
+          <DateInput
             id={ids.start}
             className={inputClass}
-            inputMode="numeric"
-            placeholder="ДД.ММ.ГГГГ"
-            autoComplete="off"
             value={start}
             aria-invalid={!startIso || undefined}
             aria-describedby={ids.startHint}
-            onChange={(e) => {
-              setStart(maskDateInput(e.target.value))
+            onChange={(v) => {
+              setStart(v)
               setError(null)
             }}
           />
@@ -532,16 +528,14 @@ export function EditGroupDialog({
               />
             </Field>
             <Field id={ids.from} label="Действует с">
-              <input
+              <DateInput
                 id={ids.from}
                 className={inputClass}
-                inputMode="numeric"
-                placeholder="ДД.ММ.ГГГГ"
-                autoComplete="off"
                 value={from}
+                min={today}
                 aria-describedby={ids.fromHint}
-                onChange={(e) => {
-                  setFrom(maskDateInput(e.target.value))
+                onChange={(v) => {
+                  setFrom(v)
                 }}
               />
             </Field>
