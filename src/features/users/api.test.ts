@@ -1,6 +1,8 @@
 vi.mock('@/lib/supabase/client', () => ({ supabase: {} }))
 
-import { createUserForm, rateForm } from './api'
+import { FunctionsFetchError } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase/client'
+import { createUserForm, rateForm, resetPassword, USERS_FUNCTION_TIMEOUT_MS } from './api'
 
 const base = {
   fullName: ' Айгуль Исакова ',
@@ -55,5 +57,31 @@ describe('rateForm', () => {
       percent: 47.5,
       validFrom: '2026-11-01',
     })
+  })
+})
+
+describe('create-user calls (#66)', () => {
+  it('time out after 20 s with a clear message instead of an endless spinner', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      data: null,
+      error: new FunctionsFetchError(new DOMException('aborted', 'AbortError')),
+    })
+    Object.assign(supabase, { functions: { invoke } })
+    await expect(resetPassword({ phone: '996555000001', password: 'iqup-7k2m' })).rejects.toThrow(
+      'Сервер не ответил, попробуйте ещё раз',
+    )
+    expect(invoke).toHaveBeenCalledWith('create-user', expect.objectContaining({ timeout: 20_000 }))
+    expect(USERS_FUNCTION_TIMEOUT_MS).toBe(20_000)
+  })
+
+  it('other network errors keep the generic message', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      data: null,
+      error: new FunctionsFetchError(new TypeError('Load failed')),
+    })
+    Object.assign(supabase, { functions: { invoke } })
+    await expect(resetPassword({ phone: '996555000001', password: 'iqup-7k2m' })).rejects.toThrow(
+      'Не удалось связаться с сервером. Попробуйте ещё раз.',
+    )
   })
 })

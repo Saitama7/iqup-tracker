@@ -1,7 +1,7 @@
 // А8 data: reads go straight to Postgres (RLS: staff only), every write goes through
 // the Edge Function create-user — roles live in the JWT (app_metadata), never set from the client.
 import { queryOptions } from '@tanstack/react-query'
-import { FunctionsHttpError } from '@supabase/supabase-js'
+import { FunctionsFetchError, FunctionsHttpError } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { normalizePhone } from '@/lib/phone'
 import { subjectName } from '@/features/subjects/api'
@@ -138,10 +138,23 @@ export class UsersApiError extends Error {
 
 const errorBodySchema = z.object({ error: z.string(), message: z.string().optional() })
 
+/** A cold or stuck function must not spin the form forever (#66). */
+export const USERS_FUNCTION_TIMEOUT_MS = 20_000
+
+function isTimeout(e: unknown): boolean {
+  if (!(e instanceof FunctionsFetchError)) return false
+  const name = (e.context as { name?: unknown } | null)?.name
+  return name === 'AbortError' || name === 'TimeoutError'
+}
+
 async function callUsersFunction<T>(body: Record<string, unknown>): Promise<T> {
-  const res = await supabase.functions.invoke<T>('create-user', { body })
+  const res = await supabase.functions.invoke<T>('create-user', {
+    body,
+    timeout: USERS_FUNCTION_TIMEOUT_MS,
+  })
   const error: unknown = res.error
   if (error) {
+    if (isTimeout(error)) throw new UsersApiError('Сервер не ответил, попробуйте ещё раз', 'timeout')
     if (error instanceof FunctionsHttpError) {
       const json: unknown = await (error.context as Response).json().catch(() => null)
       const parsed = errorBodySchema.safeParse(json)
