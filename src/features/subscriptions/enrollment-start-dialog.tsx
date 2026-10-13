@@ -22,6 +22,8 @@ export function EnrollmentStartDialog({
   groupLabel,
   startDate,
   groupStart,
+  groupEnd,
+  enrollmentEnd,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -30,6 +32,9 @@ export function EnrollmentStartDialog({
   startDate: string
   /** groups.start_date — the earliest date allowed. */
   groupStart: string | null
+  /** groups.end_date / enrollments.end_date — the latest date allowed (И45, #64). */
+  groupEnd: string | null
+  enrollmentEnd: string | null
 }) {
   const ids = { date: useId(), hint: useId() }
   const queryClient = useQueryClient()
@@ -37,6 +42,14 @@ export function EnrollmentStartDialog({
   const [error, setError] = useState<string | null>(null)
   const iso = parseDateRu(date)
   const tooEarly = iso !== null && groupStart !== null && iso < groupStart
+  const pastGroup = iso !== null && groupEnd !== null && iso > groupEnd
+  const pastEnrollment = iso !== null && enrollmentEnd !== null && iso > enrollmentEnd
+  const latest =
+    groupEnd && enrollmentEnd
+      ? groupEnd < enrollmentEnd
+        ? groupEnd
+        : enrollmentEnd
+      : (groupEnd ?? enrollmentEnd)
 
   const mutation = useMutation({
     mutationFn: (value: string) => setEnrollmentStart(enrollmentId, value),
@@ -60,8 +73,12 @@ export function EnrollmentStartDialog({
       setError('Дата в формате ДД.ММ.ГГГГ')
       return
     }
-    if (tooEarly) {
+    if (tooEarly || pastGroup) {
       setError('Дата — вне дат группы (раньше её старта или позже окончания)')
+      return
+    }
+    if (pastEnrollment) {
+      setError('Дата — позже окончания зачисления')
       return
     }
     if (iso === startDate) {
@@ -91,7 +108,8 @@ export function EnrollmentStartDialog({
             className={inputClass}
             value={date}
             min={groupStart}
-            aria-invalid={tooEarly || undefined}
+            max={latest}
+            aria-invalid={tooEarly || pastGroup || pastEnrollment || undefined}
             aria-describedby={groupStart ? ids.hint : undefined}
             onChange={(v) => {
               setDate(v)
