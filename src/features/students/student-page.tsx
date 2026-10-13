@@ -171,6 +171,8 @@ export function StudentPage({ studentId }: { studentId: string }) {
           groupLabel={editingStart.groupLabel}
           startDate={editingStart.startDate}
           groupStart={editingStart.group?.start_date ?? null}
+          groupEnd={editingStart.group?.end_date ?? null}
+          enrollmentEnd={editingStart.endDate}
         />
       )}
       {enrolling && (

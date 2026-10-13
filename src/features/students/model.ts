@@ -227,6 +227,8 @@ export interface EnrollmentView {
   group: GroupBrief | null
   groupLabel: string
   startDate: string
+  /** enrollments.end_date — the latest start allowed (with the group end). */
+  endDate: string | null
   active: boolean
   subscription: SubscriptionRow | null
   balance: Balance | null
@@ -248,6 +250,7 @@ export function enrollmentViews(
         group,
         groupLabel: group ? groupLabel(group) : 'Группа',
         startDate: e.start_date,
+        endDate: e.end_date,
         active: e.status === 'active',
         subscription,
         balance: subscription ? (balances.get(subscription.id) ?? null) : null,
