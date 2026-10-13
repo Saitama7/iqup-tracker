@@ -110,16 +110,19 @@ export function EnrollmentStartDialog({
             min={groupStart}
             max={latest}
             aria-invalid={tooEarly || pastGroup || pastEnrollment || undefined}
-            aria-describedby={groupStart ? ids.hint : undefined}
+            aria-describedby={groupStart || latest ? ids.hint : undefined}
             onChange={(v) => {
               setDate(v)
               setError(null)
             }}
           />
         </Field>
-        {groupStart && (
+        {(groupStart || latest) && (
           <p id={ids.hint} className="-mt-2 text-xs font-bold text-ink-muted">
-            Можно задним числом, не раньше старта группы — {formatDateRu(groupStart)}
+            {groupStart
+              ? `Можно задним числом, не раньше старта группы — ${formatDateRu(groupStart)}`
+              : 'Можно задним числом'}
+            {latest && ` и не позже ${formatDateRu(latest)}`}
           </p>
         )}
         {error && <ErrorText>{error}</ErrorText>}

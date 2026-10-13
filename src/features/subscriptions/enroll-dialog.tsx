@@ -191,6 +191,7 @@ export function EnrollDialog({
             className={inputClass}
             value={date}
             min={group?.start_date}
+            max={group?.end_date}
             onChange={(v) => {
               setDate(v)
             }}
