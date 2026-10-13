@@ -179,7 +179,12 @@ test('старт группы и дата зачисления — выбор в
     const studentId = student?.id ?? ''
     const { data: enrollment } = await service
       .from('enrollments')
-      .insert({ student_id: studentId, group_id: groupId, start_date: '2026-09-18' })
+      .insert({
+        student_id: studentId,
+        group_id: groupId,
+        start_date: '2026-09-18',
+        end_date: '2026-10-31',
+      })
       .select('id')
       .single()
 
@@ -188,6 +193,13 @@ test('старт группы и дата зачисления — выбор в
       .getByRole('button', { name: `Изменить дату зачисления: Математика · ${f.group}` })
       .click()
     const dialog = page.getByRole('form', { name: 'Дата зачисления' })
+    // the enrollment ends on 31 October: the hint names both bounds (#66)
+    await expect(
+      dialog.getByText(
+        'Можно задним числом, не раньше старта группы — 01.09.2026 и не позже 31.10.2026',
+      ),
+    ).toBeVisible()
+    await snap(page, testInfo, `enrollment-hint-${size(page)}`)
     await dialog.getByRole('button', { name: 'Открыть календарь' }).click()
     const enrollPicker = page.getByRole('dialog', { name: 'Выберите дату' })
     // the group starts on 1 September: no way back to August
@@ -252,6 +264,54 @@ test('телефон: тап по полю — шторка, «Закрыть» 
   // typing in progress: a tap moves the caret instead of reopening the calendar
   await field.tap()
   await expect(picker).toBeHidden()
+
+  // a tap on another field ends typing: the next tap on the date opens the sheet again (#66)
+  await add.getByLabel('Название').tap()
+  expect(await focused()).toBe(false)
+  await field.tap()
+  await expect(picker).toBeVisible()
+  expect(await focused()).toBe(false)
+  await snap(page, testInfo, 'date-picker-retap-390')
+})
+
+test('десктоп: клик в соседнее поле при открытом календаре — текст печатается туда (#66)', async ({
+  page,
+}, testInfo) => {
+  test.skip(!isDesktop(page), 'popover и возврат фокуса в поле — десктоп (#66)')
+  await pinClock(page, '2026-10-08T08:24:00Z')
+  await login(page, KANYKEI)
+  await page.goto('/admin/settings')
+  await page
+    .getByRole('region', { name: 'Праздники и выходные центра' })
+    .getByRole('button', { name: 'Добавить', exact: true })
+    .click()
+  const add = page.getByRole('form', { name: 'Новый праздник' })
+  const date = add.getByLabel('Дата')
+  const name = add.getByLabel('Название')
+  const picker = page.getByRole('dialog', { name: 'Выберите дату' })
+
+  await add.getByRole('button', { name: 'Открыть календарь' }).click()
+  await expect(picker).toBeVisible()
+  // the popover covers the left of the field below — click its uncovered right end
+  const box = await name.boundingBox()
+  await name.click({ position: { x: (box?.width ?? 0) - 16, y: (box?.height ?? 0) / 2 } })
+  await expect(picker).toBeHidden()
+  // past the popover's fade-out, when the focus used to jump back into the date
+  await page.waitForTimeout(400)
+  await page.keyboard.type('Нооруз')
+  await expect(name).toHaveValue('Нооруз')
+  await expect(date).toHaveValue('')
+  await expect(name).toBeFocused()
+
+  // a click into the date field itself closes the popover too, the caret stays there
+  await add.getByRole('button', { name: 'Открыть календарь' }).click()
+  await expect(picker).toBeVisible()
+  await date.click()
+  await expect(picker).toBeHidden()
+  await expect(date).toBeFocused()
+  await page.keyboard.type('21032027')
+  await expect(date).toHaveValue('21.03.2027')
+  await snap(page, testInfo, 'date-picker-focus-1280')
 })
 
 test('десктоп: повторный клик по заголовку закрывает календарь, неделя подсвечена', async ({
