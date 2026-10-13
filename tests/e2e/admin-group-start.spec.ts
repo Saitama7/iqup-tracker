@@ -175,7 +175,7 @@ test('старт группы и дата зачисления задним чи
     await date.pressSequentially('25082026')
     await dialog.getByRole('button', { name: 'Сохранить' }).click()
     await expect(dialog.getByRole('alert')).toHaveText(
-      'Дата — вне дат группы (раньше старта группы)',
+      'Дата — вне дат группы (раньше её старта или позже окончания)',
     )
     await date.fill('')
     await date.pressSequentially('01092026')
