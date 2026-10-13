@@ -203,7 +203,7 @@ test('А6: student card with referrer, notes and empty attendance', async ({ pag
   }
   await page.screenshot({ path: testInfo.outputPath('student.png'), fullPage: true })
 
-  await page.getByRole('button', { name: 'Изменить' }).click()
+  await page.getByRole('button', { name: 'Изменить', exact: true }).click()
   const form = page.getByRole('form', { name: 'Изменить ученика' })
   await expect(form.getByLabel('Имя и фамилия')).toHaveValue('Нурлан Асанов')
   await expect(form.getByLabel('Телефон родителя')).toHaveValue('555 999 000')

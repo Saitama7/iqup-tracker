@@ -97,6 +97,7 @@ export function EnrollmentStartDialog({
             aria-describedby={groupStart ? ids.hint : undefined}
             onChange={(e) => {
               setDate(maskDateInput(e.target.value))
+              setError(null)
             }}
           />
         </Field>

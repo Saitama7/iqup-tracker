@@ -368,7 +368,7 @@ const sameDays = (a: readonly number[], b: readonly number[]) =>
  * of the new stretch), status forming ↔ active, and the schedule from a date (today or later) —
  * reschedule_group closes the old rules, removes not-yet-started planned lessons by them and
  * generates the new ones. Two dates, two boxes: the start above, the schedule's date inside
- * «Расписание», so they are not mixed up.
+ * «Новое расписание», so they are not mixed up.
  */
 export function EditGroupDialog({
   open,
@@ -499,6 +499,7 @@ export function EditGroupDialog({
             aria-describedby={ids.startHint}
             onChange={(e) => {
               setStart(maskDateInput(e.target.value))
+              setError(null)
             }}
           />
         </Field>
@@ -514,7 +515,7 @@ export function EditGroupDialog({
           </p>
         )}
         <fieldset className="flex min-w-0 flex-col gap-3.5 rounded-2xl border-[1.5px] border-line-strong p-3.5">
-          <legend className="px-1.5 text-[13px] font-extrabold">Расписание</legend>
+          <legend className="px-1.5 text-[13px] font-extrabold">Новое расписание</legend>
           <WeekdayPicker id={ids.days} value={weekdays} onChange={setWeekdays} />
           <div className="grid grid-cols-2 gap-2.5">
             <Field id={ids.time} label="Время">
@@ -530,7 +531,7 @@ export function EditGroupDialog({
                 }}
               />
             </Field>
-            <Field id={ids.from} label="Новое расписание с">
+            <Field id={ids.from} label="Действует с">
               <input
                 id={ids.from}
                 className={inputClass}
@@ -546,7 +547,7 @@ export function EditGroupDialog({
             </Field>
           </div>
           <p id={ids.fromHint} className="-mt-2 text-xs font-bold text-ink-muted">
-            Действует с этой даты, не раньше сегодня — {formatDateRu(today)}
+            Не раньше сегодня — {formatDateRu(today)}
           </p>
           {scheduleChanged && (
             <p
