@@ -44,7 +44,7 @@ function PickerPopup({
   onOpenChange,
   title,
   anchor,
-  anchorRef,
+  toggleRef,
   onCloseAutoFocus,
   children,
 }: {
@@ -53,7 +53,8 @@ function PickerPopup({
   title: string
   /** The field / title button; on desktop the popover is positioned under it. */
   anchor: ReactElement
-  anchorRef: RefObject<HTMLElement | null>
+  /** The button that opens / closes the popup (the icon in a field, the title itself). */
+  toggleRef: RefObject<HTMLElement | null>
   onCloseAutoFocus?: (e: Event) => void
   children: ReactNode
 }) {
@@ -66,12 +67,13 @@ function PickerPopup({
           aria-label={title}
           onCloseAutoFocus={onCloseAutoFocus}
           onPointerDownOutside={(e) => {
-            // a tap on the anchor toggles the picker itself — not «outside»
-            if (anchorRef.current?.contains(e.target as Node)) e.preventDefault()
+            // a tap on the toggle opens / closes the picker itself — not «outside». A click into
+            // the field is outside: it closes the popover (#66)
+            if (toggleRef.current?.contains(e.target as Node)) e.preventDefault()
           }}
           onFocusOutside={(e) => {
             // …nor is the focus it takes on that click (Chrome), or a second click would reopen
-            if (anchorRef.current?.contains(e.target as Node)) e.preventDefault()
+            if (toggleRef.current?.contains(e.target as Node)) e.preventDefault()
           }}
         >
           {children}
@@ -110,14 +112,17 @@ const inBounds = (iso: string, { min, max }: DateBounds) =>
 
 // ─── Day calendar ───────────────────────────────────────────────────────────
 
+/** A typo like «01.01.0202» must not unroll 1800 years in the dropdown (#66). */
+const MIN_YEAR = 1900
+
 /**
  * Years in the month/year dropdowns without bounds: 5 back and 2 ahead of today, widened so the
- * field's value is always in range (#64).
+ * field's value is always in range (#64), but not before 1900 (#66).
  */
 export function yearRange(today: string, value: string | null): { from: number; to: number } {
   const year = Number(today.slice(0, 4))
   const own = value ? Number(value.slice(0, 4)) : year
-  return { from: Math.min(own, year - 5), to: Math.max(own, year + 2) }
+  return { from: Math.max(MIN_YEAR, Math.min(own, year - 5)), to: Math.max(own, year + 2) }
 }
 
 /** Monday – Sunday around an ISO date, as local dates for the day picker. */
@@ -222,6 +227,7 @@ export function DateInput({
   const typing = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
+  const iconRef = useRef<HTMLButtonElement>(null)
   const iso = parseDateRu(value)
 
   return (
@@ -229,10 +235,15 @@ export function DateInput({
       open={open}
       onOpenChange={setOpen}
       title={title}
-      anchorRef={anchorRef}
+      toggleRef={iconRef}
       onCloseAutoFocus={(e) => {
         e.preventDefault()
-        if (isDesktop) inputRef.current?.focus()
+        if (!isDesktop) return
+        // closed by a click into another field: the focus stays there, typing goes there (#66)
+        const active = document.activeElement
+        if (!active || active === document.body || anchorRef.current?.contains(active)) {
+          inputRef.current?.focus()
+        }
       }}
       anchor={
         <div ref={anchorRef} className="relative min-w-0">
@@ -261,6 +272,7 @@ export function DateInput({
             }}
           />
           <button
+            ref={iconRef}
             type="button"
             aria-label="Открыть календарь"
             aria-haspopup="dialog"
@@ -334,7 +346,7 @@ export function DatePickerButton({
       open={open}
       onOpenChange={setOpen}
       title={title}
-      anchorRef={anchorRef}
+      toggleRef={anchorRef}
       anchor={
         <button
           ref={anchorRef}
@@ -395,7 +407,7 @@ export function MonthPickerButton({
       open={open}
       onOpenChange={setOpen}
       title={title}
-      anchorRef={anchorRef}
+      toggleRef={anchorRef}
       anchor={
         <button
           ref={anchorRef}

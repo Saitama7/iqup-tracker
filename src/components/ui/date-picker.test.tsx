@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { DateInput, DatePickerButton, MonthPickerButton, yearRange } from './date-picker'
@@ -121,6 +121,27 @@ describe('DateInput on the phone (#64)', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it('after «Ввести вручную» and a tap elsewhere, a tap on the field opens the sheet again (#66)', async () => {
+    const user = userEvent.setup()
+    render(
+      <>
+        <Field initial="" />
+        <button type="button">Другое</button>
+      </>,
+    )
+    const input = screen.getByLabelText('Дата')
+    await user.click(input)
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Ввести вручную' }),
+    )
+    expect(input).toHaveFocus()
+    await user.click(screen.getByRole('button', { name: 'Другое' }))
+    expect(input).not.toHaveFocus()
+    await user.click(input)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(input).not.toHaveFocus()
+  })
+
   it('a field focused by its dialog still opens the calendar on a tap', async () => {
     const user = userEvent.setup()
     render(<Field initial="" />)
@@ -149,6 +170,50 @@ describe('DateInput on desktop (#64)', () => {
     expect(within(popover).queryByRole('button', { name: 'Ввести вручную' })).toBeNull()
     await user.click(icon)
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('a click into another field closes the popover and keeps the focus there (#66)', async () => {
+    const user = userEvent.setup()
+    render(
+      <>
+        <Field initial="05.10.2026" />
+        <label htmlFor="n">Название</label>
+        <input id="n" />
+      </>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Открыть календарь' }))
+    await screen.findByRole('dialog')
+    const other = screen.getByLabelText('Название')
+    await user.click(other)
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    await new Promise((r) => setTimeout(r, 200))
+    expect(other).toHaveFocus()
+    await user.keyboard('Нооруз')
+    expect(other).toHaveValue('Нооруз')
+    expect(screen.getByLabelText('Дата')).toHaveValue('05.10.2026')
+  })
+
+  it('a click into the field itself closes the popover; «Закрыть» returns the focus to it', async () => {
+    const user = userEvent.setup()
+    render(<Field initial="05.10.2026" />)
+    const input = screen.getByLabelText('Дата')
+    const icon = screen.getByRole('button', { name: 'Открыть календарь' })
+    await user.click(icon)
+    await screen.findByRole('dialog')
+    await user.click(input)
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    expect(input).toHaveFocus()
+    await user.click(icon)
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Закрыть' }),
+    )
+    await waitFor(() => {
+      expect(input).toHaveFocus()
+    })
   })
 })
 
@@ -185,5 +250,9 @@ describe('yearRange (#64)', () => {
     expect(yearRange('2026-10-14', null)).toEqual({ from: 2021, to: 2028 })
     expect(yearRange('2026-10-14', '2015-03-01')).toEqual({ from: 2015, to: 2028 })
     expect(yearRange('2026-10-14', '2031-01-01')).toEqual({ from: 2021, to: 2031 })
+  })
+
+  it('a typo year does not go below 1900 (#66)', () => {
+    expect(yearRange('2026-10-14', '0202-01-01')).toEqual({ from: 1900, to: 2028 })
   })
 })
