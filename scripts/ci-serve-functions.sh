@@ -23,5 +23,6 @@ for i in $(seq 1 10); do
   echo "create-user warm-up attempt $i: HTTP $code"
   sleep 2
 done
+echo "create-user did not warm up after 10 attempts"
 cat functions.log
 exit 1
