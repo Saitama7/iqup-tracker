@@ -7,12 +7,16 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, prod]
     steps:
       # /auth/v1/health отвечает 200 с publishable-ключом (корень /rest/v1/ требует secret-ключ) — запрос через шлюз считается активностью.
       - name: Ping Supabase
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ matrix.env == 'prod' && secrets.SUPABASE_URL_PROD || secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ matrix.env == 'prod' && secrets.SUPABASE_ANON_KEY_PROD || secrets.SUPABASE_ANON_KEY }}
         run: |
           URL="${SUPABASE_URL%/}"
           code=$(curl -sS "$URL/auth/v1/health" -H "apikey: $SUPABASE_ANON_KEY" -H "Authorization: Bearer $SUPABASE_ANON_KEY" -o /tmp/body -w "%{http_code}")

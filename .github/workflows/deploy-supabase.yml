@@ -1,0 +1,35 @@
+# Миграции и Edge Function догоняют код (#44): main → dev-проект, prod → prod-проект.
+# Секреты: SUPABASE_ACCESS_TOKEN, SUPABASE_DB_PASSWORD_DEV, SUPABASE_DB_PASSWORD_PROD.
+# Переменные (vars): SUPABASE_PROJECT_REF_DEV, SUPABASE_PROJECT_REF_PROD.
+name: Deploy Supabase
+on:
+  push:
+    branches: [main, prod]
+    paths: ["supabase/**", ".github/workflows/deploy-supabase.yml"]
+  workflow_dispatch:
+concurrency:
+  group: deploy-supabase-${{ github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'prod' && 'prod' || 'dev' }}
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ github.ref_name == 'prod' && secrets.SUPABASE_DB_PASSWORD_PROD || secrets.SUPABASE_DB_PASSWORD_DEV }}
+      PROJECT_REF: ${{ github.ref_name == 'prod' && vars.SUPABASE_PROJECT_REF_PROD || vars.SUPABASE_PROJECT_REF_DEV }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Link
+        run: supabase link --project-ref "$PROJECT_REF"
+      - name: Push migrations
+        run: supabase db push
+      - name: Deploy Edge Functions
+        run: supabase functions deploy create-user --project-ref "$PROJECT_REF"
+      - name: Verify local = remote
+        run: |
+          supabase migration list | tee /tmp/m.txt
+          # каждая локальная версия должна быть и на remote: строк вида `NNNN | ` (пустой remote) быть не должно
+          if grep -E '^\s*[0-9]{4}\s*\|\s*\|' /tmp/m.txt; then echo "::error::remote отстаёт от local"; exit 1; fi

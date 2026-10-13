@@ -229,13 +229,18 @@ held — зелёные; planned в прошлом — красные «Не п�
 - **Лимиты.** Supabase Free: 200 одновременных realtime-соединений, 2 млн сообщений/мес. У IQ UP ~15 пользователей и сотни событий в день — запас на два порядка. Если Realtime недоступен (Wi-Fi центра режет WebSocket), работает polling-страховка 60 с — пользователь разницы не заметит.
 - **Оффлайн.** «Провести» — мутация `confirm_lesson` без optimistic update (И27): лист остаётся на месте до ответа БД, переход на «Сегодня» — только после успеха, ошибка — тостом, черновик отметок остаётся. Без сети мутация на паузе (лист показывает «Ждём связь… отметки сохранены»), TanStack Query отправит её при `online`. Конфликт «двое отметили один урок» решает `confirmed_at` — первый выиграл, второй видит экран «уже проведено».
 
-## 8. Окружения и деплой
+## 8. Окружения и деплой (обновлено 13.10)
 
-| Окружение | Где |
-|---|---|
-| local | `supabase start` (Docker) + `vite dev` |
-| preview | Cloudflare Pages preview на PR + Supabase dev-проект |
-| production | Cloudflare Pages `main` + Supabase prod-проект |
+| | dev | prod |
+|---|---|---|
+| Supabase | `iqup-dev` (`kvivodokeqeasclporys`, аккаунт Кайрата) | `iqup-tracker-prod` (`nkuxkdmjdnbzssbtoboc`, организация IQUP на `info.iqupkg@gmail.com`, Кайрат — Owner) |
+| Cloudflare Pages | `iqup-tracker.pages.dev` (аккаунт Кайрата), ветка `main` | проект в аккаунте IQ UP, ветка **`prod`** |
+| GitHub | `Saitama7/iqup-tracker` — один репо для обоих | |
+
+- Фронт деплоит Cloudflare Pages по пушу в свою ветку. БД и Edge Function — workflow `.github/workflows/deploy-supabase.yml`: `main` → dev, `prod` → prod (`supabase db push` + `functions deploy create-user`, затем проверка local = remote). Секреты: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD_DEV/PROD`; vars: `SUPABASE_PROJECT_REF_DEV/PROD`.
+- В `prod` мержим `main` вручную по готовности (`git checkout prod && git merge --ff-only main && git push`), не по каждому PR.
+- Keepalive пингует оба проекта раз в день (`supabase-keepalive.yml`, секреты `SUPABASE_URL[_PROD]`, `SUPABASE_ANON_KEY[_PROD]`).
+- Prod без демо-сида: `supabase/seed.sql` только локально; на prod — справочники (`supabase/seed-prod.sql`: тарифы, предметы, праздники) и реальные пользователи через `create-user`.
 
 ## 9. Инструменты агентной разработки (Claude Code)
 
