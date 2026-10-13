@@ -7,6 +7,7 @@ import { BackButton } from '@/components/shell/back-button'
 import { balancesQuery, studentPaymentsQuery, type PaymentRow } from '@/features/payments/api'
 import { availableLessons, totalDebt } from '@/features/payments/balance'
 import { EnrollDialog, type EnrollStudent } from '@/features/subscriptions/enroll-dialog'
+import { EnrollmentStartDialog } from '@/features/subscriptions/enrollment-start-dialog'
 import { formatSom } from '@/features/tariffs/model'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
 import { useNow } from '@/lib/now'
@@ -105,6 +106,7 @@ export function StudentPage({ studentId }: { studentId: string }) {
   )
   const [editing, setEditing] = useState(false)
   const [enrolling, setEnrolling] = useState(false)
+  const [editingStart, setEditingStart] = useState<EnrollmentView | null>(null)
 
   if (query.isPending) {
     return <div className={cn(cardClass, 'h-64 animate-pulse')} aria-label="Загрузка" />
@@ -132,6 +134,7 @@ export function StudentPage({ studentId }: { studentId: string }) {
     onEnroll: () => {
       setEnrolling(true)
     },
+    onEditStart: setEditingStart,
   }
   const records = attendance.data ?? []
   const payments = {
@@ -158,6 +161,18 @@ export function StudentPage({ studentId }: { studentId: string }) {
           students={students.data?.students ?? []}
         />
       )}
+      {editingStart && (
+        <EnrollmentStartDialog
+          open
+          onOpenChange={() => {
+            setEditingStart(null)
+          }}
+          enrollmentId={editingStart.enrollmentId}
+          groupLabel={editingStart.groupLabel}
+          startDate={editingStart.startDate}
+          groupStart={editingStart.group?.start_date ?? null}
+        />
+      )}
       {enrolling && (
         <EnrollDialog
           open={enrolling}
@@ -179,6 +194,7 @@ interface ScreenProps {
   paymentsState: 'pending' | 'error' | 'ready'
   onEdit: () => void
   onEnroll: () => void
+  onEditStart: (e: EnrollmentView) => void
 }
 
 function headerCaption(view: StudentView): string {
@@ -216,6 +232,7 @@ function DesktopStudent({
   paymentsState,
   onEdit,
   onEnroll,
+  onEditStart,
 }: ScreenProps) {
   const s = view.student
   return (
@@ -254,7 +271,16 @@ function DesktopStudent({
           {view.active.length === 0 ? (
             <NotEnrolled onEnroll={onEnroll} />
           ) : (
-            view.active.map((e) => <EnrollmentCard key={e.enrollmentId} e={e} today={today} />)
+            view.active.map((e) => (
+              <EnrollmentCard
+                key={e.enrollmentId}
+                e={e}
+                today={today}
+                onEditStart={() => {
+                  onEditStart(e)
+                }}
+              />
+            ))
           )}
           <AttendanceTable view={view} records={records} />
         </div>
@@ -421,6 +447,7 @@ function MobileStudent({
   paymentsState,
   onEdit,
   onEnroll,
+  onEditStart,
 }: ScreenProps) {
   const s = view.student
   const navigate = useNavigate()
@@ -534,7 +561,16 @@ function MobileStudent({
           Ещё не зачислен в группу — абонемент создаётся при зачислении.
         </section>
       ) : (
-        view.active.map((e) => <MobileEnrollment key={e.enrollmentId} e={e} today={today} />)
+        view.active.map((e) => (
+          <MobileEnrollment
+            key={e.enrollmentId}
+            e={e}
+            today={today}
+            onEditStart={() => {
+              onEditStart(e)
+            }}
+          />
+        ))
       )}
 
       <PaymentsSection

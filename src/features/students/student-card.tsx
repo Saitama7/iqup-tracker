@@ -127,7 +127,29 @@ function RefundedBody({ e }: { e: EnrollmentView }) {
   )
 }
 
-export function EnrollmentCard({ e, today }: { e: EnrollmentView; today: string }) {
+/** «Изменить дату зачисления» (#60) — under the caption «… · зачислен 18 сентября». */
+function EditStartButton({ e, onClick }: { e: EnrollmentView; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Изменить дату зачисления: ${e.groupLabel}`}
+      className="flex min-h-11 items-center self-start text-xs font-extrabold whitespace-nowrap text-teal"
+    >
+      Изменить дату зачисления
+    </button>
+  )
+}
+
+export function EnrollmentCard({
+  e,
+  today,
+  onEditStart,
+}: {
+  e: EnrollmentView
+  today: string
+  onEditStart?: () => void
+}) {
   const sub = e.subscription
   const b = e.balance
   const rest = sub && b ? Math.max(0, sub.price_final - b.paidSom) : 0
@@ -140,6 +162,7 @@ export function EnrollmentCard({ e, today }: { e: EnrollmentView; today: string 
         <div className="flex flex-col gap-0.5">
           <h2 className="text-base font-extrabold">{e.groupLabel}</h2>
           <p className="text-xs font-bold text-ink-muted">{enrollmentCaption(e, today)}</p>
+          {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
         </div>
         <div className="flex items-center gap-1.5">
           {b ? <BalanceChip b={b} /> : !sub && e.refunded && <RefundedChip />}
@@ -191,7 +214,15 @@ export function EnrollmentCard({ e, today }: { e: EnrollmentView; today: string 
   )
 }
 
-export function MobileEnrollment({ e, today }: { e: EnrollmentView; today: string }) {
+export function MobileEnrollment({
+  e,
+  today,
+  onEditStart,
+}: {
+  e: EnrollmentView
+  today: string
+  onEditStart?: () => void
+}) {
   const sub = e.subscription
   const b = e.balance
   return (
@@ -212,6 +243,7 @@ export function MobileEnrollment({ e, today }: { e: EnrollmentView; today: strin
           ? `${sub.lessons_total} уроков · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
           : enrollmentCaption(e, today)}
       </p>
+      {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
       {sub && b ? (
         <>
           <UsageBar b={b} thin />

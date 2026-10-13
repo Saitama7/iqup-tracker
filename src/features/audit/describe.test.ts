@@ -499,3 +499,63 @@ describe('payments (#47)', () => {
     ).toBe('Ученик — платёж 1 600 сом (Mbank) удалён')
   })
 })
+
+describe('dates moved after the fact (#60)', () => {
+  it('group start: «Математика · 8 класс Б — старт группы перенесён с 18.09 на 01.09»', () => {
+    const group = { id: GROUP, name: '8 класс Б', start_date: '2026-09-18', status: 'active' }
+    const r = row({
+      entity: 'groups',
+      entityId: GROUP,
+      before: group,
+      after: { ...group, start_date: '2026-09-01' },
+    })
+    expect(text(r)).toBe('Математика · 8 класс Б — старт группы перенесён с 18.09 на 01.09')
+    const entry = describeAuditRow(r, lookups)
+    expect(entry.badge).toEqual({ label: 'Группа', tone: 'teal' })
+    expect(entry.link).toEqual({
+      to: '/admin/groups/$groupId',
+      params: { groupId: GROUP },
+      label: 'Группа',
+    })
+    // a group missing from lookups falls back to its own name
+    expect(text(r, EMPTY_LOOKUPS)).toBe('8 класс Б — старт группы перенесён с 18.09 на 01.09')
+  })
+
+  it('enrollment start: «Алина Исакова — зачисление в … перенесено с 18.09 на 01.09»', () => {
+    const e = { id: ENROLLMENT, student_id: ALINA, group_id: GROUP, start_date: '2026-09-18' }
+    expect(
+      text(
+        row({
+          entity: 'enrollments',
+          entityId: ENROLLMENT,
+          before: e,
+          after: { ...e, start_date: '2026-09-01' },
+        }),
+      ),
+    ).toBe('Алина Исакова — зачисление в Математика · 8 класс Б перенесено с 18.09 на 01.09')
+  })
+
+  it('subscription start follows the enrollment', () => {
+    const s = {
+      id: SUB,
+      enrollment_id: ENROLLMENT,
+      lessons_total: 12,
+      price_final: 3200,
+      status: 'active',
+      started_at: '2026-09-18',
+    }
+    expect(
+      text(
+        row({
+          entity: 'subscriptions',
+          entityId: SUB,
+          kind: 'payment',
+          before: s,
+          after: { ...s, started_at: '2026-09-01' },
+        }),
+      ),
+    ).toBe(
+      'Алина Исакова · Математика · 8 класс Б — начало абонемента 12 уроков перенесено с 18.09 на 01.09',
+    )
+  })
+})

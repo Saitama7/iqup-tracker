@@ -96,3 +96,27 @@ export async function enrollStudent(input: EnrollInput) {
   if (!row) throw new EnrollError('Не удалось зачислить. Попробуйте ещё раз.')
   return { enrollmentId: row.enrollment_id, subscriptionId: row.subscription_id }
 }
+
+/** Postgres error of set_enrollment_start (0017) → admin-facing text. */
+export function enrollmentStartErrorMessage(error: { code?: string; message?: string }): string {
+  const m = error.message ?? ''
+  if (error.code === '42501') return 'Дату зачисления меняет администратор'
+  if (error.code === '23505') return 'На эти даты у ученика уже есть другое зачисление в эту группу'
+  if (error.code === '23514') {
+    if (m.includes('outside the group dates')) return 'Дата — вне дат группы (раньше старта группы)'
+    if (m.includes('after the enrollment end')) return 'Дата позже окончания зачисления'
+    if (m.includes('attendance before'))
+      return 'Раньше этой даты у ученика уже есть отметки в группе — перенести позже нельзя'
+    return 'Проверьте дату'
+  }
+  return 'Не удалось сохранить. Проверьте интернет и попробуйте ещё раз.'
+}
+
+/** «Изменить дату зачисления» (#60): the subscription that started with the enrollment follows. */
+export async function setEnrollmentStart(enrollmentId: string, startDate: string) {
+  const { error } = await supabase.rpc('set_enrollment_start', {
+    p_enrollment_id: enrollmentId,
+    p_start_date: startDate,
+  })
+  if (error) throw new EnrollError(enrollmentStartErrorMessage(error))
+}

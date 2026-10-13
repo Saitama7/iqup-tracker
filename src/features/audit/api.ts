@@ -171,6 +171,7 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
     ...rows
       .filter((r) => r.entity === 'lessons' || r.entity === 'enrollments' || r.entity === 'trials')
       .map((r) => field(r, 'group_id')),
+    ...rows.filter((r) => r.entity === 'groups').map((r) => r.entityId),
     ...lessons.map((l) => l.group_id),
     ...enrollments.map((e) => e.group_id),
   ])

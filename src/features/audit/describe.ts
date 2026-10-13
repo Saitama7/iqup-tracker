@@ -97,6 +97,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   tariffs: 'Тарифы',
   subjects: 'Предметы',
   trials: 'Пробные',
+  groups: 'Группы',
 }
 
 const STATUS_TONE: Record<AttendanceStatus, TextTone> = {
@@ -364,6 +365,33 @@ function describeLesson(row: AuditRow, l: AuditLookups): Described {
   return { badge: { label: 'Занятие', tone: 'stone' }, link, parts: [`Занятие ${where} изменено`] }
 }
 
+/** « с 18.09 на 01.09» — a date moved (#60). */
+function moved(row: AuditRow, key: string): Part[] {
+  const was = str(row.before, key)
+  const now = str(row.after, key)
+  return [` с ${was ? dayMonth(was) : '—'} на `, strong(now ? dayMonth(now) : '—')]
+}
+
+/** groups are audited for start_date only (0017): «старт группы перенесён с 18.09 на 01.09». */
+function describeGroup(row: AuditRow, l: AuditLookups): Described {
+  const name = l.groups[row.entityId]
+    ? groupName(row.entityId, l)
+    : (str(current(row), 'name') ?? 'Группа')
+  const link = groupLink(row.entityId)
+  if (row.action === 'update' && changed(row, 'start_date')) {
+    return {
+      badge: { label: 'Группа', tone: 'teal' },
+      link,
+      parts: [strong(name), ' — старт группы перенесён', ...moved(row, 'start_date')],
+    }
+  }
+  return {
+    badge: { label: 'Группа', tone: 'stone' },
+    link,
+    parts: [strong(name), ` — ${ACTION_TEXT[row.action]}`],
+  }
+}
+
 function enrollmentOf(s: Snapshot | null, l: AuditLookups) {
   const id = str(s, 'enrollment_id')
   return id ? l.enrollments[id] : undefined
@@ -402,6 +430,13 @@ function describeSubscription(row: AuditRow, l: AuditLookups): Described {
       badge: { label: 'Абонемент', tone: 'stone' },
       link,
       parts: [...who, `абонемент ${package_} удалён`],
+    }
+  }
+  if (changed(row, 'started_at') && !changed(row, 'status')) {
+    return {
+      badge: { label: 'Абонемент', tone: 'stone' },
+      link,
+      parts: [...who, `начало абонемента ${package_} перенесено`, ...moved(row, 'started_at')],
     }
   }
   const after = str(row.after, 'status')
@@ -507,6 +542,13 @@ function describeEnrollment(row: AuditRow, l: AuditLookups): Described {
       badge: { label: 'Зачисление', tone: 'stone' },
       link,
       parts: [...who, `зачисление в ${group} удалено`],
+    }
+  }
+  if (changed(row, 'start_date')) {
+    return {
+      badge,
+      link,
+      parts: [...who, `зачисление в ${group} перенесено`, ...moved(row, 'start_date')],
     }
   }
   if (changed(row, 'status') && str(row.after, 'status') === 'finished') {
@@ -715,6 +757,7 @@ const DESCRIBERS: Record<string, (row: AuditRow, l: AuditLookups) => Described> 
   tariffs: describeTariff,
   subjects: describeSubject,
   trials: describeTrial,
+  groups: describeGroup,
 }
 
 /** The author's name: «Система» — service role, migrations, imports (no auth.uid()). */
