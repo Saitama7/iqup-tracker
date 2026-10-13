@@ -68,7 +68,7 @@ export function bishkekDaysBetween(fromMs: number, toMs: number): number {
   return Math.round((day(toMs) - day(fromMs)) / 86_400_000)
 }
 
-const MONTHS_NOM = [
+export const MONTHS_NOM = [
   'Январь',
   'Февраль',
   'Март',
@@ -91,4 +91,16 @@ export function formatMonthNom(ms: number): string {
 /** «пятница» — «Завтра, пятница» on У2. */
 export function formatWeekdayLower(ms: number): string {
   return (WEEKDAYS[bishkekParts(ms).getUTCDay()] ?? '').toLowerCase()
+}
+
+/** '2026-09-01' → local-midnight Date (react-day-picker works in the device's zone). */
+export function isoToLocalDate(isoDate: string): Date {
+  const [y = 1970, m = 1, d = 1] = isoDate.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+/** Local Date → '2026-09-01' (the calendar day the user tapped, whatever the device zone). */
+export function localDateToIso(date: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`
 }

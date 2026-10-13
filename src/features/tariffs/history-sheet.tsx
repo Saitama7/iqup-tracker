@@ -10,7 +10,7 @@ import {
   SheetDescription,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { maskDateInput } from '@/lib/date-input'
+import { DateInput } from '@/components/ui/date-picker'
 import { formatDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { deleteTariffVersion, planTariffs, planTariffsForm, settingsQuery } from './api'
@@ -347,16 +347,14 @@ function PlanForm({
       className="flex flex-col gap-3.5"
     >
       <Field id={dateId} label="Действует с">
-        <input
+        <DateInput
           id={dateId}
-          inputMode="numeric"
-          placeholder="ДД.ММ.ГГГГ"
-          autoComplete="off"
           className={inputClass}
           value={validFrom}
+          min={min.date}
           aria-describedby={hint ? hintId : undefined}
-          onChange={(e) => {
-            setValidFrom(maskDateInput(e.target.value))
+          onChange={(v) => {
+            setValidFrom(v)
           }}
         />
         {hint && (

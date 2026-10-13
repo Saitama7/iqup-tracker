@@ -7,7 +7,7 @@ import { STUDENTS_KEY } from '@/features/students/api'
 import { formatDayMonth } from '@/features/students/model'
 import { FormDialog } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, SubmitButton } from '@/features/tariffs/parts'
-import { maskDateInput } from '@/lib/date-input'
+import { DateInput } from '@/components/ui/date-picker'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { setEnrollmentStart } from './api'
 
@@ -86,17 +86,15 @@ export function EnrollmentStartDialog({
         className="flex flex-col gap-3.5"
       >
         <Field id={ids.date} label="Зачислен с">
-          <input
+          <DateInput
             id={ids.date}
             className={inputClass}
-            inputMode="numeric"
-            placeholder="ДД.ММ.ГГГГ"
-            autoComplete="off"
             value={date}
+            min={groupStart}
             aria-invalid={tooEarly || undefined}
             aria-describedby={groupStart ? ids.hint : undefined}
-            onChange={(e) => {
-              setDate(maskDateInput(e.target.value))
+            onChange={(v) => {
+              setDate(v)
               setError(null)
             }}
           />

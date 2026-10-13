@@ -2,7 +2,8 @@
 // accountant and admin (И2), read-only. Totals from v_payroll_preview (0011). Closing the period,
 // the comparison with the old scheme and advances are R3 — buttons are disabled with a hint.
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { MonthPickerButton } from '@/components/ui/date-picker'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Avatar } from '@/components/shell/shell-parts'
@@ -32,6 +33,7 @@ export function PayrollPage({ month }: { month: string }) {
   const now = useNow()
   const isDesktop = useIsDesktop()
   const today = bishkekDate(now)
+  const navigate = useNavigate()
 
   usePayrollRealtime()
   const source = useQuery(payrollQuery(month, today))
@@ -59,7 +61,15 @@ export function PayrollPage({ month }: { month: string }) {
           </p>
           <div className="flex flex-wrap items-center gap-3.5">
             <h1 className="font-display text-[26px] leading-[1.1] font-bold text-ink min-[900px]:text-[30px]">
-              {isDesktop ? monthTitle(month) : monthNom(month)}
+              <MonthPickerButton
+                value={month}
+                max={monthOf(today)}
+                onSelect={(m) => {
+                  void navigate({ to: '/payroll', search: { month: m } })
+                }}
+              >
+                {isDesktop ? monthTitle(month) : monthNom(month)}
+              </MonthPickerButton>
             </h1>
             {isDesktop && <PeriodChip />}
           </div>

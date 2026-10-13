@@ -3,7 +3,7 @@ import { Plus, X } from 'lucide-react'
 import { useId, useMemo, useState, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/page'
-import { maskDateInput } from '@/lib/date-input'
+import { DateInput } from '@/components/ui/date-picker'
 import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -389,15 +389,13 @@ function AddHolidayDialog({
         className="flex flex-col gap-3.5"
       >
         <Field id={dayId} label="Дата">
-          <input
+          <DateInput
             id={dayId}
-            inputMode="numeric"
-            placeholder="ДД.ММ.ГГГГ"
-            autoComplete="off"
             className={inputClass}
             value={day}
-            onChange={(e) => {
-              setDay(maskDateInput(e.target.value))
+            min={today}
+            onChange={(v) => {
+              setDay(v)
             }}
           />
         </Field>
