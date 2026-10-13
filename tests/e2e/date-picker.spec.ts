@@ -209,3 +209,67 @@ test('старт группы и дата зачисления — выбор в
     await cleanup()
   }
 })
+
+test('телефон: тап по полю — шторка, «Закрыть» без клавиатуры, «Ввести вручную» — фокус', async ({
+  page,
+}, testInfo) => {
+  test.skip(isDesktop(page), 'шторка и ручной ввод через неё — только на телефоне (#64)')
+  await pinClock(page, '2026-10-08T08:24:00Z')
+  await login(page, KANYKEI)
+  await page.goto('/admin/settings')
+  await page
+    .getByRole('region', { name: 'Праздники и выходные центра' })
+    .getByRole('button', { name: 'Добавить', exact: true })
+    .click()
+  const add = page.getByRole('dialog', { name: 'Новый праздник' })
+  // by id: under the open sheet the holiday dialog is aria-hidden, out of role queries
+  const fieldId = await add.getByLabel('Дата').getAttribute('id')
+  const field = page.locator(`[id="${fieldId ?? ''}"]`)
+  const picker = page.getByRole('dialog', { name: 'Выберите дату' })
+  const focused = () => field.evaluate((el) => el === document.activeElement)
+
+  // a tap on the field opens the calendar, not the keyboard
+  await field.tap()
+  await expect(picker).toBeVisible()
+  expect(await focused()).toBe(false)
+  await snap(page, testInfo, 'date-picker-manual-390')
+
+  // «Закрыть»: the field stays unfocused (no keyboard popping up on Android)
+  await picker.getByRole('button', { name: 'Закрыть' }).tap()
+  await expect(picker).toBeHidden()
+  expect(await focused()).toBe(false)
+
+  // the next tap opens the calendar again
+  await field.tap()
+  await expect(picker).toBeVisible()
+
+  // «Ввести вручную»: the sheet closes and the field takes the keyboard
+  await picker.getByRole('button', { name: 'Ввести вручную' }).tap()
+  await expect(picker).toBeHidden()
+  expect(await focused()).toBe(true)
+  await page.keyboard.type('25122026')
+  await expect(field).toHaveValue('25.12.2026')
+  // typing in progress: a tap moves the caret instead of reopening the calendar
+  await field.tap()
+  await expect(picker).toBeHidden()
+})
+
+test('десктоп: повторный клик по заголовку закрывает календарь, неделя подсвечена', async ({
+  page,
+}, testInfo) => {
+  test.skip(!isDesktop(page), 'popover и неделя в заголовке — десктоп (#64)')
+  await pinClock(page, '2026-10-08T08:24:00Z')
+  await login(page, KANYKEI)
+  await page.goto('/admin/schedule?date=2026-10-07')
+
+  const title = page.getByRole('heading', { name: '5 – 10 октября' }).getByRole('button')
+  const picker = page.getByRole('dialog', { name: 'Перейти к неделе' })
+  await title.click()
+  await expect(picker).toBeVisible()
+  await expect(picker.locator('td.bg-stone')).toHaveText(['5', '6', '7', '8', '9', '10', '11'])
+  await snap(page, testInfo, 'date-picker-week-1280')
+  await title.click()
+  await expect(picker).toBeHidden()
+  await title.click()
+  await expect(picker).toBeVisible()
+})
