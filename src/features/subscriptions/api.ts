@@ -103,7 +103,7 @@ export function enrollmentStartErrorMessage(error: { code?: string; message?: st
   if (error.code === '42501') return 'Дату зачисления меняет администратор'
   if (error.code === '23505') return 'На эти даты у ученика уже есть другое зачисление в эту группу'
   if (error.code === '23514') {
-    if (m.includes('outside the group dates')) return 'Дата — вне дат группы (раньше старта группы)'
+    if (m.includes('outside the group dates')) return 'Дата — вне дат группы (раньше её старта или позже окончания)'
     if (m.includes('after the enrollment end')) return 'Дата позже окончания зачисления'
     if (m.includes('attendance before'))
       return 'Раньше этой даты у ученика уже есть отметки в группе — перенести позже нельзя'

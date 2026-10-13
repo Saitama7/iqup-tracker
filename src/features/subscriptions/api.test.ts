@@ -73,7 +73,7 @@ describe('enrollmentStartErrorMessage (#60)', () => {
     [{ code: '23505' }, 'На эти даты у ученика уже есть другое зачисление в эту группу'],
     [
       { code: '23514', message: 'start date is outside the group dates' },
-      'Дата — вне дат группы (раньше старта группы)',
+      'Дата — вне дат группы (раньше её старта или позже окончания)',
     ],
     [
       { code: '23514', message: 'start date is after the enrollment end' },

@@ -61,7 +61,7 @@ export function EnrollmentStartDialog({
       return
     }
     if (tooEarly) {
-      setError('Дата — вне дат группы (раньше старта группы)')
+      setError('Дата — вне дат группы (раньше её старта или позже окончания)')
       return
     }
     if (iso === startDate) {
