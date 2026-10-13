@@ -191,6 +191,7 @@ export function SchedulePage({
           <DatePickerButton
             value={date}
             title="Перейти к неделе"
+            week
             onSelect={(d) => {
               set({ date: d })
             }}

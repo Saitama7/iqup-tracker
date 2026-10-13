@@ -11,6 +11,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react'
+import { flushSync } from 'react-dom'
 import { Calendar } from '@/components/ui/calendar'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
@@ -68,6 +69,10 @@ function PickerPopup({
             // a tap on the anchor toggles the picker itself — not «outside»
             if (anchorRef.current?.contains(e.target as Node)) e.preventDefault()
           }}
+          onFocusOutside={(e) => {
+            // …nor is the focus it takes on that click (Chrome), or a second click would reopen
+            if (anchorRef.current?.contains(e.target as Node)) e.preventDefault()
+          }}
         >
           {children}
         </PopoverContent>
@@ -105,19 +110,42 @@ const inBounds = (iso: string, { min, max }: DateBounds) =>
 
 // ─── Day calendar ───────────────────────────────────────────────────────────
 
+/**
+ * Years in the month/year dropdowns without bounds: 5 back and 2 ahead of today, widened so the
+ * field's value is always in range (#64).
+ */
+export function yearRange(today: string, value: string | null): { from: number; to: number } {
+  const year = Number(today.slice(0, 4))
+  const own = value ? Number(value.slice(0, 4)) : year
+  return { from: Math.min(own, year - 5), to: Math.max(own, year + 2) }
+}
+
+/** Monday – Sunday around an ISO date, as local dates for the day picker. */
+function weekOf(iso: string): { from: Date; to: Date } {
+  const d = isoToLocalDate(iso)
+  const from = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7))
+  return { from, to: new Date(from.getFullYear(), from.getMonth(), from.getDate() + 6) }
+}
+
 function DayCalendar({
   value,
   bounds,
+  week = false,
   onSelect,
   onClose,
+  onManual,
 }: {
   value: string | null
   bounds: DateBounds
+  /** Highlight the whole Monday – Sunday week of `value`. */
+  week?: boolean
   onSelect: (iso: string) => void
   onClose: () => void
+  /** Phone field: «Ввести вручную» closes the sheet and hands the field to the keyboard. */
+  onManual?: () => void
 }) {
   const today = useTodayIso()
-  const year = Number(today.slice(0, 4))
+  const years = yearRange(today, value)
   const { min, max } = bounds
   const initial = value ?? (min && today < min ? min : max && today > max ? max : today)
   const disabled = [
@@ -135,9 +163,11 @@ function DayCalendar({
         }}
         defaultMonth={isoToLocalDate(initial)}
         today={isoToLocalDate(today)}
-        startMonth={isoToLocalDate(min ?? `${year - 5}-01-01`)}
-        endMonth={isoToLocalDate(max ?? `${year + 2}-12-31`)}
+        startMonth={isoToLocalDate(min ?? `${years.from}-01-01`)}
+        endMonth={isoToLocalDate(max ?? `${years.to}-12-31`)}
         disabled={disabled}
+        modifiers={week && value ? { week: weekOf(value) } : undefined}
+        modifiersClassNames={{ week: 'bg-stone first:rounded-l-xl last:rounded-r-xl' }}
       />
       <div className="flex justify-between gap-2 border-t border-line pt-2">
         <button
@@ -150,6 +180,11 @@ function DayCalendar({
         >
           Сегодня
         </button>
+        {onManual && (
+          <button type="button" className={cn(footerButton, 'border-0 px-2')} onClick={onManual}>
+            Ввести вручную
+          </button>
+        )}
         <button type="button" className={cn(footerButton, 'border-0')} onClick={onClose}>
           Закрыть
         </button>
@@ -161,8 +196,8 @@ function DayCalendar({
 /**
  * ДД.ММ.ГГГГ field with a calendar. Same contract as the plain input it replaces: `value` /
  * `onChange` carry the typed text, forms validate it as before. The calendar opens from the icon
- * on the right; on the phone a first tap on the field opens it too — closed without a pick, the
- * field keeps focus, and the next tap brings up the keyboard.
+ * on the right. On the phone a tap on the field opens it too; closing never focuses the field (no
+ * stray keyboard on Android), typing starts from «Ввести вручную» in the sheet (#64).
  */
 export function DateInput({
   id,
@@ -183,15 +218,11 @@ export function DateInput({
   Omit<ComponentProps<'input'>, 'id' | 'value' | 'onChange' | 'min' | 'max' | 'className'>) {
   const isDesktop = useIsDesktop()
   const [open, setOpen] = useState(false)
-  const picked = useRef(false)
+  /** Phone: typing chosen via «Ввести вручную» — until the field loses focus. */
+  const typing = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
   const iso = parseDateRu(value)
-
-  const openPicker = () => {
-    picked.current = false
-    setOpen(true)
-  }
 
   return (
     <PickerPopup
@@ -201,7 +232,7 @@ export function DateInput({
       anchorRef={anchorRef}
       onCloseAutoFocus={(e) => {
         e.preventDefault()
-        if (!picked.current || isDesktop) inputRef.current?.focus()
+        if (isDesktop) inputRef.current?.focus()
       }}
       anchor={
         <div ref={anchorRef} className="relative min-w-0">
@@ -215,12 +246,18 @@ export function DateInput({
             className={cn(className, 'pr-12')}
             value={value}
             onPointerDown={(e) => {
-              if (isDesktop || document.activeElement === inputRef.current) return
+              // typing after «Ввести вручную»: the tap moves the caret. Focus alone is not enough —
+              // a dialog autofocuses its first field
+              if (isDesktop || typing.current) return
               e.preventDefault()
-              openPicker()
+              setOpen(true)
             }}
             onChange={(e) => {
               onChange(maskDateInput(e.target.value))
+            }}
+            onBlur={(e) => {
+              typing.current = false
+              inputProps.onBlur?.(e)
             }}
           />
           <button
@@ -230,8 +267,7 @@ export function DateInput({
             aria-expanded={open}
             disabled={inputProps.disabled}
             onClick={() => {
-              if (open) setOpen(false)
-              else openPicker()
+              setOpen(!open)
             }}
             className="absolute inset-y-0 right-0 flex w-11 items-center justify-center rounded-r-xl text-ink-muted hover:text-ink disabled:opacity-40"
           >
@@ -247,10 +283,22 @@ export function DateInput({
           setOpen(false)
         }}
         onSelect={(d) => {
-          picked.current = true
           onChange(formatDateRu(d))
           setOpen(false)
         }}
+        onManual={
+          isDesktop
+            ? undefined
+            : () => {
+                // iOS raises the keyboard only for a focus inside the tap itself: close the sheet
+                // (lifting its focus trap) and focus synchronously in this handler
+                flushSync(() => {
+                  setOpen(false)
+                })
+                typing.current = true
+                inputRef.current?.focus()
+              }
+        }
       />
     </PickerPopup>
   )
@@ -268,6 +316,7 @@ export function DatePickerButton({
   className,
   min,
   max,
+  week = false,
 }: {
   /** ISO date shown (selected in the calendar). */
   value: string
@@ -275,6 +324,8 @@ export function DatePickerButton({
   title?: string
   children: ReactNode
   className?: string
+  /** The title is a week: the calendar highlights all of it, not one day. */
+  week?: boolean
 } & DateBounds) {
   const [open, setOpen] = useState(false)
   const anchorRef = useRef<HTMLButtonElement>(null)
@@ -304,6 +355,7 @@ export function DatePickerButton({
       <DayCalendar
         value={value}
         bounds={{ min, max }}
+        week={week}
         onClose={() => {
           setOpen(false)
         }}

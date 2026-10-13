@@ -1,7 +1,7 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { DateInput, MonthPickerButton } from './date-picker'
+import { DateInput, DatePickerButton, MonthPickerButton, yearRange } from './date-picker'
 
 function setViewport(desktop: boolean) {
   window.matchMedia = (query: string) =>
@@ -47,7 +47,8 @@ describe('DateInput (#62)', () => {
     expect(screen.getByLabelText('Дата')).toHaveValue('01.10.2026')
   })
 
-  it('typing keeps the mask', async () => {
+  it('typing keeps the mask (desktop: straight into the field)', async () => {
+    setViewport(true)
     const user = userEvent.setup()
     render(<Field initial="" />)
     const input = screen.getByLabelText('Дата')
@@ -82,5 +83,107 @@ describe('MonthPickerButton (#62)', () => {
     await user.click(screen.getByRole('button', { name: 'Предыдущий год' }))
     await user.click(screen.getByRole('button', { name: 'Сентябрь' }))
     expect(onSelect).toHaveBeenCalledWith('2025-09')
+  })
+})
+
+describe('DateInput on the phone (#64)', () => {
+  beforeEach(() => {
+    setViewport(false)
+  })
+
+  it('a tap on the field opens the calendar; «Закрыть» leaves the field unfocused', async () => {
+    const user = userEvent.setup()
+    render(<Field initial="05.10.2026" />)
+    const input = screen.getByLabelText('Дата')
+    await user.click(input)
+    const sheet = await screen.findByRole('dialog')
+    await user.click(within(sheet).getByRole('button', { name: 'Закрыть' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(input).not.toHaveFocus()
+    // and the next tap opens the calendar again, not the keyboard
+    await user.click(input)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('«Ввести вручную» closes the sheet and focuses the field for typing', async () => {
+    const user = userEvent.setup()
+    render(<Field initial="" />)
+    const input = screen.getByLabelText('Дата')
+    await user.click(input)
+    const sheet = await screen.findByRole('dialog')
+    await user.click(within(sheet).getByRole('button', { name: 'Ввести вручную' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(input).toHaveFocus()
+    await user.keyboard('01092026')
+    expect(input).toHaveValue('01.09.2026')
+    // while typing, a tap moves the caret instead of reopening the calendar
+    await user.click(input)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('a field focused by its dialog still opens the calendar on a tap', async () => {
+    const user = userEvent.setup()
+    render(<Field initial="" />)
+    const input = screen.getByLabelText('Дата')
+    act(() => {
+      input.focus()
+    })
+    await user.click(input)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+})
+
+describe('DateInput on desktop (#64)', () => {
+  beforeEach(() => {
+    setViewport(true)
+  })
+
+  it('no «Ввести вручную»: a click in the field is a caret; the icon toggles the popover', async () => {
+    const user = userEvent.setup()
+    render(<Field initial="05.10.2026" />)
+    await user.click(screen.getByLabelText('Дата'))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    const icon = screen.getByRole('button', { name: 'Открыть календарь' })
+    await user.click(icon)
+    const popover = await screen.findByRole('dialog')
+    expect(within(popover).queryByRole('button', { name: 'Ввести вручную' })).toBeNull()
+    await user.click(icon)
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+})
+
+describe('DatePickerButton (#64)', () => {
+  it('a second click on the title closes the popover', async () => {
+    setViewport(true)
+    const user = userEvent.setup()
+    render(
+      <DatePickerButton value="2026-10-07" onSelect={vi.fn()} title="Перейти к неделе" week>
+        5 – 11 октября
+      </DatePickerButton>,
+    )
+    const title = screen.getByRole('button', { name: /5 – 11 октября/ })
+    await user.click(title)
+    const popover = await screen.findByRole('dialog', { name: 'Перейти к неделе' })
+    // the whole week of the value is highlighted: Monday 5 – Sunday 11
+    const week = popover.querySelectorAll('td.bg-stone')
+    expect([...week].map((td) => td.textContent)).toEqual(['5', '6', '7', '8', '9', '10', '11'])
+    // Chrome focuses the title on press, before the click: that focus must not dismiss the
+    // popover first (the click would then reopen it)
+    act(() => {
+      title.focus()
+    })
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await user.click(title)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await user.click(title)
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+})
+
+describe('yearRange (#64)', () => {
+  it('5 back and 2 ahead of today, widened to the value', () => {
+    expect(yearRange('2026-10-14', null)).toEqual({ from: 2021, to: 2028 })
+    expect(yearRange('2026-10-14', '2015-03-01')).toEqual({ from: 2015, to: 2028 })
+    expect(yearRange('2026-10-14', '2031-01-01')).toEqual({ from: 2021, to: 2031 })
   })
 })
