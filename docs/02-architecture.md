@@ -243,6 +243,7 @@ held — зелёные; planned в прошлом — красные «Не п�
 - БД и Edge Function — workflow `.github/workflows/deploy-supabase.yml` по пушу в `main` с изменениями в `supabase/**`: `supabase db push` + `functions deploy create-user`, затем проверка local = remote. Секреты: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD_PROD`; var: `SUPABASE_PROJECT_REF_PROD`.
 - Keepalive пингует прод раз в день (`supabase-keepalive.yml`, секреты `SUPABASE_URL_PROD`, `SUPABASE_ANON_KEY_PROD`).
 - Prod без демо-сида: `supabase/seed.sql` только локально; на prod — справочники (`supabase/seed-prod.sql`: тарифы, праздники) и реальные пользователи через `create-user`.
+- Первый админ прода заведён напрямую в БД (`auth.users` + `auth.identities` + `profiles`, пароль через `psql -v`, скрипт не в репо); все остальные пользователи — только через «Учителя и доступ» (`create-user`). Пароли и ключи в чат не передаются: пароль БД лежит в `~/.iqup-prod-pw` на Mac Кайрата и в GitHub secret.
 - Старый dev-проект Supabase `iqup-dev` (`kvivodokeqeasclporys`) и Pages-проект `iqup-tracker` в аккаунте Кайрата — удалить после переезда.
 
 ## 9. Инструменты агентной разработки (Claude Code)
