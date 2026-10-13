@@ -5,6 +5,7 @@ import { STUDENTS_KEY } from '@/features/students/api'
 import { firstName, formatDayMonth, formatLessonWhen } from '@/features/students/model'
 import { FormDialog, NativeSelect } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, labelClass, SubmitButton } from '@/features/tariffs/parts'
+import { maskDateInput, maskTimeInput } from '@/lib/date-input'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import {
@@ -16,6 +17,7 @@ import {
   lessonsKey,
   rescheduleForm,
   rescheduleGroup,
+  setGroupStart,
   setGroupStatus,
   setSubstitute,
 } from './api'
@@ -23,6 +25,7 @@ import {
   CANCEL_REASON_LABEL,
   currentRules,
   extraLessonDateError,
+  groupStartNote,
   horizon,
   MANUAL_CANCEL_REASONS,
   planLessonDates,
@@ -254,7 +257,7 @@ export function ExtraLessonDialog({
               aria-invalid={tooEarly || undefined}
               aria-describedby={minDate ? ids.hint : undefined}
               onChange={(e) => {
-                setDate(e.target.value)
+                setDate(maskDateInput(e.target.value))
               }}
             />
           </Field>
@@ -267,7 +270,7 @@ export function ExtraLessonDialog({
               autoComplete="off"
               value={time}
               onChange={(e) => {
-                setTime(e.target.value)
+                setTime(maskTimeInput(e.target.value))
               }}
             />
           </Field>
@@ -361,8 +364,11 @@ const sameDays = (a: readonly number[], b: readonly number[]) =>
   a.length === b.length && [...a].sort().every((d, i) => d === [...b].sort()[i])
 
 /**
- * «Изменить» (А4): status forming ↔ active and the schedule from a date — reschedule_group closes
- * the old rules, removes not-yet-started planned lessons by them and generates the new ones.
+ * «Изменить» (А4): the group start (may be in the past, #60 — set_group_start generates the lessons
+ * of the new stretch), status forming ↔ active, and the schedule from a date (today or later) —
+ * reschedule_group closes the old rules, removes not-yet-started planned lessons by them and
+ * generates the new ones. Two dates, two boxes: the start above, the schedule's date inside
+ * «Новое расписание», so they are not mixed up.
  */
 export function EditGroupDialog({
   open,
@@ -377,11 +383,19 @@ export function EditGroupDialog({
   holidays: readonly string[]
   today: string
 }) {
-  const ids = { days: useId(), time: useId(), from: useId() }
+  const ids = {
+    start: useId(),
+    startHint: useId(),
+    days: useId(),
+    time: useId(),
+    from: useId(),
+    fromHint: useId(),
+  }
   const queryClient = useQueryClient()
   const rules = currentRules(group.schedule_rules, today)
   const initialDays = [...new Set(rules.map((r) => r.weekday))].sort()
   const initialTime = rules[0]?.start_time.slice(0, 5) ?? ''
+  const [start, setStart] = useState(formatDateRu(group.start_date))
   const [status, setStatus] = useState<'forming' | 'active'>(
     group.status === 'forming' ? 'forming' : 'active',
   )
@@ -392,33 +406,50 @@ export function EditGroupDialog({
   )
   const [error, setError] = useState<string | null>(null)
 
+  const holidaySet = new Set(holidays)
   const until = horizon(today)
+  const startIso = parseDateRu(start)
+  const startNote = startIso ? groupStartNote(group, startIso, holidaySet) : null
   const scheduleChanged = !sameDays(weekdays, initialDays) || time.trim() !== initialTime
   const fromIso = parseDateRu(from)
   const count =
     fromIso && weekdays.length > 0
-      ? planLessonDates({ weekdays, from: fromIso, until, holidays: new Set(holidays) }).length
+      ? planLessonDates({ weekdays, from: fromIso, until, holidays: holidaySet }).length
       : 0
 
   const mutation = useMutation({
     mutationFn: async () => {
+      if (!startIso) throw new Error('Старт группы — дата в формате ДД.ММ.ГГГГ')
+      const moved = startIso !== group.start_date ? await setGroupStart(group.id, startIso) : null
       if (status !== group.status) await setGroupStatus(group.id, status)
-      if (!scheduleChanged) return null
+      if (!scheduleChanged) return { moved, rescheduled: null }
       const parsed = rescheduleForm.safeParse({ weekdays, time, validFrom: from })
       if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Проверьте поля')
-      return rescheduleGroup(group.id, parsed.data, until)
+      return { moved, rescheduled: await rescheduleGroup(group.id, parsed.data, until) }
     },
-    onSuccess: async (result) => {
+    onSettled: async () => {
+      // the start may be saved even if the schedule step fails — show what is in the database
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: lessonsKey(group.id) }),
         queryClient.invalidateQueries({ queryKey: GROUPS_KEY }),
         queryClient.invalidateQueries({ queryKey: STUDENTS_KEY }),
         queryClient.invalidateQueries({ queryKey: [TEACHER_GROUPS_KEY] }),
       ])
+    },
+    onSuccess: ({ moved, rescheduled }) => {
       toast.success(
-        result
-          ? `Расписание изменено · удалено ${result.deleted}, создано ${result.created}`
-          : 'Группа сохранена',
+        [
+          moved && startIso
+            ? `Старт группы — ${formatDayMonth(startIso)}` +
+              (moved.created > 0 ? ` · добавлено занятий: ${moved.created}` : '') +
+              (moved.deleted > 0 ? ` · удалено занятий: ${moved.deleted}` : '')
+            : null,
+          rescheduled
+            ? `Расписание изменено · удалено ${rescheduled.deleted}, создано ${rescheduled.created}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join('. ') || 'Группа сохранена',
       )
       onOpenChange(false)
     },
@@ -432,7 +463,7 @@ export function EditGroupDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Изменить группу"
-      description="Новое расписание действует с выбранной даты; прошедшие, проведённые и отменённые занятия не меняются"
+      description="Старт группы можно перенести задним числом. Новое расписание — с сегодняшнего дня или позже; проведённые и отменённые занятия не меняются."
     >
       <form
         onSubmit={(e) => {
@@ -456,45 +487,79 @@ export function EditGroupDialog({
             onChange={setStatus}
           />
         </div>
-        <WeekdayPicker id={ids.days} value={weekdays} onChange={setWeekdays} />
-        <div className="grid grid-cols-2 gap-2.5">
-          <Field id={ids.time} label="Время">
-            <input
-              id={ids.time}
-              className={inputClass}
-              inputMode="numeric"
-              placeholder="ЧЧ:ММ"
-              autoComplete="off"
-              value={time}
-              onChange={(e) => {
-                setTime(e.target.value)
-              }}
-            />
-          </Field>
-          <Field id={ids.from} label="С даты">
-            <input
-              id={ids.from}
-              className={inputClass}
-              inputMode="numeric"
-              placeholder="ДД.ММ.ГГГГ"
-              autoComplete="off"
-              value={from}
-              onChange={(e) => {
-                setFrom(e.target.value)
-              }}
-            />
-          </Field>
-        </div>
-        {scheduleChanged && (
+        <Field id={ids.start} label="Старт группы">
+          <input
+            id={ids.start}
+            className={inputClass}
+            inputMode="numeric"
+            placeholder="ДД.ММ.ГГГГ"
+            autoComplete="off"
+            value={start}
+            aria-invalid={!startIso || undefined}
+            aria-describedby={ids.startHint}
+            onChange={(e) => {
+              setStart(maskDateInput(e.target.value))
+              setError(null)
+            }}
+          />
+        </Field>
+        <p id={ids.startHint} className="-mt-2 text-xs font-bold text-ink-muted">
+          Можно задним числом — занятия достроятся
+        </p>
+        {startNote && (
           <p
             role="status"
             className="rounded-xl bg-accent px-3 py-2.5 text-xs font-bold text-warn-strong"
           >
-            {fromIso
-              ? `Запланированные занятия с ${formatDayMonth(fromIso)} по старому расписанию удалятся; по новому будет ${count} до ${formatDayMonth(until)}, праздники пропущены.`
-              : 'Укажите дату, с которой действует новое расписание.'}
+            {startNote}
           </p>
         )}
+        <fieldset className="flex min-w-0 flex-col gap-3.5 rounded-2xl border-[1.5px] border-line-strong p-3.5">
+          <legend className="px-1.5 text-[13px] font-extrabold">Новое расписание</legend>
+          <WeekdayPicker id={ids.days} value={weekdays} onChange={setWeekdays} />
+          <div className="grid grid-cols-2 gap-2.5">
+            <Field id={ids.time} label="Время">
+              <input
+                id={ids.time}
+                className={inputClass}
+                inputMode="numeric"
+                placeholder="ЧЧ:ММ"
+                autoComplete="off"
+                value={time}
+                onChange={(e) => {
+                  setTime(maskTimeInput(e.target.value))
+                }}
+              />
+            </Field>
+            <Field id={ids.from} label="Действует с">
+              <input
+                id={ids.from}
+                className={inputClass}
+                inputMode="numeric"
+                placeholder="ДД.ММ.ГГГГ"
+                autoComplete="off"
+                value={from}
+                aria-describedby={ids.fromHint}
+                onChange={(e) => {
+                  setFrom(maskDateInput(e.target.value))
+                }}
+              />
+            </Field>
+          </div>
+          <p id={ids.fromHint} className="-mt-2 text-xs font-bold text-ink-muted">
+            Не раньше сегодня — {formatDateRu(today)}
+          </p>
+          {scheduleChanged && (
+            <p
+              role="status"
+              className="rounded-xl bg-accent px-3 py-2.5 text-xs font-bold text-warn-strong"
+            >
+              {fromIso
+                ? `Запланированные занятия с ${formatDayMonth(fromIso)} по старому расписанию удалятся; по новому будет ${count} до ${formatDayMonth(until)}, праздники пропущены.`
+                : 'Укажите дату, с которой действует новое расписание.'}
+            </p>
+          )}
+        </fieldset>
         {error && <ErrorText>{error}</ErrorText>}
         <SubmitButton pending={mutation.isPending}>Сохранить</SubmitButton>
       </form>

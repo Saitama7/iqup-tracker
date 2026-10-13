@@ -1,6 +1,7 @@
 // А3 / А4 view model: pure functions of (rows, today) — no fetching, no clock.
 // Lesson dates mirror generate_lessons (0008): the database is the authority, this is the preview.
-import { firstName, formatLessonWhen, groupLabel } from '@/features/students/model'
+import { firstName, formatDayMonth, formatLessonWhen, groupLabel } from '@/features/students/model'
+import { pluralRu } from '@/features/lessons/select'
 import { rateOn } from '@/features/payroll/calc'
 import { tariffFor, type GroupType } from '@/features/tariffs/current'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
@@ -210,6 +211,27 @@ export function currentRules(rules: readonly ScheduleRule[], today: string): Sch
     .map((r) => r.valid_from)
     .sort()[0]
   return next ? rulesOn(rules, next) : []
+}
+
+/**
+ * What «Старт группы» does on save (#60, set_group_start): earlier — the schedule the group started
+ * with fills the new stretch (holidays skipped); later — planned lessons before the date are removed.
+ */
+export function groupStartNote(
+  group: Pick<GroupRow, 'start_date' | 'schedule_rules'>,
+  newStart: string,
+  holidays: ReadonlySet<string>,
+): string | null {
+  if (newStart === group.start_date) return null
+  if (newStart > group.start_date) {
+    return `Запланированные занятия до ${formatDayMonth(newStart)} удалятся. Если раньше есть проведённые или отменённые занятия, зачисления — старт не перенесётся.`
+  }
+  const weekdays = group.schedule_rules
+    .filter((r) => r.valid_from === group.start_date)
+    .map((r) => r.weekday)
+  const until = addDays(group.start_date, -1)
+  const count = planLessonDates({ weekdays, from: newStart, until, holidays }).length
+  return `Занятия с ${formatDayMonth(newStart)} по ${formatDayMonth(until)} достроятся по расписанию старта: ${count} ${pluralRu(count, ['занятие', 'занятия', 'занятий'])}, праздники пропущены.`
 }
 
 /** [1,2,3,4,5] → «ПН–ПТ», [2,4,6] → «ВТ ЧТ СБ» (А3). */

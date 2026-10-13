@@ -1,7 +1,7 @@
 vi.mock('@/lib/supabase/client', () => ({ supabase: {} }))
 
 import { describe, expect, it, vi } from 'vitest'
-import { enrollErrorMessage, enrollForm } from './api'
+import { enrollErrorMessage, enrollForm, enrollmentStartErrorMessage } from './api'
 
 const studentId = '11111111-1111-4111-8111-111111111111'
 const groupId = '00000000-0000-4000-b000-000000000001'
@@ -64,5 +64,26 @@ describe('enrollErrorMessage', () => {
     expect(
       enrollErrorMessage({ code: '23514', message: 'no tariff for group on 2001-01-01' }),
     ).toBe('На эту дату нет тарифа для группы')
+  })
+})
+
+describe('enrollmentStartErrorMessage (#60)', () => {
+  it.each([
+    [{ code: '42501' }, 'Дату зачисления меняет администратор'],
+    [{ code: '23505' }, 'На эти даты у ученика уже есть другое зачисление в эту группу'],
+    [
+      { code: '23514', message: 'start date is outside the group dates' },
+      'Дата — вне дат группы (раньше её старта или позже окончания)',
+    ],
+    [
+      { code: '23514', message: 'start date is after the enrollment end' },
+      'Дата позже окончания зачисления',
+    ],
+    [
+      { code: '23514', message: 'the enrollment has attendance before the new date' },
+      'Раньше этой даты у ученика уже есть отметки в группе — перенести позже нельзя',
+    ],
+  ])('%j', (error, text) => {
+    expect(enrollmentStartErrorMessage(error)).toBe(text)
   })
 })

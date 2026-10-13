@@ -3,6 +3,7 @@ import { Plus, X } from 'lucide-react'
 import { useId, useMemo, useState, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '@/components/page'
+import { maskDateInput } from '@/lib/date-input'
 import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -396,7 +397,7 @@ function AddHolidayDialog({
             className={inputClass}
             value={day}
             onChange={(e) => {
-              setDay(e.target.value)
+              setDay(maskDateInput(e.target.value))
             }}
           />
         </Field>

@@ -10,6 +10,7 @@ import {
   DialogFooter,
   DialogTitle,
 } from '@/components/ui/dialog'
+import { maskDateInput } from '@/lib/date-input'
 import { useSession } from '@/lib/auth'
 import { useNow } from '@/lib/now'
 import { formatPhone, formatPhoneIntl } from '@/lib/phone'
@@ -618,7 +619,7 @@ function NewUserForm({ onCreated }: { onCreated: (p: IssuedPassword) => void }) 
               className={inputClass}
               value={validFrom}
               onChange={(e) => {
-                setValidFrom(e.target.value)
+                setValidFrom(maskDateInput(e.target.value))
               }}
             />
           </Field>
@@ -984,7 +985,7 @@ function NewRateForm({ teacher }: { teacher: TeacherRow }) {
             className={inputClass}
             value={validFrom}
             onChange={(e) => {
-              setValidFrom(e.target.value)
+              setValidFrom(maskDateInput(e.target.value))
             }}
           />
         </Field>

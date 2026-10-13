@@ -1224,6 +1224,17 @@ export type Database = {
         }[]
       }
       server_now: { Args: Record<PropertyKey, never>; Returns: string }
+      set_enrollment_start: {
+        Args: { p_enrollment_id: string; p_start_date: string }
+        Returns: undefined
+      }
+      set_group_start: {
+        Args: { p_group_id: string; p_start_date: string }
+        Returns: {
+          lessons_created: number
+          lessons_deleted: number
+        }[]
+      }
       tariff_duration: {
         Args: { p_date: string; p_group_type: Database['public']['Enums']['group_type'] }
         Returns: number

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   addDays,
+  groupStartNote,
   attendanceSummary,
   autoGroupName,
   groupNameTaken,
@@ -406,5 +407,34 @@ describe('autoGroupName (А3, #42)', () => {
     expect(groupNameTaken(' 7 КЛАСС ', 's-math', groups)).toBe(true)
     expect(groupNameTaken('7 класс', 's-chem', groups)).toBe(false)
     expect(groupNameTaken('7 класс А', 's-math', groups)).toBe(false)
+  })
+})
+
+describe('groupStartNote (#60, set_group_start)', () => {
+  const group = {
+    start_date: '2026-09-18',
+    schedule_rules: [
+      { weekday: 2, start_time: '09:00:00', valid_from: '2026-09-18', valid_to: null },
+      { weekday: 4, start_time: '09:00:00', valid_from: '2026-09-18', valid_to: null },
+      // a later change does not fill the stretch before the old start
+      { weekday: 6, start_time: '10:00:00', valid_from: '2026-10-01', valid_to: null },
+    ],
+  }
+
+  it('same date — nothing to say', () => {
+    expect(groupStartNote(group, '2026-09-18', new Set())).toBeNull()
+  })
+
+  it('earlier: counts the lessons of the new stretch, holidays skipped', () => {
+    // ВТ/ЧТ 1–17 Sep: 1, 3, 8, 10, 15, 17 — minus the holiday on 3 Sep
+    expect(groupStartNote(group, '2026-09-01', new Set(['2026-09-03']))).toBe(
+      'Занятия с 1 сентября по 17 сентября достроятся по расписанию старта: 5 занятий, праздники пропущены.',
+    )
+  })
+
+  it('later: planned lessons before the date go', () => {
+    expect(groupStartNote(group, '2026-09-22', new Set())).toMatch(
+      /^Запланированные занятия до 22 сентября удалятся/,
+    )
   })
 })

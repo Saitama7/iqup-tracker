@@ -159,7 +159,15 @@ export function groupsErrorMessage(error: { code?: string; message?: string }): 
     return 'В это время у группы уже есть занятие'
   }
   if (error.code === '23514') {
+    if (m.includes('on the group start')) return 'На дату старта нет тарифа для этого типа группы'
     if (m.includes('no tariff')) return 'На эту дату нет тарифа для этого типа группы'
+    if (m.includes('held or cancelled lessons before'))
+      return 'Раньше этой даты есть проведённые или отменённые занятия — старт не перенести позже'
+    if (m.includes('enrollments before'))
+      return 'Раньше этой даты есть зачисления — сначала измените даты зачисления учеников'
+    if (m.includes('trial lessons before')) return 'Раньше этой даты есть записи на пробное'
+    if (m.includes('attendance marks before')) return 'Раньше этой даты есть отметки посещаемости'
+    if (m.includes('after the group end')) return 'Старт группы позже даты окончания'
     if (m.includes('extra lesson in the past')) return 'Доп. урок — на сегодня или позже'
     if (m.includes('in the past') || m.includes('today or later'))
       return 'Новое расписание — с сегодняшнего дня или позже'
@@ -338,4 +346,20 @@ export async function archiveGroup(groupId: string) {
 export async function setGroupStatus(groupId: string, status: 'forming' | 'active') {
   const { error } = await supabase.from('groups').update({ status }).eq('id', groupId)
   if (error) fail(error)
+}
+
+/**
+ * «Старт группы» задним числом (#60): earlier — lessons of the new stretch are generated; later —
+ * planned lessons before it are removed (refused if anything was held, cancelled or enrolled).
+ */
+export async function setGroupStart(groupId: string, startDate: string) {
+  const { data, error } = await supabase.rpc('set_group_start', {
+    p_group_id: groupId,
+    p_start_date: startDate,
+  })
+  if (error) fail(error)
+  const row = z
+    .array(z.object({ lessons_created: z.number().int(), lessons_deleted: z.number().int() }))
+    .parse(data)[0]
+  return { created: row?.lessons_created ?? 0, deleted: row?.lessons_deleted ?? 0 }
 }

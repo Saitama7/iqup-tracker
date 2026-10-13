@@ -8,6 +8,7 @@ import { createSubject, subjectForm, subjectsQuery, SUBJECTS_KEY } from '@/featu
 import { GROUP_TYPES, tariffFor, type GroupType } from '@/features/tariffs/current'
 import { ErrorText, Field, inputClass, SubmitButton } from '@/features/tariffs/parts'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
+import { maskDateInput, maskTimeInput } from '@/lib/date-input'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { createGroup, groupForm, GROUPS_KEY, type GroupsSource } from './api'
 import {
@@ -344,7 +345,7 @@ export function NewGroupForm({
             autoComplete="off"
             value={time}
             onChange={(e) => {
-              setTime(e.target.value)
+              setTime(maskTimeInput(e.target.value))
             }}
           />
         </Field>
@@ -357,7 +358,7 @@ export function NewGroupForm({
             autoComplete="off"
             value={start}
             onChange={(e) => {
-              setStart(e.target.value)
+              setStart(maskDateInput(e.target.value))
             }}
           />
         </Field>
