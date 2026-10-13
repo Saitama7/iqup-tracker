@@ -154,7 +154,8 @@ async function callUsersFunction<T>(body: Record<string, unknown>): Promise<T> {
   })
   const error: unknown = res.error
   if (error) {
-    if (isTimeout(error)) throw new UsersApiError('Сервер не ответил, попробуйте ещё раз', 'timeout')
+    if (isTimeout(error))
+      throw new UsersApiError('Сервер не ответил, попробуйте ещё раз', 'timeout')
     if (error instanceof FunctionsHttpError) {
       const json: unknown = await (error.context as Response).json().catch(() => null)
       const parsed = errorBodySchema.safeParse(json)
