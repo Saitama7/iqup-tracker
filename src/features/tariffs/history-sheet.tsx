@@ -10,6 +10,7 @@ import {
   SheetDescription,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { maskDateInput } from '@/lib/date-input'
 import { formatDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { deleteTariffVersion, planTariffs, planTariffsForm, settingsQuery } from './api'
@@ -355,7 +356,7 @@ function PlanForm({
           value={validFrom}
           aria-describedby={hint ? hintId : undefined}
           onChange={(e) => {
-            setValidFrom(e.target.value)
+            setValidFrom(maskDateInput(e.target.value))
           }}
         />
         {hint && (

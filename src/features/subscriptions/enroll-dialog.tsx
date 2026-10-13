@@ -7,6 +7,7 @@ import { firstName, formatDayMonth, groupLabel, type GroupBrief } from '@/featur
 import { FormDialog, NativeSelect } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, labelClass, SubmitButton } from '@/features/tariffs/parts'
 import { formatDateLong, formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
+import { maskDateInput } from '@/lib/date-input'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { enrollForm, enrollStudent, tariffsQuery, type EnrollInput } from './api'
@@ -193,7 +194,7 @@ export function EnrollDialog({
             className={inputClass}
             value={date}
             onChange={(e) => {
-              setDate(e.target.value)
+              setDate(maskDateInput(e.target.value))
             }}
           />
         </Field>
