@@ -1575,6 +1575,8 @@ export type Database = {
         Args: { p_enrollment_id: string }
         Returns: {
           amount: number
+          hour_marks: number
+          hours: number
           lessons: number
           teacher_id: string
           teacher_name: string

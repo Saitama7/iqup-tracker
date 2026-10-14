@@ -27,9 +27,15 @@ export const transferTargets = (groups: readonly GroupBrief[], from: GroupBrief 
 
 export const targetLabel = (g: GroupBrief) => `${groupLabel(g)} · ${GROUP_TYPE_LABEL[g.group_type]}`
 
-/** «учителю Гульзат −1 050 сом за 3 урока». */
-export const impactCaption = (i: PayrollImpact) =>
-  `учителю ${firstName(i.teacherName)} −${som(i.amount)} за ${i.lessons} ${pluralRu(i.lessons, LESSONS)}`
+/** «учителю Гульзат −1 050 сом за 3 урока»; продлёнка по часам — «за 2 дн. (3 ч)» (#82). */
+export function impactCaption(i: PayrollImpact): string {
+  const lessons = i.lessons - i.hourMarks
+  const parts = [
+    lessons > 0 ? `${lessons} ${pluralRu(lessons, LESSONS)}` : null,
+    i.hourMarks > 0 ? `${i.hourMarks} дн. (${formatHours(i.hours)} ч)` : null,
+  ].filter(Boolean)
+  return `учителю ${firstName(i.teacherName)} −${som(i.amount)} за ${parts.join(' и ')}`
+}
 
 export interface MoneyLine {
   label: string

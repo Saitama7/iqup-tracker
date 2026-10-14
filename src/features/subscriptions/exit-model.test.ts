@@ -145,9 +145,25 @@ describe('money captions', () => {
   it('payroll impact', () => {
     expect(
       sp(
-        impactCaption({ teacherId: 't', teacherName: 'Гульзат Асанова', lessons: 3, amount: 1050 }),
+        impactCaption({
+          teacherId: 't',
+          teacherName: 'Гульзат Асанова',
+          lessons: 3,
+          amount: 1050,
+          hourMarks: 0,
+          hours: 0,
+        }),
       ),
     ).toBe('учителю Гульзат −1 050 сом за 3 урока')
+  })
+
+  it('payroll impact by hours: days and hours, not lessons (#82)', () => {
+    const i = { teacherId: 't', teacherName: 'Айжан Бекова', amount: 150, hourMarks: 2, hours: 3 }
+    expect(sp(impactCaption({ ...i, lessons: 2 }))).toBe('учителю Айжан −150 сом за 2 дн. (3 ч)')
+    // a migrated student: old 20-lesson package marks + hour-bill days
+    expect(sp(impactCaption({ ...i, lessons: 3, hours: 4.5 }))).toBe(
+      'учителю Айжан −150 сом за 1 урок и 2 дн. (4,5 ч)',
+    )
   })
 
   it('marks to delete', () => {

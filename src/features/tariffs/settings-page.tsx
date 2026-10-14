@@ -152,6 +152,11 @@ export function SettingsPage() {
 // ─── Tariffs ────────────────────────────────────────────────────────────────
 
 const share = (t: Tariff) => `${teacherShare(t, 45)} / ${teacherShare(t, 50)}`
+/** Продлёнка по часам: учителю за ученико-час — % × цена часа (И62). */
+const hourShare = (t: Tariff) => {
+  const h = tariffHourPrice(t)
+  return `${Math.round((h * 45) / 100)} / ${Math.round((h * 50) / 100)}`
+}
 
 function TariffTable({ tariffs }: { tariffs: Tariff[] }) {
   return (
@@ -187,7 +192,12 @@ function TariffTable({ tariffs }: { tariffs: Tariff[] }) {
             </td>
             <td className={cn(tdClass, numClass)}>{t.lesson_duration_min} мин</td>
             <td className={cn(tdClass, numClass)}>{t.freeze_limit}</td>
-            <td className={cn(tdClass, numClass, 'text-ink-muted')}>{share(t)}</td>
+            <td className={cn(tdClass, numClass, 'text-ink-muted')}>
+              {share(t)}
+              {t.group_type === 'afterschool' && (
+                <span className="block text-xs font-bold text-teal">час {hourShare(t)}</span>
+              )}
+            </td>
           </tr>
         ))}
       </tbody>
@@ -215,16 +225,20 @@ function TariffCards({ tariffs }: { tariffs: Tariff[] }) {
               {t.lessons_in_package} уроков · {t.lesson_duration_min} мин · мест{' '}
               {seatsLabel(t.max_students)}
             </span>
-            <span className="whitespace-nowrap">
-              {t.group_type === 'afterschool'
-                ? `час ${formatSom(tariffHourPrice(t))}`
-                : `урок ${formatLessonPrice(lessonPrice(t))}`}
-            </span>
+            <span className="whitespace-nowrap">урок {formatLessonPrice(lessonPrice(t))}</span>
           </div>
           <div className="flex items-baseline justify-between gap-3 text-[13px] text-ink-muted">
             <span>Заморозок {t.freeze_limit}</span>
             <span className="whitespace-nowrap">учителю 45 % / 50 %: {share(t)}</span>
           </div>
+          {t.group_type === 'afterschool' && (
+            <div className="flex items-baseline justify-between gap-3 text-[13px] font-bold text-teal">
+              <span className="whitespace-nowrap">
+                по часам: час {formatSom(tariffHourPrice(t))}
+              </span>
+              <span className="whitespace-nowrap">учителю {hourShare(t)} за час</span>
+            </div>
+          )}
         </li>
       ))}
     </ul>

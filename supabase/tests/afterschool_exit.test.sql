@@ -1,12 +1,13 @@
--- #82 × #81 (0025 over 0024): leaving an after-school group billed by hours. A transfer from or to it
--- refuses («Ушёл» with a refund + a new enrollment instead); «Ушёл» settles by the hour price
+-- #82 × #81 (0025 over 0024): leaving an after-school group billed by hours. A transfer from or to it (and
+-- «Записан по ошибке» moving the money there or out) refuses («Ушёл» with a refund + a new enrollment
+-- instead); «Ушёл» settles by the hour price
 -- (remainder = hour price × unused paid hours); «Записан по ошибке» shows the payroll drop by hours —
 -- the same sum v_payroll_preview loses. Fixtures in February 2004, rolled back.
 --
 -- February 2004: Mondays 2, 9, 16, 23; Wednesdays 4, 11, 18, 25; Fridays 6, 13, 20, 27.
 -- Plan ПН 2 / СР 1 / ПТ 2 → 8 + 4 + 8 = 20 h; hour price 100 → 2 000 сом. Teacher 50 %.
 begin;
-select plan(17);
+select plan(19);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 insert into auth.users (id, email) values ('a8200000-0000-4000-8000-000000000081', 'admin82x@test.local');
@@ -88,6 +89,20 @@ select throws_ok(
   '23514', 'after-school by hours: no transfer — withdraw and enroll anew',
   'transfer_student: from the after-school group refuses'
 );
+select public.record_payment(s.id, 3200, 'cash')
+from public.subscriptions s where s.enrollment_id = pg_temp.enr('e8200000-0000-4000-8000-000000000083');
+select throws_ok(
+  $$ select * from public.delete_enrollment(pg_temp.enr('e8200000-0000-4000-8000-000000000081'), 'transfer',
+       'd8200000-0000-4000-8000-000000000082', '2004-02-10') $$,
+  '23514', 'after-school by hours: no transfer — withdraw and enroll anew',
+  'delete_enrollment: money out of the after-school group refuses'
+);
+select throws_ok(
+  $$ select * from public.delete_enrollment(pg_temp.enr('e8200000-0000-4000-8000-000000000083'), 'transfer',
+       'd8200000-0000-4000-8000-000000000081', '2004-02-10') $$,
+  '23514', 'after-school by hours: no transfer — withdraw and enroll anew',
+  'delete_enrollment: money into the after-school group refuses'
+);
 select throws_ok(
   $$ select * from public.transfer_preview(pg_temp.enr('e8200000-0000-4000-8000-000000000083'),
        'd8200000-0000-4000-8000-000000000081', '2004-02-10') $$,
@@ -145,8 +160,8 @@ select is(
   400, 'before: W 5 h + M 3 h = 8 h × 100 × 50 % = 400'
 );
 select results_eq(
-  $$ select teacher_id, lessons, amount from impact82x $$,
-  $$ values ('b8200000-0000-4000-8000-000000000081'::uuid, 2, 150) $$,
+  $$ select teacher_id, lessons, amount, hour_marks, hours from impact82x $$,
+  $$ values ('b8200000-0000-4000-8000-000000000081'::uuid, 2, 150, 2, 3.0::numeric) $$,
   'M: 2 marks, 3 h × 100 × 50 % = 150 — by hours, not 2 × 7 400 / 20 × 50 %'
 );
 select results_eq(

@@ -147,13 +147,18 @@ const impactRow = z.object({
   teacher_name: z.string(),
   lessons: z.number().int(),
   amount: z.number().int(),
+  hour_marks: z.number().int(),
+  hours: z.number(),
 })
 
 export interface PayrollImpact {
   teacherId: string
   teacherName: string
+  /** Marks paid to the teacher; `hourMarks` of them are after-school days by hours (#82). */
   lessons: number
   amount: number
+  hourMarks: number
+  hours: number
 }
 
 /** What the teachers were paid for the enrollment's «был» / «не был» (by lessons.teacher_id). */
@@ -174,6 +179,8 @@ export const payrollImpactQuery = (enrollmentId: string) =>
           teacherName: r.teacher_name,
           lessons: r.lessons,
           amount: r.amount,
+          hourMarks: r.hour_marks,
+          hours: r.hours,
         }))
     },
   })

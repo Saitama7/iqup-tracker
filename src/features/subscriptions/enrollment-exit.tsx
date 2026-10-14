@@ -24,7 +24,6 @@ import {
 } from './exit-api'
 import {
   AFTERSCHOOL_NO_TRANSFER,
-  exitTargets,
   impactCaption,
   marksCaption,
   settlementLines,
@@ -637,7 +636,9 @@ function DeleteBody({
 }: ExitProps & { s: Settlement }) {
   const ids = { choice: useId(), group: useId(), date: useId() }
   const impact = useQuery(payrollImpactQuery(enrollmentId))
-  const targets = exitTargets(groups, group)
+  // no money moves to an after-school (hours) group or out of one — as the transfer (#82)
+  const fromAfterschool = group?.group_type === 'afterschool'
+  const targets = transferTargets(groups, group)
   const hasMoney = s.moneySom !== 0
   const [money, setMoney] = useState<'transfer' | 'refund' | null>(null)
   const [groupId, setGroupId] = useState('')
@@ -728,17 +729,21 @@ function DeleteBody({
           <legend className={cn(labelClass, 'mb-1.5')}>
             Оплачено {som(s.moneySom)} — оплаты не удаляются. Что сделать с деньгами?
           </legend>
-          <Choice
-            name={ids.choice}
-            value="transfer"
-            checked={money === 'transfer'}
-            onChange={() => {
-              setMoney('transfer')
-              setError(null)
-            }}
-          >
-            Перевести в правильную группу
-          </Choice>
+          {fromAfterschool ? (
+            <p className="text-xs font-bold text-ink-muted">{AFTERSCHOOL_NO_TRANSFER}</p>
+          ) : (
+            <Choice
+              name={ids.choice}
+              value="transfer"
+              checked={money === 'transfer'}
+              onChange={() => {
+                setMoney('transfer')
+                setError(null)
+              }}
+            >
+              Перевести в правильную группу
+            </Choice>
+          )}
           {s.moneySom > 0 && (
             <Choice
               name={ids.choice}
