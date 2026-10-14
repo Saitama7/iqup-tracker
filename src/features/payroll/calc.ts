@@ -44,13 +44,21 @@ export const consumedCount = (marks: readonly { status: PayMark }[]) =>
 export interface PaySubscription {
   price_full: number
   lessons_total: number
+  /** After-school monthly subscription (#82): billed hours; null / absent — a lesson package. */
+  hours_total?: number | null
 }
 
 export interface PayAttendance {
   status: PayMark
   /** null — no subscription behind the mark (И5 breach): the mark pays 0, flagged on У6 / Б1. */
   subscription: PaySubscription | null
+  /** After-school: planned hours of the student that day (attendance.hours, #82). */
+  hours?: number | null
 }
+
+/** An hour subscription (#82): marks are priced by hours, not one lesson each. */
+export const isHourSubscription = (s: PaySubscription | null): boolean =>
+  s?.hours_total != null && s.hours_total > 0
 
 /** Full price of one lesson of a subscription: price_full / lessons_total (А1.1, К3, К6). */
 export const subscriptionLessonPrice = (s: PaySubscription) => s.price_full / s.lessons_total
@@ -59,9 +67,19 @@ export const subscriptionLessonPrice = (s: PaySubscription) => s.price_full / s.
  * Exact pay for one consumed mark: the price of the subscription it was written off — not the
  * tariff of the lesson date, so a tariff changed after the purchase never reprices it (К6) —
  * × the teacher's percent on the lesson date. No subscription or no percent → 0.
+ * An hour subscription (#82): price_full × hours / hours_total × percent (И56).
  */
-export function markPay(subscription: PaySubscription | null, percent: number | null): number {
+export function markPay(
+  subscription: PaySubscription | null,
+  percent: number | null,
+  hours: number | null = null,
+): number {
   if (!subscription || percent === null) return 0
+  if (isHourSubscription(subscription)) {
+    return (
+      (subscription.price_full * percent * (hours ?? 0)) / ((subscription.hours_total ?? 1) * 100)
+    )
+  }
   return calcLessonPay({
     consumedCount: 1,
     packagePrice: subscription.price_full,
@@ -99,6 +117,8 @@ export interface LessonPay {
   studentLessons: number
   /** Consumed marks without a subscription — counted, paid 0. */
   noSubscription: number
+  /** After-school hours charged to hour subscriptions (#82). */
+  studentHours: number
   /** Exact, not rounded. 0 when the date has no percent. */
   pay: number
 }
@@ -110,6 +130,8 @@ export interface PayTotals {
   studentLessons: number
   /** Student-lessons paid 0 for want of a subscription («нет абонемента», И5). */
   noSubscription: number
+  /** After-school student-hours on hour subscriptions (#82) — v_payroll_preview.student_hours. */
+  studentHours: number
   /** Whole som, rounded once (not per lesson). */
   amount: number
 }
@@ -136,7 +158,11 @@ export function calcMonth(lessons: readonly PayLesson[], rates: readonly PayRate
       lesson,
       studentLessons: consumed.length,
       noSubscription: consumed.filter((m) => !m.subscription).length,
-      pay: consumed.reduce((sum, m) => sum + markPay(m.subscription, percent), 0),
+      studentHours: consumed.reduce(
+        (sum, m) => sum + (isHourSubscription(m.subscription) ? (m.hours ?? 0) : 0),
+        0,
+      ),
+      pay: consumed.reduce((sum, m) => sum + markPay(m.subscription, percent, m.hours ?? null), 0),
     })
   }
   return { ...totals(paid), lessons: paid }
@@ -163,11 +189,13 @@ export function totals(paid: readonly LessonPay[]): PayTotals {
   let minutes = 0
   let studentLessons = 0
   let noSubscription = 0
+  let studentHours = 0
   let exact = 0
   for (const p of paid) {
     minutes += p.lesson.duration_min
     studentLessons += p.studentLessons
     noSubscription += p.noSubscription
+    studentHours += p.studentHours
     exact += p.pay
   }
   return {
@@ -175,6 +203,7 @@ export function totals(paid: readonly LessonPay[]): PayTotals {
     hours: Math.round((minutes / 60) * 100) / 100,
     studentLessons,
     noSubscription,
+    studentHours: Math.round(studentHours * 10) / 10,
     amount: roundSom(exact),
   }
 }

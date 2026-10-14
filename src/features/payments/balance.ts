@@ -9,15 +9,24 @@ import { roundSom } from '@/features/payroll/calc'
 /** Up to 3 lessons «в долг» are allowed (В7): highlighted, never blocked. The 4th is red. */
 export const DEBT_LIMIT = 3
 
+/** A package counts lessons; an after-school monthly subscription counts hours (#82). */
+export type BalanceUnit = 'lesson' | 'hour'
+
 export interface BalanceSubscription {
   id: string
   status: 'active' | 'exhausted' | 'refunded'
   started_at: string
   created_at: string
+  /** Units of the subscription: lessons_total, or hours_total of an hour subscription. */
   lessons_total: number
   price_final: number
-  /** present + absent_burned marks written off this subscription (attendance.subscription_id). */
+  /**
+   * present + absent_burned marks written off this subscription (attendance.subscription_id);
+   * an hour subscription — Σ their hours.
+   */
   used: number
+  /** Default lesson. */
+  unit?: BalanceUnit
   /** Σ payments.amount — refunds are negative. */
   paid: number
 }
@@ -54,11 +63,21 @@ export interface SubscriptionBalance {
 /**
  * Partial payment opens a proportional number of lessons (В7.1), integer math — no float noise. A
  * negative paid (a debt carried by a transfer, #81) floors too: −600 at 3 800 / 12 → −2, a debt of 2.
+ * Hours open by 0,5 h (#82).
  */
-export function paidLessons(paid: number, lessonsTotal: number, priceFinal: number): number {
+export function paidLessons(
+  paid: number,
+  lessonsTotal: number,
+  priceFinal: number,
+  unit: BalanceUnit = 'lesson',
+): number {
   if (priceFinal <= 0) return lessonsTotal
+  if (unit === 'hour') return Math.floor((paid * lessonsTotal * 2) / priceFinal) / 2
   return Math.floor((paid * lessonsTotal) / priceFinal)
 }
+
+/** Float noise of half-hour sums (0,5 + 1 + …) cut before comparing / showing. */
+const units = (n: number) => Math.round(n * 1e6) / 1e6
 
 const byStart = (a: BalanceSubscription, b: BalanceSubscription) =>
   a.started_at.localeCompare(b.started_at) ||
@@ -74,7 +93,7 @@ function finish(
 ): SubscriptionBalance {
   const refunded = s.status === 'refunded'
   const closed = refunded || s.status === 'exhausted'
-  const debtLessons = refunded ? 0 : Math.max(0, used - paid)
+  const debtLessons = refunded ? 0 : units(Math.max(0, used - paid))
   // Ceil, not round: paying debtSom must open every debt lesson (paidLessons floors).
   const owed = Math.ceil((used * s.price_final - s.paid * s.lessons_total) / s.lessons_total)
   const remaining = Math.max(0, Math.min(paid, s.lessons_total) - used)
@@ -85,9 +104,9 @@ function finish(
     priceFinal: s.price_final,
     paidSom: s.paid,
     paidLessons: paid,
-    carriedIn,
-    lessonsUsed: used,
-    lessonsLeft: s.lessons_total - used,
+    carriedIn: units(carriedIn),
+    lessonsUsed: units(used),
+    lessonsLeft: units(s.lessons_total - used),
     debtLessons,
     debtSom: debtLessons > 0 ? Math.max(0, owed) : 0,
     refundSuggested: closed ? 0 : roundSom((remaining * s.price_final) / s.lessons_total),
@@ -99,27 +118,33 @@ function finish(
  * Balances of all subscriptions of one student in one group (any enrollments), in the input order.
  * Lessons charged «в долг» beyond a subscription move to the next one once it is bought: a
  * subscription that is not the last holds at most max(lessons_total, paid lessons), the rest is
- * carried (И37). A refunded subscription is closed — it neither carries nor owes.
+ * carried (И37). A refunded subscription is closed — it neither carries nor owes. Carrying stays
+ * within one unit (an old 20-lesson package never carries into hours, #82); the current one is the
+ * newest live subscription of any unit.
  */
 export function subscriptionBalances(
   subscriptions: readonly BalanceSubscription[],
 ): SubscriptionBalance[] {
   const live = subscriptions.filter((s) => s.status !== 'refunded').sort(byStart)
+  const newest = live.at(-1)?.id
   const result = new Map<string, SubscriptionBalance>()
-  let carry = 0
-  live.forEach((s, i) => {
-    const paid = paidLessons(s.paid, s.lessons_total, s.price_final)
-    const last = i === live.length - 1
-    const capacity = Math.max(s.lessons_total, paid)
-    const total = s.used + carry
-    const used = last ? total : Math.min(total, capacity)
-    result.set(s.id, finish(s, paid, carry, used, last))
-    carry = Math.max(0, total - capacity)
-  })
+  for (const unit of ['lesson', 'hour'] as const) {
+    const chain = live.filter((s) => (s.unit ?? 'lesson') === unit)
+    let carry = 0
+    chain.forEach((s, i) => {
+      const paid = paidLessons(s.paid, s.lessons_total, s.price_final, unit)
+      const last = i === chain.length - 1
+      const capacity = Math.max(s.lessons_total, paid)
+      const total = s.used + carry
+      const used = last ? total : Math.min(total, capacity)
+      result.set(s.id, finish(s, paid, carry, used, s.id === newest))
+      carry = Math.max(0, total - capacity)
+    })
+  }
   return subscriptions.map(
     (s) =>
       result.get(s.id) ??
-      finish(s, paidLessons(s.paid, s.lessons_total, s.price_final), 0, s.used, false),
+      finish(s, paidLessons(s.paid, s.lessons_total, s.price_final, s.unit), 0, s.used, false),
   )
 }
 

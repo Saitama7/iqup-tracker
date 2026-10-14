@@ -189,7 +189,11 @@ describe("lessonAccrual — «Начислится» by the students' subscripti
       { ...lesson, status: 'held' },
       new Map([['id-А', 'present' as const]]),
     )
-    expect(rows[0]?.paySubscription).toEqual({ price_full: 3000, lessons_total: 12 })
+    expect(rows[0]?.paySubscription).toEqual({
+      price_full: 3000,
+      lessons_total: 12,
+      hours_total: null,
+    })
   })
 })
 
@@ -330,5 +334,72 @@ describe('marks', () => {
     expect(marksPayload(rows, new Map<string, Mark>([['c', 'present']]))).toEqual([
       { student_id: 'c', status: 'present' },
     ])
+  })
+})
+
+describe('after-school by hours (#82)', () => {
+  // ПН 2 / СР 1 / ПТ 2 from 1 October; 8 October 2026 is a Thursday, 9th a Friday
+  const plans = [{ valid_from: '2026-10-01', hours: [2, 0, 1, 0, 2, 0, 0] }]
+  const hourSub = (marks: { lesson_id: string; status: Mark; hours: number }[], paid = 2000) =>
+    sub('h', {
+      lessons_total: 12,
+      hours_total: 20,
+      price_full: 2000,
+      price_final: 2000,
+      paid,
+      marks,
+    })
+
+  it('roster: a student with 0 h that day is not expected; no plan — as before', () => {
+    const list = [enrollment('Айпери', [hourSub([])], { plans }), enrollment('Бектур', [sub('b')])]
+    const thursday = lessonRoster(
+      list,
+      { id: LESSON, lesson_date: '2026-10-08', status: 'planned' },
+      new Map(),
+    )
+    expect(thursday.map((r) => r.fullName)).toEqual(['Бектур'])
+    const friday = lessonRoster(
+      list,
+      { id: LESSON, lesson_date: '2026-10-09', status: 'planned' },
+      new Map(),
+    )
+    expect(friday.map((r) => [r.fullName, r.hours])).toEqual([
+      ['Айпери', 2],
+      ['Бектур', null],
+    ])
+  })
+
+  it('balance in hours and «Осталось 16 ч», pay by the day hours', () => {
+    const marks = [
+      { lesson_id: 'm1', status: 'present' as const, hours: 2 },
+      { lesson_id: 'm2', status: 'absent_burned' as const, hours: 2 },
+      { lesson_id: 'm3', status: 'absent_frozen' as const, hours: 1 },
+    ]
+    const [row] = lessonRoster(
+      [enrollment('Айпери', [hourSub(marks)], { plans })],
+      { id: LESSON, lesson_date: '2026-10-09', status: 'planned' },
+      new Map(),
+    )
+    expect(row?.balance).toMatchObject({ unit: 'hour', total: 20, left: 16, freezes: 1 })
+    expect(row && mobileMeta(row).text).toBe('Осталось 16 ч · заморозок 1/2')
+    expect(row && desktopMeta(row).text).toBe('16 из 20 ч · заморозок 1/2')
+    // 2 h × 100 сом/ч × 45 %
+    expect(row && lessonAccrual([row], new Map([[row.studentId, 'present']]), 45)).toEqual({
+      pay: 90,
+      perStudentLesson: null,
+    })
+  })
+
+  it('debt in hours', () => {
+    const [row] = lessonRoster(
+      [
+        enrollment('Айпери', [hourSub([{ lesson_id: 'm1', status: 'present', hours: 2 }], 0)], {
+          plans,
+        }),
+      ],
+      { id: LESSON, lesson_date: '2026-10-09', status: 'planned' },
+      new Map(),
+    )
+    expect(row && mobileMeta(row).text).toBe('Долг 2 ч · 200 сом')
   })
 })

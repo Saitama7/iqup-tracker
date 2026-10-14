@@ -14,6 +14,7 @@ const NOW = Date.parse('2026-10-08T14:20:00+06:00')
 
 const balance = (freezes: number): Balance => ({
   subscriptionId: 's1',
+  unit: 'lesson',
   total: 12,
   left: 6,
   freezes,

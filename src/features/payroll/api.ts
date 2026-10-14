@@ -22,10 +22,18 @@ const RATE = z.object({ percent: z.number(), valid_from: z.string() })
 /** A mark with the subscription it was written off — its price is the teacher's base (К6). */
 export const PAY_ATTENDANCE = z.object({
   status: MARK,
-  subscription: z.object({ price_full: z.number(), lessons_total: z.number().int() }).nullable(),
+  subscription: z
+    .object({
+      price_full: z.number(),
+      lessons_total: z.number().int(),
+      hours_total: z.number().nullable(),
+    })
+    .nullable(),
+  /** After-school: hours charged by the student's plan (#82). */
+  hours: z.number().nullable(),
 })
 export const PAY_ATTENDANCE_FIELDS =
-  'attendance(status, subscription:subscriptions(price_full, lessons_total))'
+  'attendance(status, hours, subscription:subscriptions(price_full, lessons_total, hours_total))'
 
 const tariffSchema = z.object({
   group_type: GROUP_TYPE,
@@ -170,6 +178,7 @@ const previewSchema = z.object({
   no_subscription: z.number().int(),
   advances: z.number().int(),
   to_pay: z.number().int(),
+  student_hours: z.number(),
 })
 
 /** v_payroll_preview rows of `month`; RLS leaves a teacher only her own. */
@@ -177,7 +186,7 @@ async function fetchPreview(month: string, teacherId?: string): Promise<PreviewR
   let query = supabase
     .from('v_payroll_preview')
     .select(
-      'teacher_id, month, lessons_held, hours, student_lessons, base_amount, no_subscription, advances, to_pay',
+      'teacher_id, month, lessons_held, hours, student_lessons, base_amount, no_subscription, advances, to_pay, student_hours',
     )
     .eq('month', monthStart(month))
   if (teacherId) query = query.eq('teacher_id', teacherId)
@@ -192,6 +201,7 @@ async function fetchPreview(month: string, teacherId?: string): Promise<PreviewR
       hours: r.hours,
       studentLessons: r.student_lessons,
       noSubscription: r.no_subscription,
+      studentHours: r.student_hours,
       amount: r.base_amount,
       advances: r.advances,
       toPay: r.to_pay,

@@ -266,3 +266,32 @@ describe('payState', () => {
     expect(debtOverLimit(4)).toBe(true)
   })
 })
+
+describe('after-school hours (#82)', () => {
+  const hours = (over: Partial<BalanceSubscription> = {}) =>
+    sub({ unit: 'hour', lessons_total: 20, price_final: 2000, paid: 2000, ...over })
+
+  it('paid hours open by 0,5 h', () => {
+    expect(paidLessons(1000, 20, 2000, 'hour')).toBe(10)
+    expect(paidLessons(1060, 20, 2000, 'hour')).toBe(10.5)
+    expect(paidLessons(1040, 20, 2000, 'hour')).toBe(10)
+  })
+
+  it('balance in hours: used 4 of 20, debt in hours and som', () => {
+    const [b] = subscriptionBalances([hours({ used: 4 })])
+    expect(b).toMatchObject({ lessonsUsed: 4, lessonsLeft: 16, debtLessons: 0, isCurrent: true })
+    const [d] = subscriptionBalances([hours({ paid: 500, used: 6.5 })])
+    // 500 сом → 5 h paid; 6,5 used → 1,5 h × 100 = 150
+    expect(d).toMatchObject({ paidLessons: 5, debtLessons: 1.5, debtSom: 150 })
+  })
+
+  it('hours over a month carry into the next month (И37), never from an old lesson package', () => {
+    const old = sub({ id: 'pkg', used: 14, started_at: '2026-09-01' })
+    const oct = hours({ id: 'oct', used: 22, started_at: '2026-10-01' })
+    const nov = hours({ id: 'nov', used: 0, started_at: '2026-11-01', created_at: '2026-10-25' })
+    const [p, o, n] = subscriptionBalances([old, oct, nov])
+    expect(p).toMatchObject({ lessonsUsed: 14, debtLessons: 2, isCurrent: false })
+    expect(o).toMatchObject({ lessonsUsed: 20, debtLessons: 0, isCurrent: false })
+    expect(n).toMatchObject({ carriedIn: 2, lessonsUsed: 2, isCurrent: true })
+  })
+})

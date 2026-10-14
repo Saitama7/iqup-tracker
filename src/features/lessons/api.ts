@@ -166,10 +166,13 @@ const subscriptionSchema = z.object({
   started_at: z.string(),
   created_at: z.string(),
   lessons_total: z.number().int(),
+  hours_total: z.number().nullable(),
   price_full: z.number(),
   price_final: z.number(),
   tariff: z.object({ freeze_limit: z.number().int() }),
-  attendance: z.array(z.object({ lesson_id: z.uuid(), status: markSchema })),
+  attendance: z.array(
+    z.object({ lesson_id: z.uuid(), status: markSchema, hours: z.number().nullable() }),
+  ),
   payments: z.array(z.object({ amount: z.number().int() })),
 })
 
@@ -179,15 +182,20 @@ export const enrollmentSchema = z.object({
   status: z.enum(['active', 'finished']),
   student: z.object({ id: z.uuid(), full_name: z.string(), parent_phone: z.string().nullable() }),
   subscriptions: z.array(subscriptionSchema),
+  afterschool_plans: z.array(z.object({ valid_from: z.string(), hours: z.array(z.number()) })),
 })
 
 /** subscriptions(…) of an enrollment, with every mark charged to them and their payments (teacher RLS: own students, Д3). */
 export const ENROLLMENT_FIELDS =
-  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status), payments(amount))'
+  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, hours_total, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status, hours), payments(amount)), afterschool_plans(valid_from, hours)'
 
-export function toEnrollment(row: z.infer<typeof enrollmentSchema>): EnrollmentSource {
+export function toEnrollment({
+  afterschool_plans,
+  ...row
+}: z.infer<typeof enrollmentSchema>): EnrollmentSource {
   return {
     ...row,
+    plans: afterschool_plans,
     subscriptions: row.subscriptions.map(({ tariff, attendance, payments, ...s }) => ({
       ...s,
       freeze_limit: tariff.freeze_limit,

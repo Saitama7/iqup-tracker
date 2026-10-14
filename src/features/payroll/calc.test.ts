@@ -263,6 +263,7 @@ describe('byGroup / totals', () => {
       hours: 2,
       studentLessons: 15,
       noSubscription: 0,
+      studentHours: 0,
       amount: 1_800,
     })
     expect(totals(groups.get('b') ?? []).amount).toBe(720)
@@ -285,5 +286,42 @@ describe('advances (А8, #83)', () => {
     expect(toPay(38_160, adjustments)).toBe(30_160)
     expect(toPay(38_160, [])).toBe(38_160)
     expect(toPay(2000, adjustments)).toBe(-6000)
+  })
+})
+
+describe('after-school hour subscriptions (#82, И56)', () => {
+  // 20 h invoiced for 2 000 сом → 100 сом/ч
+  const HOURS: PaySubscription = { price_full: 2000, lessons_total: 12, hours_total: 20 }
+
+  it('markPay: price_full × hours / hours_total × percent', () => {
+    expect(markPay(HOURS, 45, 2)).toBe(90)
+    expect(markPay(HOURS, 45, 1)).toBe(45)
+    expect(markPay(HOURS, 45, null)).toBe(0)
+  })
+
+  it('a lesson package ignores hours — the very same pay as before', () => {
+    expect(markPay(SUB.afterschool, 45, 3)).toBe(markPay(SUB.afterschool, 45))
+  })
+
+  it('calcMonth: present 2 h + burned 2 h pay, a freeze does not; student-hours summed', () => {
+    const l = lesson({ duration_min: 180, marks: [] })
+    const month = calcMonth(
+      [
+        {
+          ...l,
+          attendance: [
+            { status: 'present', subscription: HOURS, hours: 2 },
+            { status: 'absent_burned', subscription: HOURS, hours: 2 },
+            { status: 'absent_frozen', subscription: HOURS, hours: 1 },
+            { status: 'present', subscription: SUB.afterschool, hours: 3 },
+          ],
+        },
+      ],
+      RATE_45,
+    )
+    // 4 h × 100 × 45 % = 180, plus one old 20-lesson package mark 166,5
+    expect(month.amount).toBe(roundSom(180 + 166.5))
+    expect(month.studentHours).toBe(4)
+    expect(month.studentLessons).toBe(3)
   })
 })
