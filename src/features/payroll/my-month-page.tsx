@@ -11,10 +11,12 @@ import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
+import { fromMyMonth, NEXT_UNCONFIRMED_ID, type LessonSearch } from '@/features/lessons/return-to'
 import { lessonsWord } from '@/features/lessons/select'
 import { formatSom } from '@/features/tariffs/model'
 import { myMonthQuery, usePayrollRealtime } from './api'
 import {
+  filterMonthLessons,
   formulaNote,
   groupCaption,
   hoursCaption,
@@ -30,6 +32,7 @@ import {
   shiftMonth,
   som,
   type MonthLessonLine,
+  type MonthLessonsFilter,
   type MyMonthView,
 } from './model'
 import { CountUp, TiltCard } from './pay-card'
@@ -39,9 +42,11 @@ const LESSONS_SHOWN = 7
 
 interface Props {
   month: string
+  /** Group filter of the lesson lists (?group=, #72); undefined — all groups. */
+  group: string | undefined
 }
 
-export function MyMonthPage({ month }: Props) {
+export function MyMonthPage({ month, group }: Props) {
   const now = useNow()
   const { userId } = useSession()
   const isDesktop = useIsDesktop()
@@ -59,16 +64,17 @@ export function MyMonthPage({ month }: Props) {
     body = <Notice>Считаем месяц…</Notice>
   } else {
     const view = myMonthView(source.data, month, now)
+    const filter = filterMonthLessons(view, group)
     body = isDesktop ? (
-      <DesktopMonth view={view} month={month} />
+      <DesktopMonth view={view} filter={filter} month={month} />
     ) : (
-      <MobileMonth view={view} month={month} today={today} />
+      <MobileMonth view={view} filter={filter} month={month} today={today} />
     )
   }
 
   return (
     <section className="flex flex-col gap-[18px] min-[900px]:gap-6">
-      <Header month={month} today={today} desktop={isDesktop} />
+      <Header month={month} group={group} today={today} desktop={isDesktop} />
       {body}
     </section>
   )
@@ -84,7 +90,17 @@ function Notice({ children }: { children: ReactNode }) {
 
 // ─── Header and month switch ────────────────────────────────────────────────
 
-function Header({ month, today, desktop }: { month: string; today: string; desktop: boolean }) {
+function Header({
+  month,
+  group,
+  today,
+  desktop,
+}: {
+  month: string
+  group: string | undefined
+  today: string
+  desktop: boolean
+}) {
   const navigate = useNavigate()
   const prev = shiftMonth(month, -1)
   const next = month < monthOf(today) ? shiftMonth(month, 1) : null
@@ -103,7 +119,7 @@ function Header({ month, today, desktop }: { month: string; today: string; deskt
               value={month}
               max={monthOf(today)}
               onSelect={(m) => {
-                void navigate({ to: '/my-month', search: { month: m } })
+                void navigate({ to: '/my-month', search: { month: m, group } })
               }}
             >
               {desktop ? monthTitle(month) : monthNom(month)}
@@ -117,12 +133,12 @@ function Header({ month, today, desktop }: { month: string; today: string; deskt
         </div>
       </div>
       <nav className="flex gap-1.5 min-[900px]:gap-2" aria-label="Месяц">
-        <Link to="/my-month" search={{ month: prev }} className={pill}>
+        <Link to="/my-month" search={{ month: prev, group }} className={pill}>
           <ChevronLeft className="size-4" strokeWidth={2.5} aria-hidden />
           {monthNom(prev)}
         </Link>
         {next && (
-          <Link to="/my-month" search={{ month: next }} className={pill}>
+          <Link to="/my-month" search={{ month: next, group }} className={pill}>
             {monthNom(next)}
             <ChevronRight className="size-4" strokeWidth={2.5} aria-hidden />
           </Link>
@@ -132,12 +148,89 @@ function Header({ month, today, desktop }: { month: string; today: string; deskt
   )
 }
 
+// ─── Group filter (#72) ─────────────────────────────────────────────────────
+
+/**
+ * «Все группы / 8 класс А / …» over the lesson lists; the choice lives in the URL (?group=) so it
+ * survives reload and the return from a lesson. The badge — lessons over but not confirmed.
+ */
+function GroupFilter({
+  view,
+  month,
+  active,
+}: {
+  view: MyMonthView
+  month: string
+  active: string | null
+}) {
+  const navigate = useNavigate()
+  if (view.groups.length < 2) return null
+  const pick = (group: string | undefined) => {
+    void navigate({ to: '/my-month', search: { month, group }, replace: true })
+  }
+  const chip = (on: boolean) =>
+    cn(
+      'flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-extrabold whitespace-nowrap',
+      on ? 'border-ink bg-ink text-paper' : 'border-line bg-card text-ink',
+    )
+  return (
+    <div
+      role="group"
+      aria-label="Фильтр по группам"
+      className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 min-[900px]:flex-wrap"
+    >
+      <button
+        type="button"
+        aria-pressed={active === null}
+        onClick={() => {
+          pick(undefined)
+        }}
+        className={chip(active === null)}
+      >
+        Все группы
+      </button>
+      {view.groups.map((g) => (
+        <button
+          key={g.id}
+          type="button"
+          title={g.label}
+          aria-pressed={active === g.id}
+          onClick={() => {
+            pick(g.id)
+          }}
+          className={chip(active === g.id)}
+        >
+          {g.name}
+          {g.unconfirmed > 0 && (
+            <span
+              className="rounded-full bg-burned-soft px-1.5 py-0.5 text-[11px] leading-none font-extrabold text-burned-strong"
+              aria-label={`${g.unconfirmed} не подтверждено`}
+            >
+              {g.unconfirmed}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // ─── У6 · phone ─────────────────────────────────────────────────────────────
 
-function MobileMonth({ view, month, today }: { view: MyMonthView; month: string; today: string }) {
+function MobileMonth({
+  view,
+  filter,
+  month,
+  today,
+}: {
+  view: MyMonthView
+  filter: MonthLessonsFilter
+  month: string
+  today: string
+}) {
   const { pay } = view
   const [all, setAll] = useState(false)
-  const held = view.lessons.filter((l) => l.state === 'held')
+  const held = filter.lessons.filter((l) => l.state === 'held')
   const shown = all ? held : held.slice(0, LESSONS_SHOWN)
   const more = held.length - shown.length
   const stats = [
@@ -223,7 +316,11 @@ function MobileMonth({ view, month, today }: { view: MyMonthView; month: string;
         ))}
       </section>
 
-      {view.unconfirmed.length > 0 && <UnconfirmedBlock lessons={view.unconfirmed} />}
+      <GroupFilter view={view} month={month} active={filter.group} />
+
+      {filter.unconfirmed.length > 0 && (
+        <UnconfirmedBlock lessons={filter.unconfirmed} month={month} group={filter.group} />
+      )}
 
       {held.length > 0 && (
         <section className="flex flex-col gap-2" aria-label={`Занятия ${inMonthPrep(month)}`}>
@@ -275,10 +372,19 @@ function MobileMonth({ view, month, today }: { view: MyMonthView; month: string;
   )
 }
 
-function UnconfirmedBlock({ lessons }: { lessons: MonthLessonLine[] }) {
+function UnconfirmedBlock({
+  lessons,
+  month,
+  group,
+}: {
+  lessons: MonthLessonLine[]
+  month: string
+  group: string | null
+}) {
   return (
     <section
-      className="flex flex-col gap-2 rounded-2xl bg-burned-soft px-4 py-3.5 text-burned-deep"
+      id={NEXT_UNCONFIRMED_ID}
+      className="flex scroll-mt-4 flex-col gap-2 rounded-2xl bg-burned-soft px-4 py-3.5 text-burned-deep"
       aria-label="Не подтверждено — не в ЗП"
     >
       <h2 className="text-sm font-extrabold">Не подтверждено — не в ЗП</h2>
@@ -291,6 +397,7 @@ function UnconfirmedBlock({ lessons }: { lessons: MonthLessonLine[] }) {
             <Link
               to="/lessons/$lessonId"
               params={{ lessonId: l.id }}
+              search={fromMyMonth(month, group ?? undefined)}
               className="font-extrabold whitespace-nowrap text-burned-strong"
             >
               Подтвердить →
@@ -314,11 +421,21 @@ const td = 'border-b border-line px-3 py-3 align-middle text-sm'
 const num = 'text-right tabular-nums whitespace-nowrap'
 const kpiLabel = 'text-xs font-extrabold tracking-[0.06em] uppercase'
 
-function DesktopMonth({ view, month }: { view: MyMonthView; month: string }) {
+function DesktopMonth({
+  view,
+  filter,
+  month,
+}: {
+  view: MyMonthView
+  filter: MonthLessonsFilter
+  month: string
+}) {
   const { pay } = view
   const [all, setAll] = useState(false)
-  const shown = all ? view.lessons : view.lessons.slice(0, LESSONS_SHOWN)
-  const more = view.lessons.length - shown.length
+  const shown = all ? filter.lessons : filter.lessons.slice(0, LESSONS_SHOWN)
+  const more = filter.lessons.length - shown.length
+  const firstUnconfirmed = shown.find((l) => l.state === 'unconfirmed')?.id
+  const lessonSearch = fromMyMonth(month, filter.group ?? undefined)
   return (
     <>
       <div className="grid grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))] gap-3.5">
@@ -347,7 +464,10 @@ function DesktopMonth({ view, month }: { view: MyMonthView; month: string }) {
       <div className="grid grid-cols-[minmax(0,1fr)_300px] items-start gap-5">
         <div className={cn(card, 'overflow-x-auto')}>
           <h2 className="px-5 pt-4 text-[15px] font-extrabold">Занятия {inMonthPrep(month)}</h2>
-          {view.lessons.length === 0 ? (
+          <div className="px-5 pt-3">
+            <GroupFilter view={view} month={month} active={filter.group} />
+          </div>
+          {filter.lessons.length === 0 ? (
             <p className="px-5 py-4 text-sm font-bold text-ink-muted">
               Проведённых занятий пока нет.
             </p>
@@ -368,7 +488,12 @@ function DesktopMonth({ view, month }: { view: MyMonthView; month: string }) {
               </thead>
               <tbody>
                 {shown.map((l) => (
-                  <LessonRow key={l.id} lesson={l} />
+                  <LessonRow
+                    key={l.id}
+                    lesson={l}
+                    search={lessonSearch}
+                    anchor={l.id === firstUnconfirmed}
+                  />
                 ))}
                 {more > 0 && (
                   <tr>
@@ -438,10 +563,22 @@ function Kpi({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function LessonRow({ lesson: l }: { lesson: MonthLessonLine }) {
+function LessonRow({
+  lesson: l,
+  search,
+  anchor,
+}: {
+  lesson: MonthLessonLine
+  search: LessonSearch
+  /** The first unconfirmed row — the return from a lesson scrolls here (#72). */
+  anchor: boolean
+}) {
   const unconfirmed = l.state === 'unconfirmed'
   return (
-    <tr className={cn('[&:last-child>td]:border-0', unconfirmed && 'bg-burned-soft/50')}>
+    <tr
+      id={anchor ? NEXT_UNCONFIRMED_ID : undefined}
+      className={cn('scroll-mt-4 [&:last-child>td]:border-0', unconfirmed && 'bg-burned-soft/50')}
+    >
       <td className={cn(td, 'whitespace-nowrap')}>{l.when}</td>
       <td className={cn(td, 'font-extrabold')}>{l.group}</td>
       <td className={cn(td, unconfirmed ? 'font-bold text-burned-strong' : 'text-ink-muted')}>
@@ -462,6 +599,7 @@ function LessonRow({ lesson: l }: { lesson: MonthLessonLine }) {
           <Link
             to="/lessons/$lessonId"
             params={{ lessonId: l.id }}
+            search={search}
             className="font-extrabold whitespace-nowrap text-burned-strong"
           >
             Подтвердить →
