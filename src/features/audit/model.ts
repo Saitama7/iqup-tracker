@@ -1,6 +1,7 @@
 // А10 view model: filters in the URL, the period's start, entries grouped by Bishkek day.
 // Pure functions of (data, now) — no fetching, no clock.
 import { addDays } from '@/features/groups/model'
+import { nameKey } from '@/features/trials/model'
 import { bishkekDate, formatDayMonth } from '@/lib/time'
 import { bishkekDay, type AuditEntry, type AuditKind } from './describe'
 
@@ -26,7 +27,21 @@ export interface AuditFilters {
   actor: string | null
   /** Start of the period, `timestamptz` ISO; null — all time. */
   since: string | null
+  /** «Ученик, группа, учитель…» as `searchKey` made it; null — no search. */
+  q: string | null
 }
+
+/**
+ * The search box as v_audit_feed.search is stored (person_name_key in 0018 = nameKey): spaces
+ * collapsed, lower case, ё = е. `*` is a wildcard in PostgREST's like — dropped. Empty → null.
+ */
+export function searchKey(text: string | null | undefined): string | null {
+  const key = nameKey((text ?? '').replaceAll('*', ' '))
+  return key === '' ? null : key
+}
+
+/** `like` pattern for a searchKey: the key anywhere, its own `%` / `_` / `\` taken literally. */
+export const likePattern = (key: string) => `%${key.replace(/[\\%_]/g, '\\$&')}%`
 
 /** Bishkek midnight the period starts at: «7 дней» — today and the 6 days before. */
 export function periodStart(period: Period, nowMs: number): string | null {

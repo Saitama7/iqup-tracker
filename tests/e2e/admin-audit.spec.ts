@@ -218,6 +218,82 @@ test('А10: late confirmation and a mark corrected by the admin, filters, «По
   }
 })
 
+test('А10: server search «Ученик, группа, учитель…», a cancel comment shown once (#52)', async ({
+  page,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'webkit-desktop'
+  const day = desktop ? '2026-09-18' : '2026-09-25'
+  const dm = `${day.slice(8, 10)}.${day.slice(5, 7)}`
+  const comment = `нет света ${desktop ? 'деск' : 'моб'} ${Date.now() % 1_000_000}`
+  const db = service()
+
+  await removeLesson(db, day)
+  try {
+    const { data: lesson, error } = await db
+      .from('lessons')
+      .insert({
+        group_id: GROUP_6,
+        lesson_date: day,
+        planned_start: '20:00',
+        duration_min: 60,
+        is_extra: true,
+      })
+      .select('id')
+      .single()
+    if (error) throw error
+    const kanykei = await signedIn('996552775771')
+    const cancel = await kanykei.rpc('cancel_lesson', {
+      p_lesson_id: lesson.id,
+      p_reason: 'teacher',
+      p_comment: comment,
+    })
+    if (cancel.error) throw cancel.error
+
+    await login(page, KANYKEI)
+    await page.goto('/admin/audit')
+    const feed = page.getByRole('feed', { name: 'Изменения' })
+    const cancelled = feed
+      .getByRole('article')
+      .filter({
+        hasText: `Занятие Математика · 6 класс, ${dm} в 20:00 отменено: отменил учитель`,
+      })
+      .filter({ hasText: comment })
+
+    const box = page.getByRole('searchbox', { name: 'Поиск по журналу' })
+    await expect(box).toHaveAttribute('placeholder', 'Ученик, группа, учитель…')
+    await box.fill('6 КЛАСС')
+    await expect(page).toHaveURL(/q=6/)
+    await expect(cancelled).toHaveCount(1)
+    await expect(cancelled).toContainText(`Комментарий: «${comment}»`)
+    await expect(cancelled).not.toContainText('Причина')
+    // the server answered: nothing but 6 класс rows on screen
+    await expect(feed).toHaveAttribute('aria-busy', 'false')
+    await expect(feed.getByRole('article').filter({ hasNotText: '6 класс' })).toHaveCount(0)
+    // every row on screen is about 6 класс; the counts follow the search
+    const all = page.getByRole('button', { name: /^Все · \d+$/ })
+    await expect(all).toBeVisible()
+    await page.addStyleTag({ content: noTabBar })
+    await page.screenshot({
+      path: shot(testInfo, isDesktop(page) ? 'audit-search-1280' : 'audit-search-390'),
+    })
+
+    // the teacher's name finds her group's rows too
+    await box.fill('гульзат')
+    await expect(page).toHaveURL(/q=%D0%B3/)
+    await expect(cancelled).toHaveCount(1)
+
+    await box.fill('нет такого ученика')
+    await expect(page.getByText('По «нет такого ученика» ничего не нашли.')).toBeVisible()
+    await expect(all).toHaveText('Все · 0')
+
+    await box.fill('')
+    await expect(page).not.toHaveURL(/q=/)
+    await expect(cancelled).toHaveCount(1)
+  } finally {
+    await removeLesson(db, day)
+  }
+})
+
 test('А10: the accountant reads the journal without links', async ({ page }) => {
   await login(page, AIGERIM)
   await page.goto('/admin/audit')

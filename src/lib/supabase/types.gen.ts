@@ -117,6 +117,7 @@ export type Database = {
           entity: string
           entity_id: string
           id: string
+          kind: string | null
           reason: string | null
         }
         ComputedFields: never
@@ -129,6 +130,7 @@ export type Database = {
           entity: string
           entity_id: string
           id?: string
+          kind?: never
           reason?: string | null
         }
         Update: {
@@ -140,6 +142,7 @@ export type Database = {
           entity?: string
           entity_id?: string
           id?: string
+          kind?: never
           reason?: string | null
         }
         Relationships: []
@@ -861,6 +864,7 @@ export type Database = {
           kind: string | null
           marks: Json | null
           reason: string | null
+          search: string | null
         }
         ComputedFields: never
         Insert: {
@@ -872,9 +876,10 @@ export type Database = {
           entity?: string | null
           entity_id?: string | null
           id?: string | null
-          kind?: never
+          kind?: string | null
           marks?: never
           reason?: string | null
+          search?: never
         }
         Update: {
           action?: string | null
@@ -885,9 +890,10 @@ export type Database = {
           entity?: string | null
           entity_id?: string | null
           id?: string | null
-          kind?: never
+          kind?: string | null
           marks?: never
           reason?: string | null
+          search?: never
         }
         Relationships: []
       }
@@ -1103,6 +1109,27 @@ export type Database = {
       assert_payment_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
       attendance_subscription: {
         Args: { p_lesson_id: string; p_student_id: string }
+        Returns: string
+      }
+      audit_feed_counts: {
+        Args: {
+          p_actor?: string
+          p_entity?: string
+          p_q?: string
+          p_since?: string
+          p_system?: boolean
+        }
+        Returns: {
+          kind: string
+          n: number
+        }[]
+      }
+      audit_kind: {
+        Args: { p_action: string; p_after: Json; p_at: string; p_before: Json; p_entity: string }
+        Returns: string
+      }
+      audit_search_text: {
+        Args: { p_entity: string; p_entity_id: string; p_row: Json }
         Returns: string
       }
       bishkek_today: { Args: Record<PropertyKey, never>; Returns: string }

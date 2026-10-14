@@ -579,7 +579,9 @@ function describeRate(row: AuditRow, l: AuditLookups): Described {
       : { label: 'Ставка', tone: 'teal' as const }
 
   if (row.action === 'insert') {
-    return { badge, link, parts: [...who, `ставка ${num(row.after, 'percent')} %${since}`] }
+    // a past valid_from re-prices lessons already held (#52)
+    const retro = row.kind === 'retro' ? ' — задним числом' : ''
+    return { badge, link, parts: [...who, `ставка ${num(row.after, 'percent')} %${since}${retro}`] }
   }
   if (row.action === 'delete') {
     return {
@@ -785,9 +787,33 @@ export function authorName(actorId: string | null, l: AuditLookups): string {
 export const authorShort = (author: string) =>
   author === 'Система' || author === 'Пользователь' ? author : firstName(author)
 
+/** audit_log.reason written by an RPC (iqup.audit_reason) as words, not codes. */
+const REASON_LABEL: Record<string, string> = {
+  archive_group: 'группа переведена в архив',
+}
+
+/**
+ * «Причина: …» under a row. confirm_lesson — none (the row says «проведено»); cancel_lesson writes the
+ * admin's comment or `cancel: <code>` (0008) — the code becomes words, and on the lesson's own row
+ * neither repeats what its text / «Комментарий» already says.
+ */
+function reasonNote(row: AuditRow, note: string | null): string | null {
+  const reason = row.reason?.trim()
+  if (!reason || reason === 'confirm_lesson') return null
+  const cancel = /^cancel:\s*(\S+)$/.exec(reason)
+  if (cancel) {
+    if (row.entity === 'lessons') return null
+    return `Причина: занятие отменено — ${labelOf(CANCEL_REASON_LABEL, cancel[1] ?? '')}`
+  }
+  const label = REASON_LABEL[reason]
+  if (label) return `Причина: ${label}`
+  if (note?.includes(`«${reason}»`)) return null
+  return `Причина: «${reason}»`
+}
+
 export function describeAuditRow(row: AuditRow, lookups: AuditLookups): AuditEntry {
   const d = (DESCRIBERS[row.entity] ?? describeOther)(row, lookups)
-  const reason = row.reason && row.reason !== 'confirm_lesson' ? `Причина: «${row.reason}»` : null
+  const reason = reasonNote(row, d.note ?? null)
   return {
     id: row.id,
     at: row.at,

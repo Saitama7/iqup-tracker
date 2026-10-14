@@ -17,6 +17,7 @@ const searchSchema = z.object({
     .optional()
     .catch(undefined),
   period: z.enum(PERIODS).optional().catch(undefined),
+  q: z.string().max(100).optional().catch(undefined),
 })
 
 // А10 Журнал изменений (docs/design/AuditLog.dc.html); role guard (admin, accountant) — admin/route.tsx.
