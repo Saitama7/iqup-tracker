@@ -4,6 +4,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { GULZAT, login } from './support/auth'
+import { groupTeacher } from './support/db'
 import { lockSeed } from './support/seed-lock'
 
 // #72: September is entered backdated from «Мой месяц». Needs the local stack + `pnpm seed:users`.
@@ -53,6 +54,7 @@ async function extraLesson(db: Db, group: string, day: string) {
     .from('lessons')
     .insert({
       group_id: group,
+      teacher_id: await groupTeacher(db, group),
       lesson_date: day,
       planned_start: '19:00',
       duration_min: 60,

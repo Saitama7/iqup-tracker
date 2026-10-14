@@ -197,8 +197,8 @@ select is(
 select is(
   (select array_agg(entity order by entity) from public.audit_log
    where reason = 'remove_enrollment' and action = 'delete'
-     and entity_id in ('f7300000-0000-4000-8000-000000000001', 'c7300000-0000-4000-8000-000000000001')
-      or (reason = 'remove_enrollment' and entity = 'attendance')),
+     and (entity_id in ('f7300000-0000-4000-8000-000000000001', 'c7300000-0000-4000-8000-000000000001')
+          or (entity = 'attendance' and before ->> 'student_id' = 'e7300000-0000-4000-8000-000000000001'))),
   array['attendance', 'enrollments', 'subscriptions'],
   'journal: the three deletions with reason remove_enrollment'
 );
