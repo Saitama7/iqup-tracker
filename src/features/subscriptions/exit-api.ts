@@ -51,6 +51,8 @@ export function withdrawErrorMessage(error: DbError): string {
       return 'После этой даты есть отметки «был» / «не был» — выберите дату позже'
     if (m.includes('before the enrollment start')) return 'Дата раньше начала зачисления'
     if (m.includes('refund must be')) return 'Сумма возврата — от 0 до остатка'
+    if (m.includes('left to the center'))
+      return 'Невозвращённый остаток — только явно центру, с причиной'
   }
   return fallback(error, 'Завершение')
 }
@@ -247,6 +249,8 @@ export async function withdrawEnrollment(input: {
   refund: number
   method: PaymentMethod | null
   reason: string
+  /** Why the rest (remainder − refund) stays with the center; required when there is a rest. */
+  centerReason: string
 }) {
   const { error } = await supabase.rpc('withdraw_enrollment', {
     p_enrollment_id: input.enrollmentId,
@@ -254,6 +258,7 @@ export async function withdrawEnrollment(input: {
     p_refund: input.refund,
     ...(input.method ? { p_method: input.method } : {}),
     ...(input.reason.trim() ? { p_reason: input.reason.trim() } : {}),
+    ...(input.centerReason.trim() ? { p_center_reason: input.centerReason.trim() } : {}),
   })
   if (error) throw new EnrollError(withdrawErrorMessage(error))
 }

@@ -28,7 +28,10 @@ export interface SubscriptionBalance {
   lessonsTotal: number
   priceFinal: number
   paidSom: number
-  /** floor(paid × lessons_total / price_final) — partial payment opens that many lessons (В7.1). */
+  /**
+   * floor(paid × lessons_total / price_final) — partial payment opens that many lessons (В7.1); a debt
+   * carried in by a transfer (paid < 0) gives a negative number — lessons owed before the first one (#81).
+   */
   paidLessons: number
   /** Lessons «в долг» of the previous subscription taken over by this one (И37). */
   carriedIn: number
@@ -39,16 +42,22 @@ export interface SubscriptionBalance {
   debtLessons: number
   /** What the debt lessons cost beyond the money paid, rounded up to whole som (И37) — paying it closes the debt. */
   debtSom: number
-  /** Remaining paid lessons × price_final / lessons_total (В8); the admin may correct it. */
+  /**
+   * Remaining paid lessons × price_final / lessons_total (В8); the admin may correct it. 0 on an
+   * exhausted subscription — closed by a transfer / «ушёл», its rest moved, refunded or left to the center.
+   */
   refundSuggested: number
   /** The newest live subscription — the one shown as «Абонемент». */
   isCurrent: boolean
 }
 
-/** Partial payment opens a proportional number of lessons (В7.1), integer math — no float noise. */
+/**
+ * Partial payment opens a proportional number of lessons (В7.1), integer math — no float noise. A
+ * negative paid (a debt carried by a transfer, #81) floors too: −600 at 3 800 / 12 → −2, a debt of 2.
+ */
 export function paidLessons(paid: number, lessonsTotal: number, priceFinal: number): number {
   if (priceFinal <= 0) return lessonsTotal
-  return Math.floor((Math.max(0, paid) * lessonsTotal) / priceFinal)
+  return Math.floor((paid * lessonsTotal) / priceFinal)
 }
 
 const byStart = (a: BalanceSubscription, b: BalanceSubscription) =>
@@ -64,6 +73,7 @@ function finish(
   isCurrent: boolean,
 ): SubscriptionBalance {
   const refunded = s.status === 'refunded'
+  const closed = refunded || s.status === 'exhausted'
   const debtLessons = refunded ? 0 : Math.max(0, used - paid)
   // Ceil, not round: paying debtSom must open every debt lesson (paidLessons floors).
   const owed = Math.ceil((used * s.price_final - s.paid * s.lessons_total) / s.lessons_total)
@@ -80,7 +90,7 @@ function finish(
     lessonsLeft: s.lessons_total - used,
     debtLessons,
     debtSom: debtLessons > 0 ? Math.max(0, owed) : 0,
-    refundSuggested: refunded ? 0 : roundSom((remaining * s.price_final) / s.lessons_total),
+    refundSuggested: closed ? 0 : roundSom((remaining * s.price_final) / s.lessons_total),
     isCurrent,
   }
 }

@@ -118,7 +118,9 @@ test('Хадижа: из индивидуальной в мини-группу, 
   await expect(page.getByRole('heading', { name: new RegExp(n.group.mini) }).first()).toBeVisible()
 })
 
-test('«Ушёл из группы» с возвратом остатка', async ({ page }, testInfo) => {
+test('«Ушёл из группы» с возвратом части остатка, разница — явно центру', async ({
+  page,
+}, testInfo) => {
   const n = names(testInfo)
   const teacher = await teacherId('Бекзат%')
   const grp = await makeGroup(n.group.grp, teacher, '2026-09-01', 'group')
@@ -133,6 +135,12 @@ test('«Ушёл из группы» с возвратом остатка', asyn
   await expect(form.getByLabel('Сумма возврата, сом')).toHaveValue('2400')
   await form.getByRole('button', { name: 'Наличные' }).click()
   await shot(page, 'withdraw', testInfo)
+  // a partial refund: the difference is never dropped silently
+  await form.getByLabel('Сумма возврата, сом').fill('2000')
+  await expect(form.getByText(/Разница 400.сом не вернётся/)).toBeVisible()
+  await form.getByRole('button', { name: 'Оформить возврат и завершить' }).click()
+  await expect(form.getByText(/Укажите, почему 400.сом остаётся центру/)).toBeVisible()
+  await form.getByLabel(/Почему 400.сом остаётся центру/).fill('договорились с родителем')
   await form.getByRole('button', { name: 'Оформить возврат и завершить' }).click()
   await expect(dialog).toBeHidden()
 
@@ -149,7 +157,22 @@ test('«Ушёл из группы» с возвратом остатка', asyn
     .eq('subscription_id', e.subscriptionId)
     .eq('kind', 'refund')
     .single()
-  expect(refund).toEqual({ amount: -2400, method: 'cash', kind: 'refund' })
+  expect(refund).toEqual({ amount: -2000, method: 'cash', kind: 'refund' })
+  const { data: closed } = await db
+    .from('subscriptions')
+    .select('status')
+    .eq('id', e.subscriptionId)
+    .single()
+  expect(closed?.status).toBe('exhausted')
+  const { data: journal } = await db
+    .from('audit_log')
+    .select('reason')
+    .eq('entity', 'subscriptions')
+    .eq('entity_id', e.subscriptionId)
+    .like('reason', 'остаток 400 сом оставлен центру%')
+  expect(journal?.map((r) => r.reason)).toEqual([
+    'остаток 400 сом оставлен центру: договорились с родителем',
+  ])
   // the roster no longer has them
   await expect(page.getByRole('button', { name: `Действия: ${n.student.left}` })).toHaveCount(0)
 })

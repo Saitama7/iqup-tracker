@@ -418,7 +418,13 @@ function WithdrawBody({
   s,
   onDone,
 }: ExitProps & { s: Settlement }) {
-  const ids = { date: useId(), choice: useId(), amount: useId(), reason: useId() }
+  const ids = {
+    date: useId(),
+    choice: useId(),
+    amount: useId(),
+    reason: useId(),
+    center: useId(),
+  }
   const min = withdrawMinDate(startDate, s.lastMarkDate)
   const [date, setDate] = useState(formatDateRu(withdrawDefaultDate(today, min)))
   const refundable = Math.max(0, s.remainder)
@@ -426,15 +432,28 @@ function WithdrawBody({
   const [amount, setAmount] = useState(String(refundable))
   const [method, setMethod] = useState<PaymentMethod | null>(null)
   const [reason, setReason] = useState('')
+  const [centerReason, setCenterReason] = useState('')
   const [error, setError] = useState<string | null>(null)
+  // What is not refunded stays with the center — only explicitly, with a reason (never lost silently).
+  const typed = Number(amount.replace(/\s/g, ''))
+  const rest = refund
+    ? Number.isInteger(typed) && typed > 0 && typed < refundable
+      ? refundable - typed
+      : 0
+    : refundable
 
   const mutation = useMutation({
     mutationFn: withdrawEnrollment,
     onSuccess: (_, input) => {
+      const left = refundable - input.refund
       onDone(
-        input.refund > 0
-          ? `${studentName}: зачисление завершено, возврат ${som(input.refund)}`
-          : `${studentName}: зачисление завершено`,
+        [
+          `${studentName}: зачисление завершено`,
+          input.refund > 0 ? `возврат ${som(input.refund)}` : null,
+          left > 0 ? `${som(left)} оставлено центру` : null,
+        ]
+          .filter(Boolean)
+          .join(', '),
       )
     },
     onError: (e) => {
@@ -462,6 +481,11 @@ function WithdrawBody({
       setError('Выберите способ возврата')
       return
     }
+    const left = refundable - sum
+    if (left > 0 && !centerReason.trim()) {
+      setError(`Укажите, почему ${som(left)} остаётся центру`)
+      return
+    }
     setError(null)
     mutation.mutate({
       enrollmentId,
@@ -469,6 +493,7 @@ function WithdrawBody({
       refund: sum,
       method: refund ? method : null,
       reason,
+      centerReason: left > 0 ? centerReason : '',
     })
   }
 
@@ -507,13 +532,13 @@ function WithdrawBody({
           </Choice>
           <Choice
             name={ids.choice}
-            value="keep"
+            value="center"
             checked={!refund}
             onChange={() => {
               setRefund(false)
             }}
           >
-            Оставить на балансе
+            Не возвращать — остаток остаётся центру
           </Choice>
           {refund && (
             <>
@@ -538,6 +563,28 @@ function WithdrawBody({
                   placeholder="ученик ушёл из группы"
                   onChange={(e) => {
                     setReason(e.target.value)
+                  }}
+                />
+              </Field>
+            </>
+          )}
+          {rest > 0 && (
+            <>
+              <Note tone="muted">
+                {refund
+                  ? `Разница ${som(rest)} не вернётся — она останется центру.`
+                  : `${som(rest)} останется центру.`}{' '}
+                На балансе ученика после ухода деньги не хранятся — причина попадёт в журнал.
+              </Note>
+              <Field id={ids.center} label={`Почему ${som(rest)} остаётся центру`}>
+                <input
+                  id={ids.center}
+                  className={inputClass}
+                  value={centerReason}
+                  placeholder="например: договорились с родителем"
+                  onChange={(e) => {
+                    setCenterReason(e.target.value)
+                    setError(null)
                   }}
                 />
               </Field>

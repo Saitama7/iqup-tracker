@@ -12,12 +12,22 @@
 --    new group, the new group gets a new enrollment + subscription at its tariff, the remainder moves
 --    (debt too); a surplus over the new price stays (more lessons) or is refunded. Same type with
 --    nothing written off — the #73 move (transfer_enrollment), unchanged.
---    withdraw_enrollment — «Ушёл»: finished from a date, the remainder refunded or left on the balance.
+--    withdraw_enrollment — «Ушёл»: finished from a date; the remainder is refunded, and whatever is not
+--    refunded is left to the center explicitly, with a reason in the journal (nothing is lost silently).
+--    The old subscriptions of a transfer / «ушёл» become exhausted (closed on their used lessons; they
+--    stay in the И37 chain, so a carried debt does not reappear, but never take a new mark first).
 --    delete_enrollment — «Записан по ошибке»: every mark is deleted (payroll drops by them); payments
 --    stay (immutable) — the money is transferred to the right group or refunded, and an enrollment that
---    has payments stays as a void record (finished, end_date null = never on a roster).
+--    has payments stays as a void record (finished, end_date null = never on a roster) whose
+--    subscriptions are refunded — out of attendance_subscription and the balance chain.
+-- 4. A void record holds no dates: enrollment_attendance takes no lessons by its dates, and the overlap
+--    checks (set_enrollment_start 0017, transfer_enrollment 0020, the ones below) skip it — the student
+--    can be enrolled in that group again.
+-- 5. v_student_balance: paid_lessons floors a negative paid_som too — a debt carried to a new
+--    subscription is a debt before the first lesson (same in balance.ts).
 -- Safe on production data: the new enum value and column, method nullable and a wider check accept
--- every existing row; existing functions are untouched; re-running the file is a no-op.
+-- every existing row; the replaced view / functions keep their signatures and change nothing for rows
+-- that exist before this migration (no void records, paid_som ≥ 0); re-running the file is a no-op.
 
 -- ─── 1. payments: transfer ──────────────────────────────────────────────────
 
@@ -39,6 +49,296 @@ alter table public.payments add constraint payments_kind_check check (
       and length(btrim(coalesce(reason, ''))) > 0)
 );
 create index if not exists payments_transfer_idx on public.payments (transfer_id) where transfer_id is not null;
+
+-- ─── 1b. balance with a carried debt, void records ──────────────────────────
+
+-- Same as 0016 except: paid_lessons = floor(paid × lessons_total / price_final) for a negative paid_som
+-- too (a debt carried by a transfer) — debt_lessons / debt_som show it before the first lesson; an
+-- exhausted subscription (closed by a transfer / «ушёл») suggests no refund — its rest was moved,
+-- refunded or left to the center.
+create or replace view public.v_student_balance
+with (security_invoker = true)
+as
+with subs as (
+  select
+    s.id as subscription_id,
+    s.enrollment_id,
+    e.student_id,
+    e.group_id,
+    s.status,
+    s.started_at,
+    s.created_at,
+    s.lessons_total,
+    s.price_full,
+    s.price_final,
+    t.freeze_limit,
+    (select count(*) from public.attendance a
+     where a.subscription_id = s.id and a.consumes_credit)::integer as used_own,
+    (select count(*) from public.attendance a
+     where a.subscription_id = s.id and a.status = 'absent_frozen')::integer as freezes_used,
+    coalesce((select sum(p.amount) from public.payments p where p.subscription_id = s.id), 0)::integer
+      as paid_som
+  from public.subscriptions s
+  join public.enrollments e on e.id = s.enrollment_id
+  join public.tariffs t on t.id = s.tariff_id
+),
+paid as (
+  select
+    subs.*,
+    case
+      when price_final = 0 then lessons_total
+      -- floor, not truncation: a debt carried in by a transfer (paid_som < 0) is lessons owed
+      else floor(paid_som::numeric * lessons_total / price_final)::integer
+    end as paid_lessons
+  from subs
+),
+chain as (
+  -- prefix = Σ (used_own − capacity) of the earlier subscriptions of the student in the group
+  select
+    paid.*,
+    coalesce(sum(used_own - greatest(lessons_total, paid_lessons)) over (
+      partition by student_id, group_id order by started_at, created_at, subscription_id
+      rows between unbounded preceding and 1 preceding
+    ), 0) as prefix,
+    row_number() over (
+      partition by student_id, group_id order by started_at desc, created_at desc, subscription_id desc
+    ) = 1 as is_last
+  from paid
+  where status <> 'refunded'
+),
+carried as (
+  -- Lindley: carry_k = max(0, carry_{k-1} + used_{k-1} − capacity_{k-1}) = prefix_k − min(prefix_0..k)
+  select
+    chain.*,
+    (prefix - min(prefix) over (
+      partition by student_id, group_id order by started_at, created_at, subscription_id
+      rows between unbounded preceding and current row
+    ))::integer as carried_in
+  from chain
+),
+used as (
+  select
+    carried.subscription_id, carried.carried_in, carried.is_last,
+    case
+      when is_last then used_own + carried_in
+      else least(used_own + carried_in, greatest(lessons_total, paid_lessons))
+    end as lessons_used
+  from carried
+),
+balance as (
+  select
+    paid.*,
+    coalesce(used.carried_in, 0) as carried_in,
+    coalesce(used.is_last, false) as is_current,
+    coalesce(used.lessons_used, paid.used_own) as lessons_used
+  from paid
+  left join used on used.subscription_id = paid.subscription_id
+)
+select
+  subscription_id,
+  enrollment_id,
+  student_id,
+  group_id,
+  status,
+  started_at,
+  lessons_total,
+  price_full,
+  price_final,
+  paid_som,
+  paid_lessons,
+  used_own,
+  carried_in,
+  lessons_used,
+  lessons_total - lessons_used as lessons_left,
+  case when status = 'refunded' then 0 else greatest(0, lessons_used - paid_lessons) end
+    as debt_lessons,
+  case
+    when status = 'refunded' or lessons_used <= paid_lessons then 0
+    else greatest(0, ceil(
+      (lessons_used::numeric * price_final - paid_som::numeric * lessons_total) / lessons_total
+    ))::integer
+  end as debt_som,
+  case
+    when status in ('refunded', 'exhausted') then 0 -- exhausted: closed by a transfer / «ушёл» (#81)
+    else round(
+      greatest(0, least(paid_lessons, lessons_total) - lessons_used)::numeric * price_final / lessons_total
+    )::integer
+  end as refund_suggested,
+  freezes_used,
+  freeze_limit,
+  is_current
+from balance;
+
+comment on view public.v_student_balance is
+  'Per subscription: paid / used / debt / refund (В7, В7.1, В8, И37, #81) — same as src/features/payments/balance.ts.';
+
+-- Marks of an enrollment: charged to its subscriptions, or in its group within its dates. A void record
+-- (finished, end_date null — «записан по ошибке» with payments) has no dates: only marks charged to it.
+create or replace function public.enrollment_attendance(p_enrollment_id uuid)
+returns setof public.attendance
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select a.*
+  from public.enrollments e
+  join public.lessons l on l.group_id = e.group_id
+  join public.attendance a on a.lesson_id = l.id and a.student_id = e.student_id
+  where e.id = p_enrollment_id
+    and (
+      a.subscription_id in (select s.id from public.subscriptions s where s.enrollment_id = e.id)
+      or (
+        l.lesson_date >= e.start_date
+        and (l.lesson_date <= e.end_date or (e.end_date is null and e.status = 'active'))
+      )
+    );
+$$;
+
+-- 0017 / 0020 with the overlap checks skipping a void record (else it blocks the group forever).
+create or replace function public.set_enrollment_start(p_enrollment_id uuid, p_start_date date)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_enrollment public.enrollments%rowtype;
+  v_group public.groups%rowtype;
+begin
+  perform public.assert_admin();
+
+  select * into v_enrollment from public.enrollments e where e.id = p_enrollment_id for update;
+  if not found then
+    raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
+  end if;
+  if p_start_date is null then
+    raise exception 'start date is required' using errcode = 'check_violation';
+  end if;
+  if p_start_date = v_enrollment.start_date then
+    return;
+  end if;
+
+  select * into v_group from public.groups g where g.id = v_enrollment.group_id;
+  if p_start_date < v_group.start_date
+     or (v_group.end_date is not null and p_start_date > v_group.end_date) then
+    raise exception 'start date is outside the group dates' using errcode = 'check_violation';
+  end if;
+  if v_enrollment.end_date is not null and p_start_date > v_enrollment.end_date then
+    raise exception 'start date is after the enrollment end' using errcode = 'check_violation';
+  end if;
+
+  -- the same student in the same group: periods must not overlap (and unique start date)
+  if exists (
+    select 1 from public.enrollments e
+    where e.student_id = v_enrollment.student_id
+      and e.group_id = v_enrollment.group_id
+      and e.id <> v_enrollment.id
+      and e.start_date <= coalesce(v_enrollment.end_date, 'infinity'::date)
+      and coalesce(e.end_date, 'infinity'::date) >= p_start_date
+      and not (e.status = 'finished' and e.end_date is null) -- a void record (0099) holds no dates
+  ) then
+    raise exception 'another enrollment of the student in this group overlaps these dates'
+      using errcode = 'unique_violation';
+  end if;
+
+  -- marks of this enrollment: charged to its subscriptions, or in the group since it started
+  if exists (
+    select 1 from public.attendance a
+    join public.lessons l on l.id = a.lesson_id
+    where a.student_id = v_enrollment.student_id
+      and l.group_id = v_enrollment.group_id
+      and l.lesson_date < p_start_date
+      and (
+        l.lesson_date >= v_enrollment.start_date
+        or a.subscription_id in (
+          select s.id from public.subscriptions s where s.enrollment_id = v_enrollment.id
+        )
+      )
+  ) then
+    raise exception 'the enrollment has attendance before the new date' using errcode = 'check_violation';
+  end if;
+
+  update public.enrollments set start_date = p_start_date where id = p_enrollment_id;
+  update public.subscriptions s
+  set started_at = p_start_date
+  where s.enrollment_id = p_enrollment_id and s.started_at = v_enrollment.start_date;
+end;
+$$;
+
+create or replace function public.transfer_enrollment(
+  p_enrollment_id uuid,
+  p_group_id uuid,
+  p_start_date date default null
+)
+returns date
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_enrollment public.enrollments%rowtype;
+  v_from public.groups%rowtype;
+  v_to public.groups%rowtype;
+  v_start date;
+begin
+  perform public.assert_admin();
+
+  select * into v_enrollment from public.enrollments e where e.id = p_enrollment_id for update;
+  if not found then
+    raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
+  end if;
+  select * into v_to from public.groups g where g.id = p_group_id;
+  if not found then
+    raise exception 'group % not found', p_group_id using errcode = 'foreign_key_violation';
+  end if;
+  if v_to.id = v_enrollment.group_id then
+    raise exception 'the enrollment is already in this group' using errcode = 'check_violation';
+  end if;
+  if v_to.status = 'archived' then
+    raise exception 'group % is archived', p_group_id using errcode = 'check_violation';
+  end if;
+  select * into v_from from public.groups g where g.id = v_enrollment.group_id;
+  if v_to.group_type <> v_from.group_type then
+    raise exception 'the target group has another type — refund first' using errcode = 'check_violation';
+  end if;
+
+  perform public.assert_enrollment_undoable(p_enrollment_id);
+
+  v_start := coalesce(p_start_date, greatest(v_enrollment.start_date, v_to.start_date));
+  if v_start < v_to.start_date or (v_to.end_date is not null and v_start > v_to.end_date) then
+    raise exception 'start date is outside the group dates' using errcode = 'check_violation';
+  end if;
+  if v_enrollment.end_date is not null and v_start > v_enrollment.end_date then
+    raise exception 'start date is after the enrollment end' using errcode = 'check_violation';
+  end if;
+  if exists (
+    select 1 from public.enrollments e
+    where e.student_id = v_enrollment.student_id
+      and e.group_id = p_group_id
+      and e.start_date <= coalesce(v_enrollment.end_date, 'infinity'::date)
+      and coalesce(e.end_date, 'infinity'::date) >= v_start
+      and not (e.status = 'finished' and e.end_date is null) -- a void record (0099) holds no dates
+  ) then
+    raise exception 'the student is already enrolled in the target group on these dates'
+      using errcode = 'unique_violation';
+  end if;
+
+  perform set_config('iqup.audit_reason', 'transfer_enrollment', true);
+
+  delete from public.attendance a
+  where a.id in (select m.id from public.enrollment_attendance(p_enrollment_id) m)
+    and a.status = 'absent_frozen'; -- a «был» committed meanwhile (confirm_lesson) is never deleted
+
+  update public.enrollments set group_id = p_group_id, start_date = v_start where id = p_enrollment_id;
+  update public.subscriptions s
+  set started_at = v_start
+  where s.enrollment_id = p_enrollment_id and s.started_at = v_enrollment.start_date;
+
+  perform set_config('iqup.audit_reason', '', true);
+  return v_start;
+end;
+$$;
 
 -- ─── 2. money of an enrollment ──────────────────────────────────────────────
 
@@ -335,6 +635,9 @@ begin
   if not found then
     raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
   end if;
+  -- the subscriptions too, as record_payment does: no payment / refund lands between the settlement
+  -- read below and the rows written from it
+  perform 1 from public.subscriptions s where s.enrollment_id = p_enrollment_id for update;
   if v_old.status <> 'active' then
     raise exception 'enrollment is finished' using errcode = 'check_violation';
   end if;
@@ -448,7 +751,6 @@ begin
       insert into public.payments (subscription_id, amount, method, paid_at, kind, reason)
       values (r.subscription_id, -v_take, p_method, public.payment_time(p_paid_on), 'refund',
               'излишек при переводе в ' || public.group_title(p_group_id));
-      update public.subscriptions set status = 'refunded' where id = r.subscription_id;
       v_left := v_left - v_take;
     end if;
     v_out := r.remainder - v_take;
@@ -464,6 +766,10 @@ begin
     values (v_subscription_id, v_moved, null, 'transfer',
             'перенос из ' || public.group_title(v_old.group_id), v_transfer);
   end if;
+  -- the old subscriptions are closed on their used lessons: the money left them, and a later
+  -- enrollment in the old group must not charge its marks to them (attendance_subscription)
+  update public.subscriptions s set status = 'exhausted'
+  where s.enrollment_id = p_enrollment_id and s.status = 'active';
 
   perform set_config('iqup.audit_reason', '', true);
   return query select v_enrollment_id, v_subscription_id, v_start, v_moved, v_refund, false;
@@ -474,17 +780,21 @@ $$;
 
 -- p_end_date — the last day in the group (lessons after it leave the roster; its «был» / «сгорело» stay
 -- with the teacher's payroll). «Заморожен» marks after it are deleted; written-off marks after it
--- refuse. p_refund (0 … the remainder) is refunded from the newest subscriptions with money left
--- (they become refunded); 0 — the remainder stays on the balance.
+-- refuse. p_refund (0 … the remainder) is refunded from the newest subscriptions with money left.
+-- What is not refunded (the remainder − p_refund) is never dropped silently: it is left to the center
+-- only with p_center_reason (the journal of the subscriptions says «остаток N сом оставлен центру:
+-- <reason>»), else the call refuses. The subscriptions become exhausted — closed on their used
+-- lessons; a debt (remainder < 0) stays on them and in the debtors list.
 create or replace function public.withdraw_enrollment(
   p_enrollment_id uuid,
   p_end_date date,
   p_refund integer default 0,
   p_method public.payment_method default null,
   p_reason text default null,
-  p_paid_on date default null
+  p_paid_on date default null,
+  p_center_reason text default null
 )
-returns table (remainder integer, refunded integer)
+returns table (remainder integer, refunded integer, left_to_center integer)
 language plpgsql
 security definer
 set search_path = ''
@@ -493,9 +803,11 @@ declare
   v_enrollment public.enrollments%rowtype;
   v_remainder integer;
   v_refund integer := coalesce(p_refund, 0);
+  v_rest integer;
   v_left integer;
   v_take integer;
   v_reason text := coalesce(nullif(btrim(coalesce(p_reason, '')), ''), 'ученик ушёл из группы');
+  v_center_reason text := nullif(btrim(coalesce(p_center_reason, '')), '');
   r record;
 begin
   perform public.assert_admin();
@@ -504,6 +816,9 @@ begin
   if not found then
     raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
   end if;
+  -- the subscriptions too, as record_payment does: no payment / refund lands between the settlement
+  -- read below and the rows written from it
+  perform 1 from public.subscriptions s where s.enrollment_id = p_enrollment_id for update;
   if v_enrollment.status <> 'active' then
     raise exception 'enrollment is finished' using errcode = 'check_violation';
   end if;
@@ -534,6 +849,11 @@ begin
   if v_refund > 0 and p_method is null then
     raise exception 'payment method is required for a refund' using errcode = 'check_violation';
   end if;
+  v_rest := greatest(v_remainder, 0) - v_refund;
+  if v_rest > 0 and v_center_reason is null then
+    raise exception 'the rest of the remainder must be refunded or left to the center with a reason'
+      using errcode = 'check_violation';
+  end if;
 
   perform set_config('iqup.audit_reason', 'withdraw_enrollment', true);
 
@@ -557,13 +877,19 @@ begin
     if v_take > 0 then
       insert into public.payments (subscription_id, amount, method, paid_at, kind, reason)
       values (r.subscription_id, -v_take, p_method, public.payment_time(p_paid_on), 'refund', v_reason);
-      update public.subscriptions set status = 'refunded' where id = r.subscription_id;
       v_left := v_left - v_take;
     end if;
   end loop;
 
+  if v_rest > 0 then
+    perform set_config('iqup.audit_reason',
+      'остаток ' || v_rest || ' сом оставлен центру: ' || v_center_reason, true);
+  end if;
+  update public.subscriptions s set status = 'exhausted'
+  where s.enrollment_id = p_enrollment_id and s.status = 'active';
+
   perform set_config('iqup.audit_reason', '', true);
-  return query select v_remainder, v_refund;
+  return query select v_remainder, v_refund, v_rest;
 end;
 $$;
 
@@ -615,6 +941,9 @@ begin
   if not found then
     raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
   end if;
+  -- the subscriptions too, as record_payment does: no payment / refund lands between the settlement
+  -- read below and the rows written from it
+  perform 1 from public.subscriptions s where s.enrollment_id = p_enrollment_id for update;
   select * into v_from from public.groups g where g.id = v_old.group_id;
 
   if exists (
@@ -692,6 +1021,7 @@ begin
     if v_to.group_type = v_from.group_type and not exists (
       select 1 from public.enrollments e
       where e.student_id = v_old.student_id and e.group_id = p_group_id
+        and not (e.status = 'finished' and e.end_date is null)
     ) then
       -- nothing is written off any more: the whole enrollment moves (#73)
       perform public.transfer_enrollment(
@@ -776,15 +1106,18 @@ begin
     loop
       insert into public.payments (subscription_id, amount, method, paid_at, kind, reason)
       values (r.id, -r.net, p_method, public.payment_time(p_paid_on), 'refund', 'записан по ошибке');
-      update public.subscriptions set status = 'refunded' where id = r.id;
       v_moved := v_moved + r.net;
     end loop;
   end if;
 
-  -- the void record: subscriptions without payments go, the enrollment is on no roster
+  -- the void record: subscriptions without payments go, the rest are refunded (closed: out of
+  -- attendance_subscription and the balance chain — its money was transferred or refunded), the
+  -- enrollment is on no roster and holds no dates
   delete from public.subscriptions s
   where s.enrollment_id = p_enrollment_id
     and not exists (select 1 from public.payments p where p.subscription_id = s.id);
+  update public.subscriptions s set status = 'refunded'
+  where s.enrollment_id = p_enrollment_id and s.status <> 'refunded';
   update public.enrollments set status = 'finished', end_date = null where id = p_enrollment_id;
 
   perform set_config('iqup.audit_reason', '', true);
@@ -805,7 +1138,7 @@ revoke execute on function
   public.enrollment_payroll_impact(uuid),
   public.transfer_preview(uuid, uuid, date),
   public.transfer_student(uuid, uuid, date, boolean, public.payment_method, date),
-  public.withdraw_enrollment(uuid, date, integer, public.payment_method, text, date),
+  public.withdraw_enrollment(uuid, date, integer, public.payment_method, text, date, text),
   public.delete_enrollment(uuid, text, uuid, date, public.payment_method, date)
 from public, anon;
 
@@ -814,6 +1147,6 @@ grant execute on function
   public.enrollment_payroll_impact(uuid),
   public.transfer_preview(uuid, uuid, date),
   public.transfer_student(uuid, uuid, date, boolean, public.payment_method, date),
-  public.withdraw_enrollment(uuid, date, integer, public.payment_method, text, date),
+  public.withdraw_enrollment(uuid, date, integer, public.payment_method, text, date, text),
   public.delete_enrollment(uuid, text, uuid, date, public.payment_method, date)
 to authenticated;

@@ -1,8 +1,10 @@
 -- Issue #81: transfer to a group of another type with the remainder of the money, «Ушёл» with a refund,
 -- «Записан по ошибке» with the payroll going down (0099). Hadija's case, surplus, debt, refusals,
--- closed period, access, journal; the seed payroll stays. Fixtures in 2003 (no seed holidays), rolled back.
+-- closed period, access, journal; review #86: a discount, the new teacher's payroll, several
+-- subscriptions with a carried debt (И37), a carried debt before the first lesson, «остаток центру»,
+-- the void record out of the way of a new enrollment; the seed payroll stays. Fixtures in 2003 (no seed holidays), rolled back.
 begin;
-select plan(73);
+select plan(99);
 
 -- ─── Seed payroll before ────────────────────────────────────────────────────
 select is(
@@ -37,6 +39,7 @@ insert into public.tariffs (group_type, lessons_in_package, package_price, max_s
 
 -- ВТ/ЧТ 09:00 from Tue 2 Sep 2003, lessons to the end of October.
 -- IND (individual, A) · MINI (mini, B) · MINI2 (mini, B) · GRP (group, A) · GRP2 (group, A) · LOCK (group, A)
+-- · GRP3 (group, B)
 insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status)
 select g.id::uuid, g.name, (select id from public.subjects where name = 'Математика'), 9, g.type::public.group_type,
        g.teacher::uuid, '2003-09-02', 'active'
@@ -46,7 +49,8 @@ from (values
   ('d8100000-0000-4000-8000-000000000003', 'S81 MINI2', 'mini', 'b8100000-0000-4000-8000-000000000002'),
   ('d8100000-0000-4000-8000-000000000004', 'S81 GRP', 'group', 'b8100000-0000-4000-8000-000000000001'),
   ('d8100000-0000-4000-8000-000000000005', 'S81 GRP2', 'group', 'b8100000-0000-4000-8000-000000000001'),
-  ('d8100000-0000-4000-8000-000000000006', 'S81 LOCK', 'group', 'b8100000-0000-4000-8000-000000000001')
+  ('d8100000-0000-4000-8000-000000000006', 'S81 LOCK', 'group', 'b8100000-0000-4000-8000-000000000001'),
+  ('d8100000-0000-4000-8000-000000000007', 'S81 GRP3', 'group', 'b8100000-0000-4000-8000-000000000002')
 ) as g(id, name, type, teacher);
 insert into public.schedule_rules (group_id, weekday, start_time, valid_from)
 select g.id, w, '09:00', g.start_date
@@ -72,36 +76,51 @@ grant all on l81 to authenticated;
 -- 09 MistakeSame GRP 1000 paid, 1 «был»        → moved whole to GRP2 (#73)
 -- 10 MistakeRefund GRP 3200 paid               → refunded
 -- 11 Locked LOCK 3200 paid, 1 «был» locked     → refused everywhere
+-- 12 Discount IND 15 % (6120 of 7200) paid, 3 «был» → MINI: remainder by 510, payroll by 600; then
+--    3 «был» in MINI pay Teacher B 3 × 3800/12 × 40 % = 380
+-- 13 Chain GRP3 3200 paid, 14 «был» (2 «в долг») + a 2nd subscription 300 paid → MINI2: debt 234 moves
 insert into public.students (id, full_name)
 select ('e81000000000400080000000000000' || lpad(n::text, 2, '0'))::uuid, 'Student 81 ' || n
-from generate_series(1, 11) n;
+from generate_series(1, 13) n;
 insert into public.enrollments (id, student_id, group_id, start_date)
 select ('f81000000000400080000000000000' || lpad(n::text, 2, '0'))::uuid,
        ('e81000000000400080000000000000' || lpad(n::text, 2, '0'))::uuid,
-       case when n <= 3 then 'd8100000-0000-4000-8000-000000000001'::uuid
+       case when n <= 3 or n = 12 then 'd8100000-0000-4000-8000-000000000001'::uuid
             when n = 11 then 'd8100000-0000-4000-8000-000000000006'::uuid
+            when n = 13 then 'd8100000-0000-4000-8000-000000000007'::uuid
             else 'd8100000-0000-4000-8000-000000000004'::uuid end,
        '2003-09-02'
-from generate_series(1, 11) n;
+from generate_series(1, 13) n;
 insert into public.subscriptions (id, enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at)
 select ('c81000000000400080000000000000' || right(e.id::text, 2))::uuid, e.id, t.id, 12, t.package_price, t.package_price, e.start_date
 from public.enrollments e
 join public.groups g on g.id = e.group_id
 join public.tariffs t on t.group_type = g.group_type and t.valid_from = '1990-01-01'
 where e.id::text like 'f8100000-%';
+update public.subscriptions set discount_percent = 15, discount_reason = 'returning', price_final = 6120
+where id = 'c8100000-0000-4000-8000-000000000012';
+-- 13: the second subscription, bought after 12 lessons + 2 «в долг» on the first
+insert into public.subscriptions (id, enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at)
+select 'c8100000-0000-4000-8000-000000000113', 'f8100000-0000-4000-8000-000000000013', t.id, 12, 3200, 3200, '2003-10-20'
+from public.tariffs t where t.group_type = 'group' and t.valid_from = '1990-01-01';
 insert into public.payments (subscription_id, amount, method, paid_at)
 select ('c81000000000400080000000000000' || lpad(p.n::text, 2, '0'))::uuid, p.amount, 'cash', '2003-09-02 10:00+06'
-from (values (1, 7200), (2, 7200), (3, 7200), (4, 1000), (5, 3200), (6, 3200), (8, 3200), (9, 1000), (10, 3200), (11, 3200))
+from (values (1, 7200), (2, 7200), (3, 7200), (4, 1000), (5, 3200), (6, 3200), (8, 3200), (9, 1000), (10, 3200), (11, 3200),
+             (12, 6120), (13, 3200))
   as p(n, amount);
+insert into public.payments (subscription_id, amount, method, paid_at) values
+  ('c8100000-0000-4000-8000-000000000113', 300, 'cash', '2003-10-20 10:00+06');
 
 -- marks: the first N lessons of the group «был»
 update public.lessons set status = 'held'
-where id in (select id from l81 where grp in ('S81 IND', 'S81 GRP', 'S81 LOCK') and n <= 9);
+where id in (select id from l81 where grp in ('S81 IND', 'S81 GRP', 'S81 LOCK') and n <= 9
+             or grp = 'S81 GRP3' and n <= 14);
 insert into public.attendance (lesson_id, student_id, subscription_id, status)
 select l.id, ('e81000000000400080000000000000' || lpad(m.s::text, 2, '0'))::uuid,
        ('c81000000000400080000000000000' || lpad(m.s::text, 2, '0'))::uuid, 'present'
 from (values (1, 'S81 IND', 9), (2, 'S81 IND', 2), (3, 'S81 IND', 2), (4, 'S81 GRP', 6), (5, 'S81 GRP', 3),
-             (6, 'S81 GRP', 3), (7, 'S81 GRP', 3), (8, 'S81 GRP', 2), (9, 'S81 GRP', 1), (11, 'S81 LOCK', 1))
+             (6, 'S81 GRP', 3), (7, 'S81 GRP', 3), (8, 'S81 GRP', 2), (9, 'S81 GRP', 1), (11, 'S81 LOCK', 1),
+             (12, 'S81 IND', 3), (13, 'S81 GRP3', 14))
   as m(s, grp, lessons)
 join l81 l on l.grp = m.grp and l.n <= m.lessons;
 -- 06: a «заморожен» on the 10th GRP lesson (2 Oct) — after the day they leave
@@ -232,7 +251,7 @@ select results_eq(
 );
 select is(
   (select status::text from public.subscriptions where id = 'c8100000-0000-4000-8000-000000000002'),
-  'refunded', 'the subscription with a refund is refunded'
+  'exhausted', 'the old subscription with a refund is closed (exhausted), not refunded'
 );
 select results_eq(
   $$ select transferred, refunded
@@ -269,6 +288,115 @@ select results_eq(
 select is(
   (select debt_som from public.v_student_balance where subscription_id = 'c8100000-0000-4000-8000-000000000004'),
   0, 'old subscription owes nothing'
+);
+select results_eq(
+  $$ select b.debt_lessons, b.debt_som, b.lessons_used from public.v_student_balance b
+     join public.subscriptions s on s.id = b.subscription_id join public.enrollments e on e.id = s.enrollment_id
+     where e.student_id = 'e8100000-0000-4000-8000-000000000004' and e.group_id = 'd8100000-0000-4000-8000-000000000002' $$,
+  $$ values (2, 600, 0) $$,
+  'the carried debt is a debt before the first lesson: 600 сом = 2 mini lessons (floor of −1.9)'
+);
+select is(
+  (select status::text from public.subscriptions where id = 'c8100000-0000-4000-8000-000000000004'),
+  'exhausted', 'the old subscription is closed after the transfer'
+);
+
+-- ─── Discount: remainder by the paid price, payroll by the full one ─────────
+select results_eq(
+  $$ select paid_som, lessons_used, used_som, remainder, lesson_price
+     from public.enrollment_settlement('f8100000-0000-4000-8000-000000000012') $$,
+  $$ values (6120, 3, 1530, 4590, 510::numeric) $$,
+  'discount 15 %: 3 × 510 = 1 530 used of 6 120, 4 590 left'
+);
+select results_eq(
+  $$ select teacher_name, lessons, amount from public.enrollment_payroll_impact('f8100000-0000-4000-8000-000000000012') $$,
+  $$ values ('Teacher 81 A'::text, 3, 900) $$,
+  'discount: the teacher was paid by the full price — 3 × 600 × 50 % = 900'
+);
+select results_eq(
+  $$ select transferred, refunded
+     from public.transfer_student('f8100000-0000-4000-8000-000000000012', 'd8100000-0000-4000-8000-000000000002', '2003-10-02') $$,
+  $$ values (4590, 0) $$,
+  'discount: 4 590 moves'
+);
+select results_eq(
+  $$ select s.price_full, s.price_final, s.discount_percent, b.paid_som, b.paid_lessons
+     from public.enrollments e
+     join public.subscriptions s on s.enrollment_id = e.id
+     join public.v_student_balance b on b.subscription_id = s.id
+     where e.student_id = 'e8100000-0000-4000-8000-000000000012' and e.group_id = 'd8100000-0000-4000-8000-000000000002' $$,
+  $$ values (3800, 3800, 0, 4590, 14) $$,
+  'the new subscription: no discount (Г5), 4 590 = 14 mini lessons'
+);
+select is(
+  (select base_amount from public.v_payroll_preview
+   where teacher_id = 'b8100000-0000-4000-8000-000000000001' and month = '2003-09-01'),
+  (select base_amount from pay81),
+  'discount: the old teacher keeps 900 for the used lessons'
+);
+create temp table payb81 as
+select coalesce((select base_amount from public.v_payroll_preview
+                 where teacher_id = 'b8100000-0000-4000-8000-000000000002' and month = '2003-10-01'), 0) as base_amount;
+-- three «был» in the new group, charged the way confirm_lesson charges them
+reset role;
+update public.lessons set status = 'held'
+where id in (select id from l81 where grp = 'S81 MINI' and lesson_date >= '2003-10-02' order by lesson_date limit 3);
+insert into public.attendance (lesson_id, student_id, subscription_id, status)
+select l.id, 'e8100000-0000-4000-8000-000000000012',
+       public.attendance_subscription(l.id, 'e8100000-0000-4000-8000-000000000012'), 'present'
+from (select id from l81 where grp = 'S81 MINI' and lesson_date >= '2003-10-02' order by lesson_date limit 3) l;
+set local role authenticated;
+select is(
+  (select count(*)::integer from public.attendance a
+   join public.subscriptions s on s.id = a.subscription_id join public.enrollments e on e.id = s.enrollment_id
+   where a.student_id = 'e8100000-0000-4000-8000-000000000012' and e.group_id = 'd8100000-0000-4000-8000-000000000002'),
+  3, 'the new marks go to the new subscription'
+);
+select results_eq(
+  $$ select i.teacher_name, i.lessons, i.amount from public.enrollments e,
+     lateral public.enrollment_payroll_impact(e.id) i
+     where e.student_id = 'e8100000-0000-4000-8000-000000000012' and e.group_id = 'd8100000-0000-4000-8000-000000000002' $$,
+  $$ values ('Teacher 81 B'::text, 3, 380) $$,
+  'the new teacher is paid by the new subscription: 3 × 3 800/12 × 40 % = 380'
+);
+select is(
+  (select base_amount from public.v_payroll_preview
+   where teacher_id = 'b8100000-0000-4000-8000-000000000002' and month = '2003-10-01'),
+  (select base_amount + 380 from payb81),
+  'v_payroll_preview: Teacher B October +380'
+);
+
+-- ─── Several subscriptions, a debt carried between them (И37) ───────────────
+select results_eq(
+  $$ select subscription_id, lessons_used, paid_som from public.v_student_balance
+     where student_id = 'e8100000-0000-4000-8000-000000000013' order by started_at $$,
+  $$ values ('c8100000-0000-4000-8000-000000000013'::uuid, 12, 3200),
+            ('c8100000-0000-4000-8000-000000000113'::uuid, 2, 300) $$,
+  'chain: 14 «был» on the first, 2 carried to the second'
+);
+select results_eq(
+  $$ select remainder from public.transfer_preview('f8100000-0000-4000-8000-000000000013', 'd8100000-0000-4000-8000-000000000003', '2003-10-21') $$,
+  $$ values (-234) $$,
+  'chain remainder: 0 on the first, 300 − ceil(2 × 266.67) = −234 on the second'
+);
+select results_eq(
+  $$ select transferred from public.transfer_student('f8100000-0000-4000-8000-000000000013', 'd8100000-0000-4000-8000-000000000003', '2003-10-21') $$,
+  $$ values (-234) $$,
+  'chain: the debt of 234 moves'
+);
+select results_eq(
+  $$ select subscription_id, status::text, lessons_used, debt_som, refund_suggested from public.v_student_balance
+     where student_id = 'e8100000-0000-4000-8000-000000000013' and group_id = 'd8100000-0000-4000-8000-000000000007'
+     order by started_at $$,
+  $$ values ('c8100000-0000-4000-8000-000000000013'::uuid, 'exhausted', 12, 0, 0),
+            ('c8100000-0000-4000-8000-000000000113'::uuid, 'exhausted', 2, 0, 0) $$,
+  'chain: both old subscriptions closed, the carry intact, nothing owed there'
+);
+select results_eq(
+  $$ select b.paid_som, b.debt_lessons, b.debt_som from public.v_student_balance b
+     where b.student_id = 'e8100000-0000-4000-8000-000000000013' and b.group_id = 'd8100000-0000-4000-8000-000000000003' $$,
+  $$ values (-234, 1, 234) $$,
+  'chain: the new subscription owes 234 before the first lesson'
 );
 
 -- ─── Transfer refusals ──────────────────────────────────────────────────────
@@ -333,16 +461,35 @@ select results_eq(
 );
 select is(
   (select status::text from public.subscriptions where id = 'c8100000-0000-4000-8000-000000000005'),
-  'refunded', 'subscription refunded'
+  'exhausted', 'subscription closed (exhausted)'
+);
+select throws_ok(
+  $$ select * from public.withdraw_enrollment('f8100000-0000-4000-8000-000000000006', '2003-09-30') $$,
+  '23514', 'the rest of the remainder must be refunded or left to the center with a reason',
+  'the remainder is never dropped silently'
+);
+select throws_ok(
+  $$ select * from public.withdraw_enrollment('f8100000-0000-4000-8000-000000000006', '2003-09-30', 1000, 'cash', null, null, '  ') $$,
+  '23514', 'the rest of the remainder must be refunded or left to the center with a reason',
+  'a partial refund needs the reason for the rest'
 );
 select results_eq(
-  $$ select remainder, refunded from public.withdraw_enrollment('f8100000-0000-4000-8000-000000000006', '2003-09-30') $$,
-  $$ values (2400, 0) $$,
-  'leaves, money stays on the balance'
+  $$ select remainder, refunded, left_to_center from public.withdraw_enrollment(
+       'f8100000-0000-4000-8000-000000000006', '2003-09-30', 1000, 'cash', null, null, 'семья переехала') $$,
+  $$ values (2400, 1000, 1400) $$,
+  'partial refund: 1 000 back, 1 400 left to the center explicitly'
 );
-select is(
-  (select count(*)::integer from public.payments where subscription_id = 'c8100000-0000-4000-8000-000000000006'),
-  1, 'no refund written'
+select results_eq(
+  $$ select amount, kind::text from public.payments where subscription_id = 'c8100000-0000-4000-8000-000000000006'
+     order by paid_at, amount desc $$,
+  $$ values (3200, 'payment'), (-1000, 'refund') $$,
+  'only the refunded part is a payment row'
+);
+select results_eq(
+  $$ select status::text, debt_som, refund_suggested from public.v_student_balance
+     where subscription_id = 'c8100000-0000-4000-8000-000000000006' $$,
+  $$ values ('exhausted', 0, 0) $$,
+  'the subscription is closed: nothing owed, nothing suggested for a refund'
 );
 select is(
   (select count(*)::integer from public.attendance where student_id = 'e8100000-0000-4000-8000-000000000006'),
@@ -422,6 +569,56 @@ select is(
   (select base_amount - 666 from pay81),
   'payroll dropped by its 2 lessons too (400 + 2 × 133.33, rounded once)'
 );
+select is(
+  (select status::text from public.subscriptions where id = 'c8100000-0000-4000-8000-000000000008'),
+  'refunded', 'the void record''s subscription is closed (refunded)'
+);
+-- the student comes back to the same group: the void record is in nobody's way
+select lives_ok(
+  $$ select * from public.enroll_student('e8100000-0000-4000-8000-000000000008', 'd8100000-0000-4000-8000-000000000004', '2003-10-02') $$,
+  'enrolled again in the group of the void record'
+);
+select lives_ok(
+  $$ select public.record_payment(s.id, 3200, 'cash') from public.subscriptions s join public.enrollments e on e.id = s.enrollment_id
+     where e.student_id = 'e8100000-0000-4000-8000-000000000008' and e.group_id = 'd8100000-0000-4000-8000-000000000004'
+       and e.start_date = '2003-10-02' $$,
+  'paid for the new subscription'
+);
+select lives_ok(
+  $$ select public.set_enrollment_start(e.id, '2003-09-30') from public.enrollments e
+     where e.student_id = 'e8100000-0000-4000-8000-000000000008' and e.group_id = 'd8100000-0000-4000-8000-000000000004'
+       and e.start_date = '2003-10-02' $$,
+  'set_enrollment_start: the void record does not overlap'
+);
+reset role;
+update public.lessons set status = 'held' where id = (select id from l81 where grp = 'S81 GRP' and lesson_date = '2003-10-07');
+insert into public.attendance (lesson_id, student_id, subscription_id, status)
+select l.id, 'e8100000-0000-4000-8000-000000000008',
+       public.attendance_subscription(l.id, 'e8100000-0000-4000-8000-000000000008'), 'present'
+from l81 l where l.grp = 'S81 GRP' and l.lesson_date = '2003-10-07';
+set local role authenticated;
+select results_eq(
+  $$ select s.enrollment_id, b.lessons_used, b.debt_som from public.attendance a
+     join public.subscriptions s on s.id = a.subscription_id
+     join public.v_student_balance b on b.subscription_id = s.id
+     join public.lessons l on l.id = a.lesson_id
+     where a.student_id = 'e8100000-0000-4000-8000-000000000008' and l.lesson_date = '2003-10-07' $$,
+  $$ select e.id, 1, 0 from public.enrollments e
+     where e.student_id = 'e8100000-0000-4000-8000-000000000008' and e.group_id = 'd8100000-0000-4000-8000-000000000004'
+       and e.start_date = '2003-09-30' $$,
+  'the new mark goes to the new subscription — no debt on the void one'
+);
+reset role;
+select is(
+  (select count(*)::integer from public.enrollment_attendance('f8100000-0000-4000-8000-000000000008')),
+  0, 'the void record takes no marks by dates'
+);
+set local role authenticated;
+select is(
+  (select coalesce(sum(debt_som), 0)::integer from public.v_student_balance
+   where student_id = 'e8100000-0000-4000-8000-000000000008'),
+  0, 'the student owes nothing anywhere'
+);
 
 select results_eq(
   $$ select marks_deleted, money, kept
@@ -454,7 +651,7 @@ select throws_ok(
   '23514', 'the enrollment has marks in a closed period', 'closed period: no delete'
 );
 select lives_ok(
-  $$ select * from public.withdraw_enrollment('f8100000-0000-4000-8000-000000000011', '2003-09-30') $$,
+  $$ select * from public.withdraw_enrollment('f8100000-0000-4000-8000-000000000011', '2003-09-30', 0, null, null, null, 'не вернётся') $$,
   'closed period before the last day: «ушёл» is fine'
 );
 select is(
@@ -482,6 +679,12 @@ select ok(
   exists (select 1 from public.audit_log where entity = 'enrollments' and reason = 'withdraw_enrollment'
           and entity_id = 'f8100000-0000-4000-8000-000000000005'),
   'journal: «ушёл»'
+);
+select ok(
+  exists (select 1 from public.audit_log where entity = 'subscriptions' and action = 'update'
+          and entity_id = 'c8100000-0000-4000-8000-000000000006'
+          and reason = 'остаток 1400 сом оставлен центру: семья переехала'),
+  'journal: the rest left to the center, with the reason'
 );
 select is(
   (select count(*)::integer from public.audit_log

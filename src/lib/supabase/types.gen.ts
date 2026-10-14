@@ -1675,6 +1675,7 @@ export type Database = {
       }
       withdraw_enrollment: {
         Args: {
+          p_center_reason?: string
           p_end_date: string
           p_enrollment_id: string
           p_method?: Database['public']['Enums']['payment_method']
@@ -1683,6 +1684,7 @@ export type Database = {
           p_refund?: number
         }
         Returns: {
+          left_to_center: number
           refunded: number
           remainder: number
         }[]
