@@ -6,6 +6,7 @@ import { phoneToEmail } from '../../supabase/functions/_shared/phone'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { AIGERIM, GULZAT, KANYKEI, login } from './support/auth'
 import { lockSeed } from './support/seed-lock'
+import { groupTeacher } from './support/db'
 
 // А10 «Журнал изменений» (#45). Needs the local stack + `pnpm seed:users`. Each project works on its
 // own 20:00 extra lesson of «Математика · 6 класс» (no other spec touches the group) on a September
@@ -88,6 +89,7 @@ test('А10: late confirmation and a mark corrected by the admin, filters, «По
       .from('lessons')
       .insert({
         group_id: GROUP_6,
+        teacher_id: await groupTeacher(db, GROUP_6),
         lesson_date: day,
         planned_start: '20:00',
         duration_min: 60,

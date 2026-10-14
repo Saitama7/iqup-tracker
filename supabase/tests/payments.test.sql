@@ -54,9 +54,11 @@ insert into public.subscriptions (id, enrollment_id, tariff_id, lessons_total, p
 
 set session_replication_role = replica;
 -- 15 held lessons of group A in 2002
-insert into public.lessons (id, group_id, lesson_date, planned_start, duration_min, status, confirmed_at)
+insert into public.lessons (id, group_id, teacher_id, lesson_date, planned_start, duration_min, status, confirmed_at)
 select ('34700000-0000-4000-8000-0000000000' || lpad(n::text, 2, '0'))::uuid,
-       'd4700000-0000-4000-8000-000000000001', date '2002-01-01' + n, '09:00', 60, 'held', now()
+       'd4700000-0000-4000-8000-000000000001',
+       (select teacher_id from public.groups where id = 'd4700000-0000-4000-8000-000000000001'),
+       date '2002-01-01' + n, '09:00', 60, 'held', now()
 from generate_series(1, 15) n;
 insert into public.attendance (lesson_id, student_id, subscription_id, status)
 select ('34700000-0000-4000-8000-0000000000' || lpad(n::text, 2, '0'))::uuid,
@@ -72,9 +74,11 @@ select ('34700000-0000-4000-8000-0000000000' || lpad(n::text, 2, '0'))::uuid,
        'e4700000-0000-4000-8000-000000000004', '54700000-0000-4000-8000-000000000004', 'present'
 from generate_series(1, 4) n;
 -- 5 held lessons of group B, S5 present on all
-insert into public.lessons (id, group_id, lesson_date, planned_start, duration_min, status, confirmed_at)
+insert into public.lessons (id, group_id, teacher_id, lesson_date, planned_start, duration_min, status, confirmed_at)
 select ('34700000-0000-4000-8000-0000000000' || (20 + n)::text)::uuid,
-       'd4700000-0000-4000-8000-000000000002', date '2002-01-01' + n, '09:00', 60, 'held', now()
+       'd4700000-0000-4000-8000-000000000002',
+       (select teacher_id from public.groups where id = 'd4700000-0000-4000-8000-000000000002'),
+       date '2002-01-01' + n, '09:00', 60, 'held', now()
 from generate_series(1, 5) n;
 insert into public.attendance (lesson_id, student_id, subscription_id, status)
 select ('34700000-0000-4000-8000-0000000000' || (20 + n)::text)::uuid,
@@ -358,8 +362,10 @@ select throws_ok(
 -- ─── Trials: «привёл друг» → referred_by_student_id (В5) ────────────────────
 reset role;
 set session_replication_role = replica;
-insert into public.lessons (id, group_id, lesson_date, planned_start, duration_min, status, confirmed_at) values
-  ('34700000-0000-4000-8000-000000000099', 'd4700000-0000-4000-8000-000000000001', public.bishkek_today() - 1, '09:00', 60, 'held', now());
+insert into public.lessons (id, group_id, teacher_id, lesson_date, planned_start, duration_min, status, confirmed_at) values
+  ('34700000-0000-4000-8000-000000000099', 'd4700000-0000-4000-8000-000000000001',
+   (select teacher_id from public.groups where id = 'd4700000-0000-4000-8000-000000000001'),
+   public.bishkek_today() - 1, '09:00', 60, 'held', now());
 insert into public.trials (id, full_name, group_id, lesson_id, status, came, source, referred_by_student_id) values
   ('74700000-0000-4000-8000-000000000001', 'Friend', 'd4700000-0000-4000-8000-000000000001',
    '34700000-0000-4000-8000-000000000099', 'attended', true, 'referral', 'e4700000-0000-4000-8000-000000000001');
