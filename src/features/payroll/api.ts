@@ -8,7 +8,7 @@ import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import { monthEnd, monthStart } from './model'
-import type { MyMonthSource, PayrollSource, PreviewRow } from './model'
+import type { MyMonthGroup, MyMonthSource, PayrollSource, PreviewRow } from './model'
 
 /** Every payroll query starts with this key — realtime and «Провести» invalidate them at once. */
 export const PAYROLL_KEY = 'payroll'
@@ -33,37 +33,31 @@ const tariffSchema = z.object({
   package_price: z.number().int(),
 })
 
-const myMonthSchema = z.object({
+const myGroupSchema = z.object({
   id: z.uuid(),
-  rates: z.array(RATE),
-  groups: z.array(
+  name: z.string(),
+  subject: subjectName,
+  group_type: GROUP_TYPE,
+  enrollments: z.array(
     z.object({
-      id: z.uuid(),
-      name: z.string(),
-      subject: subjectName,
-      group_type: GROUP_TYPE,
-      enrollments: z.array(
-        z.object({
-          student_id: z.uuid(),
-          start_date: z.string(),
-          end_date: z.string().nullable(),
-          status: z.enum(['active', 'finished']),
-        }),
-      ),
-      lessons: z.array(
-        z.object({
-          id: z.uuid(),
-          lesson_date: z.string(),
-          planned_start: z.string(),
-          duration_min: z.number().int(),
-          status: z.enum(['planned', 'held', 'cancelled']),
-          confirmed_at: z.string().nullable(),
-          confirmed_late: z.boolean(),
-          attendance: z.array(PAY_ATTENDANCE),
-        }),
-      ),
+      student_id: z.uuid(),
+      start_date: z.string(),
+      end_date: z.string().nullable(),
+      status: z.enum(['active', 'finished']),
     }),
   ),
+})
+
+const myLessonSchema = z.object({
+  id: z.uuid(),
+  lesson_date: z.string(),
+  planned_start: z.string(),
+  duration_min: z.number().int(),
+  status: z.enum(['planned', 'held', 'cancelled']),
+  confirmed_at: z.string().nullable(),
+  confirmed_late: z.boolean(),
+  group: myGroupSchema,
+  attendance: z.array(PAY_ATTENDANCE),
 })
 
 async function fetchTariffs() {
@@ -75,29 +69,43 @@ async function fetchTariffs() {
 }
 
 /**
- * The signed-in teacher's groups (archived too — their lessons were paid) with the lessons of
- * `month` (`YYYY-MM`) and marks; null — the user has no teachers row.
+ * The signed-in teacher's lessons of `month` (`YYYY-MM`) by lessons.teacher_id — the teacher paid
+ * for the lesson, whatever group.teacher_id is now (0020) — with marks, folded by group (archived
+ * and handed-over groups too: their lessons were paid); null — the user has no teachers row.
  */
 export const myMonthQuery = (userId: string, month: string) =>
   queryOptions({
     queryKey: [PAYROLL_KEY, 'my-month', userId, month],
     queryFn: async (): Promise<MyMonthSource | null> => {
-      const [teacher, tariffs] = await Promise.all([
-        supabase
-          .from('teachers')
-          .select(
-            `id, rates:teacher_rates(percent, valid_from), groups(id, name, subject:subjects(name), group_type, enrollments(student_id, start_date, end_date, status), lessons(id, lesson_date, planned_start, duration_min, status, confirmed_at, confirmed_late, ${PAY_ATTENDANCE_FIELDS}))`,
-          )
-          .eq('user_id', userId)
-          .gte('groups.lessons.lesson_date', monthStart(month))
-          .lte('groups.lessons.lesson_date', monthEnd(month))
-          .maybeSingle(),
-        fetchTariffs(),
-      ])
+      const teacher = await supabase
+        .from('teachers')
+        .select('id, rates:teacher_rates(percent, valid_from)')
+        .eq('user_id', userId)
+        .maybeSingle()
       if (teacher.error) throw teacher.error
       if (!teacher.data) return null
-      const row = myMonthSchema.parse(teacher.data)
-      return { teacherId: row.id, rates: row.rates, groups: row.groups, tariffs }
+      const me = z.object({ id: z.uuid(), rates: z.array(RATE) }).parse(teacher.data)
+      const [lessons, tariffs] = await Promise.all([
+        supabase
+          .from('lessons')
+          .select(
+            `id, lesson_date, planned_start, duration_min, status, confirmed_at, confirmed_late, group:groups!inner(id, name, subject:subjects(name), group_type, enrollments(student_id, start_date, end_date, status)), ${PAY_ATTENDANCE_FIELDS}`,
+          )
+          .eq('teacher_id', me.id)
+          .gte('lesson_date', monthStart(month))
+          .lte('lesson_date', monthEnd(month))
+          .order('lesson_date')
+          .order('planned_start'),
+        fetchTariffs(),
+      ])
+      if (lessons.error) throw lessons.error
+      const byGroup = new Map<string, MyMonthGroup>()
+      for (const { group, ...lesson } of z.array(myLessonSchema).parse(lessons.data)) {
+        const entry = byGroup.get(group.id) ?? { ...group, lessons: [] }
+        entry.lessons.push(lesson)
+        byGroup.set(group.id, entry)
+      }
+      return { teacherId: me.id, rates: me.rates, groups: [...byGroup.values()], tariffs }
     },
     refetchInterval: POLL_MS,
   })

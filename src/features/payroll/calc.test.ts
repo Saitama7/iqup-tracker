@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { GroupType } from '@/features/tariffs/current'
 import {
   byGroup,
+  byTeacher,
   calcLessonPay,
   calcMonth,
   markPay,
@@ -228,6 +229,18 @@ describe('calcMonth', () => {
   it('no rate on the date → the lesson counts, pays 0', () => {
     const month = calcMonth([lesson({ lesson_date: '2026-08-20', marks: present(4) })], RATE_45)
     expect(month).toMatchObject({ lessonsHeld: 1, studentLessons: 4, amount: 0 })
+  })
+})
+
+describe('byTeacher — lessons.teacher_id decides who is paid (0020)', () => {
+  it('a lesson of a group now led by B, with teacher_id = A, is paid to A', () => {
+    // group g1 was handed over to B on 2026-09-20; the earlier lesson stays with A
+    const old = { ...lesson({ lesson_date: '2026-09-10', marks: present(5) }), teacher_id: 'A' }
+    const fresh = { ...lesson({ lesson_date: '2026-09-25', marks: present(5) }), teacher_id: 'B' }
+    const by = byTeacher([old, fresh])
+    expect(calcMonth(by.get('A') ?? [], RATE_45).amount).toBe(600)
+    expect(calcMonth(by.get('B') ?? [], RATE_45).amount).toBe(600)
+    expect(by.get('A')?.map((l) => l.id)).toEqual([old.id])
   })
 })
 
