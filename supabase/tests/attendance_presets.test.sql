@@ -3,7 +3,7 @@
 -- the payroll, «Заморозка» does not (0099).
 -- Self-contained fixtures in September 2099 (lessons must be today or later), rolled back.
 begin;
-select plan(32);
+select plan(33);
 
 -- ─── Seed payroll is untouched ──────────────────────────────────────────────
 select results_eq(
@@ -244,6 +244,15 @@ select is(
 select ok(
   (select bool_and(search like '%student 84%') from public.v_audit_feed where entity = 'attendance_presets'),
   'audit: presets are found by the student''s name'
+);
+
+-- ─── A deleted lesson takes its presets along (FK cascade) ──────────────────
+reset role;
+reset request.jwt.claims;
+delete from public.attendance where lesson_id = (select id from l84 where grp = 'S84 G1' and n = 1);
+select lives_ok(
+  $$ delete from public.lessons where id = (select id from l84 where grp = 'S84 G1' and n = 1) $$,
+  'cascade: a held lesson with a preset can be deleted'
 );
 
 select * from finish();

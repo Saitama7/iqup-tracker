@@ -35,7 +35,7 @@ create index if not exists attendance_presets_student_idx on public.attendance_p
 -- Insert / update: an admin (or the service role), a planned lesson of today or later outside a closed
 -- period, the student enrolled on its date, the freeze limit of the subscription. Author and time —
 -- from the database. Delete: only while the lesson is planned (a held lesson keeps its history);
--- a deleted lesson takes its presets along.
+-- a deleted lesson or student takes its presets along.
 create or replace function public.attendance_presets_guard()
 returns trigger
 language plpgsql
@@ -48,6 +48,11 @@ declare
   v_limit integer;
   v_used integer;
 begin
+  -- a deleted lesson / student takes its presets along (FK cascade runs one trigger level deeper)
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return old;
+  end if;
+
   if auth.uid() is not null and not public.is_admin() then
     raise exception 'only an admin may set a freeze in advance' using errcode = 'insufficient_privilege';
   end if;
