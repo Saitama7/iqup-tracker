@@ -98,6 +98,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   subjects: 'Предметы',
   trials: 'Пробные',
   groups: 'Группы',
+  attendance_correction_requests: 'Запросы на исправление',
 }
 
 const STATUS_TONE: Record<AttendanceStatus, TextTone> = {
@@ -220,6 +221,23 @@ function describeAttendance(row: AuditRow, l: AuditLookups): Described {
       badge,
       link,
       parts: ['Отметка ', student, ' удалена (была ', status(before), ')', where],
+    }
+  }
+  if (before !== after && isHumanReason(row.reason)) {
+    // correct_attendance / an applied request (#74): the reason is the admin's or the teacher's words
+    return {
+      badge: { label: 'Исправление', tone: 'burned' },
+      link,
+      parts: [
+        'Отметки занятия',
+        lesson ? ` ${lessonWhere(lesson, l)}` : '',
+        ' исправлены: ',
+        student,
+        ' ',
+        status(before),
+        ' → ',
+        status(after),
+      ],
     }
   }
   if (before !== after) {
@@ -389,6 +407,63 @@ function moved(row: AuditRow, key: string): Part[] {
   const was = str(row.before, key)
   const now = str(row.after, key)
   return [` с ${was ? dayMonth(was) : '—'} на `, strong(now ? dayMonth(now) : '—')]
+}
+
+/** A reason typed by a person (correct_attendance), not an RPC code. */
+const isHumanReason = (r: string | null): boolean => {
+  const reason = r?.trim()
+  return (
+    !!reason && !isServiceReason(reason) && !reason.startsWith('cancel:') && !REASON_LABEL[reason]
+  )
+}
+
+/** «Учитель просит исправить отметки … / запрос … применён / отклонён» (#74). */
+function describeCorrectionRequest(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const lessonId = str(s, 'lesson_id')
+  const lesson = lessonId ? l.lessons[lessonId] : undefined
+  const where = lesson ? ` ${lessonWhere(lesson, l)}` : ''
+  const teacher = strong(teacherName(str(s, 'teacher_id'), l))
+  const link = groupLink(lesson?.groupId ?? null)
+  if (row.action === 'insert') {
+    const marks = Array.isArray(s?.marks) ? (s.marks as unknown[]) : []
+    const changes = marks.flatMap((m, i): Part[] => {
+      const mark = m && typeof m === 'object' ? (m as Snapshot) : null
+      const studentId = str(mark, 'student_id')
+      return [
+        i > 0 ? '; ' : '',
+        strong((studentId && l.students[studentId]) || 'ученик'),
+        ' → ',
+        status(str(mark, 'status')),
+      ]
+    })
+    const comment = str(s, 'comment')
+    return {
+      badge: { label: 'Запрос', tone: 'warn' },
+      link,
+      parts: [teacher, ' просит исправить отметки занятия', where, ': ', ...changes],
+      note: comment ? `Комментарий: «${comment}»` : null,
+    }
+  }
+  const decision = str(row.after, 'status')
+  const rejected = decision === 'rejected'
+  const reason = str(row.after, 'decision_comment')
+  return {
+    badge: rejected ? { label: 'Отклонено', tone: 'stone' } : { label: 'Запрос', tone: 'present' },
+    link,
+    parts: [
+      'запрос ',
+      teacher,
+      ' на исправление отметок занятия',
+      where,
+      rejected
+        ? ' отклонён'
+        : decision === 'approved'
+          ? ' применён'
+          : ` — ${ACTION_TEXT[row.action]}`,
+    ],
+    note: rejected && reason ? `Причина: «${reason}»` : null,
+  }
 }
 
 const TEACHER_REASON = 'change_group_teacher:'
@@ -847,6 +922,7 @@ const DESCRIBERS: Record<string, (row: AuditRow, l: AuditLookups) => Described> 
   subjects: describeSubject,
   trials: describeTrial,
   groups: describeGroup,
+  attendance_correction_requests: describeCorrectionRequest,
 }
 
 /** The author's name: «Система» — service role, migrations, imports (no auth.uid()). */

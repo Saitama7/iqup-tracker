@@ -8,9 +8,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet'
+import { usePendingRequests } from '@/features/lessons/corrections-api'
 import { cn } from '@/lib/utils'
 import { BackButton } from './back-button'
 import { backTarget, isPushedScreen, MORE, TABS, type NavItem, type TabItem } from './nav'
+import { NavBadge } from './shell-parts'
 import { useSignOut } from './use-sign-out'
 import { useView } from './use-view'
 
@@ -22,6 +24,7 @@ export function MobileShell({ children }: { children: ReactNode }) {
   const pathname = useLocation({ select: (l) => l.pathname })
   // У7 Профиль, АМ2 Ученик are pushed screens with a back button, no tab bar.
   const tabs = view && !isPushedScreen(pathname) ? TABS[view] : []
+  const corrections = usePendingRequests(view === 'admin').data?.length ?? 0
   const showTabs = tabs.length > 1
   // АМ1 packs five tabs: narrower items, 10 px labels, 44×30 pill.
   const dense = tabs.length > 3
@@ -80,6 +83,9 @@ export function MobileShell({ children }: { children: ReactNode }) {
                         )}
                       >
                         {icon}
+                        {tab.badge && (
+                          <NavBadge count={corrections} className="absolute -top-1 -right-1" />
+                        )}
                       </span>
                       {tab.label}
                     </Link>
@@ -199,4 +205,4 @@ const itemClass = (dense: boolean) =>
   )
 
 const pillClass = (dense: boolean) =>
-  cn('flex items-center justify-center', dense ? 'h-[30px] w-11' : 'h-8 w-12')
+  cn('relative flex items-center justify-center', dense ? 'h-[30px] w-11' : 'h-8 w-12')

@@ -107,6 +107,85 @@ export type Database = {
           },
         ]
       }
+      attendance_correction_requests: {
+        Row: {
+          comment: string
+          created_at: string
+          created_by: string | null
+          decided_at: string | null
+          decided_by: string | null
+          decision_comment: string | null
+          id: string
+          lesson_id: string
+          marks: NonNullable<Json>
+          status: string
+          teacher_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          comment: string
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_comment?: string | null
+          id?: string
+          lesson_id: string
+          marks: NonNullable<Json>
+          status?: string
+          teacher_id?: string
+        }
+        Update: {
+          comment?: string
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          decision_comment?: string | null
+          id?: string
+          lesson_id?: string
+          marks?: NonNullable<Json>
+          status?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'attendance_correction_requests_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'attendance_correction_requests_decided_by_fkey'
+            columns: ['decided_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'attendance_correction_requests_lesson_id_fkey'
+            columns: ['lesson_id']
+            isOneToOne: false
+            referencedRelation: 'lessons'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'attendance_correction_requests_lesson_id_fkey'
+            columns: ['lesson_id']
+            isOneToOne: false
+            referencedRelation: 'v_lesson_status'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'attendance_correction_requests_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teachers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -1124,8 +1203,10 @@ export type Database = {
       }
     }
     Functions: {
+      apply_correction_request: { Args: { p_request_id: string }; Returns: number }
       archive_group: { Args: { p_group_id: string }; Returns: number }
       assert_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
+      assert_correction_marks: { Args: { p_lesson_id: string; p_marks: Json }; Returns: undefined }
       assert_enrollment_undoable: { Args: { p_enrollment_id: string }; Returns: undefined }
       assert_payment_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
       attendance_subscription: {
@@ -1193,6 +1274,10 @@ export type Database = {
         }[]
       }
       confirm_lesson: { Args: { p_lesson_id: string; p_marks: Json }; Returns: string }
+      correct_attendance: {
+        Args: { p_lesson_id: string; p_marks: Json; p_reason: string }
+        Returns: number
+      }
       create_extra_lesson: {
         Args: { p_date: string; p_group_id: string; p_makes_up_for?: string; p_start: string }
         Returns: string
@@ -1308,6 +1393,10 @@ export type Database = {
           p_subscription_id: string
         }
         Returns: string
+      }
+      reject_correction_request: {
+        Args: { p_reason: string; p_request_id: string }
+        Returns: undefined
       }
       remove_enrollment: {
         Args: { p_enrollment_id: string }

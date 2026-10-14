@@ -2,7 +2,7 @@
 // Marks live in local state until «Провести занятие» sends the whole roster in one RPC (0010).
 // Trials (Ж2/Ж3) get their own section under the roster; they never count in «Отмечено N из M».
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouter } from '@tanstack/react-router'
 import { Check } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
@@ -11,6 +11,7 @@ import { BackButton } from '@/components/shell/back-button'
 import { rateOn } from '@/features/payroll/calc'
 import { PRELIMINARY_NOTE } from '@/features/payroll/model'
 import { trialsQuery, useTrialsRealtime } from '@/features/trials/api'
+import { useSession } from '@/lib/auth'
 import { lessonTrials, trialsWord, type Trial } from '@/features/trials/model'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { useNow } from '@/lib/now'
@@ -37,6 +38,7 @@ import {
   type Tone,
 } from './attendance'
 import { clearDraft, loadDraft, saveDraft } from './draft'
+import { HeldPanel, useCorrections, type Corrections } from './lesson-corrections'
 import { DesktopTrials, MobileTrials } from './lesson-trials'
 import { lessonReturn, type LessonSearch } from './return-to'
 import { studentsWord } from './parts'
@@ -84,6 +86,9 @@ interface SheetModel {
   counts: Tally
   /** Marks can be changed and the lesson held now (Б1: from the start; held — admin only, И4). */
   editable: boolean
+  /** A held lesson: the admin corrects its marks / the teacher proposes new ones (#74). */
+  correcting: boolean
+  corrections: Corrections
   /** The marks are being sent — buttons wait for the database. */
   busy: boolean
   /** Offline: the confirm waits for the network (TanStack paused mutation). */
@@ -105,6 +110,8 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   const now = useNow()
   const isDesktop = useIsDesktop()
   const navigate = useNavigate()
+  const router = useRouter()
+  const { roles } = useSession()
   const mutation = useConfirmLesson(sheet.id, sheet.group.id)
   const trialRows = useQuery(trialsQuery({ lessonId: sheet.id }))
   useTrialsRealtime()
@@ -114,6 +121,8 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   )
 
   const roster = useMemo(() => lessonRoster(sheet.enrollments, sheet, sheet.marks), [sheet])
+  const corrections = useCorrections(sheet, roster, roles.includes('admin'))
+  const correcting = corrections.fix !== null
   // The draft outlives the page (И19, #29): restored from localStorage, dropped once the lesson
   // is held / cancelled — not on the optimistic «held», a failed confirm keeps it.
   const [draft, setDraftState] = useState<Map<string, Mark> | null>(() =>
@@ -130,7 +139,8 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   const state = lessonState(sheet, now)
   const copy = confirmCopy(state)
   const editable = sheet.status === 'planned' && state !== 'upcoming'
-  const marks: ReadonlyMap<string, Mark> = editable ? (draft ?? sheet.marks) : sheet.marks
+  const marks: ReadonlyMap<string, Mark> =
+    corrections.fix ?? (editable ? (draft ?? sheet.marks) : sheet.marks)
   const counts = tally(roster, marks)
 
   const percent = rateOn(sheet.rates, sheet.lesson_date)
@@ -143,7 +153,9 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
     marks,
     counts,
     editable,
-    busy: mutation.isPending,
+    correcting,
+    corrections,
+    busy: mutation.isPending || corrections.busy,
     paused: mutation.isPaused,
     canConfirm: editable && counts.unmarked === 0 && !mutation.isPending,
     copy,
@@ -152,8 +164,12 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
     trialsMarkable: sheet.lesson_date <= bishkekDate(now) && sheet.status !== 'cancelled',
     setMark: (studentId, mark) => {
       const row = roster.find((r) => r.studentId === studentId)
-      if (!editable || mutation.isPending || !row) return
-      if (mark === 'absent_frozen' && freezeBlocked(row, marks.get(studentId))) return
+      if (!row || (mark === 'absent_frozen' && freezeBlocked(row, marks.get(studentId)))) return
+      if (correcting) {
+        corrections.setFixMark(studentId, mark)
+        return
+      }
+      if (!editable || mutation.isPending) return
       setDraft(new Map(marks).set(studentId, mark))
     },
     allPresent: () => {
@@ -168,6 +184,11 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
         { marks: marksPayload(roster, marks), copy },
         {
           onSuccess: () => {
+            // an admin without the teacher role has no «Сегодня» of a teacher — back to the list
+            if (!search.from && !roles.includes('teacher')) {
+              router.history.back()
+              return
+            }
             void navigate({ ...lessonReturn(search), replace: true })
           },
         },
@@ -280,7 +301,7 @@ function MarkButtons({
             key={k}
             type="button"
             aria-pressed={active}
-            disabled={!m.editable || m.busy || limit}
+            disabled={!(m.editable || m.correcting) || m.busy || limit}
             aria-describedby={limit ? hintId : undefined}
             onClick={() => {
               m.setMark(row.studentId, k)
@@ -290,7 +311,7 @@ function MarkButtons({
               desktop ? 'min-h-10 rounded-[10px]' : 'min-h-11 rounded-xl',
               active ? ACTIVE[k] : 'border-line-strong bg-card text-ink',
               limit && 'bg-stone text-placeholder',
-              !m.editable && !active && 'opacity-50',
+              !(m.editable || m.correcting) && !active && 'opacity-50',
             )}
           >
             {MARK_LABEL[k]}
@@ -388,7 +409,7 @@ function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
           <span className="text-burned-strong">Не был {counts.burned}</span>
           <span className="text-ink-muted">Не отмечено {counts.unmarked}</span>
         </p>
-        <ConfirmAction m={m} />
+        {m.sheet.status === 'held' ? <HeldPanel c={m.corrections} /> : <ConfirmAction m={m} />}
       </footer>
     </section>
   )
@@ -596,7 +617,11 @@ function Summary({ m }: { m: SheetModel }) {
           )}
           {m.accrual && <p className="text-[11px] font-bold text-ink-muted">{PRELIMINARY_NOTE}</p>}
         </dl>
-        <ConfirmAction m={m} desktop />
+        {m.sheet.status === 'held' ? (
+          <HeldPanel c={m.corrections} />
+        ) : (
+          <ConfirmAction m={m} desktop />
+        )}
       </div>
       <p className="rounded-2xl bg-stone px-4 py-3.5 text-xs leading-normal font-bold text-ink-muted">
         Заморозка — ученик предупредил за день или минимум за 2 часа. Не более 2 на абонемент.

@@ -117,11 +117,27 @@ async function select<T>(
   return z.array(schema).parse(data)
 }
 
+/** Students named in attendance_correction_requests.marks. */
+function requestStudentIds(snapshot: Record<string, unknown> | null): (string | null)[] {
+  const marks = snapshot?.marks
+  if (!Array.isArray(marks)) return []
+  return marks.map((m: unknown) =>
+    m && typeof m === 'object' && typeof (m as { student_id?: unknown }).student_id === 'string'
+      ? (m as { student_id: string }).student_id
+      : null,
+  )
+}
+
 /** Names behind the page's rows. Two steps: lessons / enrollments first, then who and which group. */
 async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['lookups']> {
   const lessonIds = ids(
     rows
-      .filter((r) => r.entity === 'attendance' || r.entity === 'trials')
+      .filter(
+        (r) =>
+          r.entity === 'attendance' ||
+          r.entity === 'trials' ||
+          r.entity === 'attendance_correction_requests',
+      )
       .map((r) => field(r, 'lesson_id')),
   )
   const enrollmentIds = ids(
@@ -172,6 +188,10 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
       .filter((r) => r.entity === 'attendance' || r.entity === 'enrollments')
       .map((r) => field(r, 'student_id')),
     ...enrollments.map((e) => e.student_id),
+    // a teacher's request: the students it is about (#74)
+    ...rows
+      .filter((r) => r.entity === 'attendance_correction_requests')
+      .flatMap((r) => requestStudentIds(r.after ?? r.before)),
   ])
   const groupIds = ids([
     ...rows
@@ -186,6 +206,9 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
   const teacherIds = ids([
     ...rows.filter((r) => r.entity === 'teacher_rates').map((r) => field(r, 'teacher_id')),
     ...rows.filter((r) => r.entity === 'lessons').map((r) => field(r, 'substitute_teacher_id')),
+    ...rows
+      .filter((r) => r.entity === 'attendance_correction_requests')
+      .map((r) => field(r, 'teacher_id')),
     // teacher changes (0020): who it was and who it became, groups and lessons
     ...rows
       .filter((r) => r.entity === 'groups' || r.entity === 'lessons')

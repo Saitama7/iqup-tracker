@@ -7,7 +7,7 @@ import { requireRole } from '@/lib/guards'
 export const Route = createFileRoute('/_app/lessons/$lessonId')({
   validateSearch: lessonSearchSchema,
   beforeLoad: ({ context }) => {
-    requireRole(context.auth, 'teacher')
+    requireRole(context.auth, 'teacher', 'admin')
   },
   component: LessonRoute,
 })

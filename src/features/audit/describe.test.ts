@@ -140,6 +140,80 @@ describe('attendance', () => {
   })
 })
 
+describe('attendance corrections (#74)', () => {
+  const mark = {
+    id: 'm1',
+    lesson_id: LESSON,
+    student_id: ALINA,
+    subscription_id: SUB,
+    status: 'present',
+  }
+  const request = {
+    id: 'r1',
+    lesson_id: LESSON,
+    teacher_id: GULZAT,
+    marks: [{ student_id: ALINA, status: 'absent_burned' }],
+    comment: 'Алины не было',
+    status: 'pending',
+    decision_comment: null,
+  }
+
+  it('correct_attendance: «Отметки занятия … исправлены: Алина Исакова Был → Не был», reason in the note', () => {
+    const e = describeAuditRow(
+      row({
+        entity: 'attendance',
+        kind: 'retro',
+        before: mark,
+        after: { ...mark, status: 'absent_burned' },
+        reason: 'перепутали',
+      }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Отметки занятия Математика · 8 класс Б, 10.10 в 09:00 исправлены: Алина Исакова Был → Не был',
+    )
+    expect(e.badge).toEqual({ label: 'Исправление', tone: 'burned' })
+    expect(e.note).toBe('Причина: «перепутали»')
+  })
+
+  it('a teacher asks, the admin applies or rejects', () => {
+    const asked = describeAuditRow(
+      row({
+        entity: 'attendance_correction_requests',
+        action: 'insert',
+        actorId: TEACHER_USER,
+        after: request,
+      }),
+      lookups,
+    )
+    expect(plain(asked.parts)).toBe(
+      'Гульзат Асанова просит исправить отметки занятия Математика · 8 класс Б, 10.10 в 09:00: Алина Исакова → Не был',
+    )
+    expect(asked.note).toBe('Комментарий: «Алины не было»')
+    expect(
+      text(
+        row({
+          entity: 'attendance_correction_requests',
+          before: request,
+          after: { ...request, status: 'approved' },
+        }),
+      ),
+    ).toBe(
+      'запрос Гульзат Асанова на исправление отметок занятия Математика · 8 класс Б, 10.10 в 09:00 применён',
+    )
+    const rejected = describeAuditRow(
+      row({
+        entity: 'attendance_correction_requests',
+        before: request,
+        after: { ...request, status: 'rejected', decision_comment: 'Не подтвердилось' },
+      }),
+      lookups,
+    )
+    expect(plain(rejected.parts)).toMatch(/отклонён$/)
+    expect(rejected.note).toBe('Причина: «Не подтвердилось»')
+  })
+})
+
 describe('lessons', () => {
   it('confirmed late: «Занятие … подтверждено с опозданием»', () => {
     const r = row({
