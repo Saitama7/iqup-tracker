@@ -22,15 +22,22 @@ export const teacherId = async (like: string): Promise<string> => {
   return data.id
 }
 
+type GroupType = Database['public']['Enums']['group_type']
+
 /** ВТ/ЧТ 19:00 from `start`, lessons generated up to the end of October. */
-export async function makeGroup(name: string, teacher: string, start = '2026-09-01') {
+export async function makeGroup(
+  name: string,
+  teacher: string,
+  start = '2026-09-01',
+  type: GroupType = 'mini',
+) {
   const db = service()
   const { data: subject } = await db.from('subjects').select('id').eq('name', 'Математика').single()
   const { data, error } = await db.rpc('create_group', {
     p_name: name,
     p_subject_id: subject?.id ?? '',
     p_grade: 11,
-    p_group_type: 'mini',
+    p_group_type: type,
     p_teacher_id: teacher,
     p_weekdays: [2, 4],
     p_start_time: '19:00',
@@ -43,7 +50,13 @@ export async function makeGroup(name: string, teacher: string, start = '2026-09-
 }
 
 /** A pupil with an enrollment, a subscription and, optionally, a payment of `paid` som. */
-export async function makeEnrollment(fullName: string, groupId: string, start: string, paid = 0) {
+export async function makeEnrollment(
+  fullName: string,
+  groupId: string,
+  start: string,
+  paid = 0,
+  type: GroupType = 'mini',
+) {
   const db = service()
   const { data: student, error: se } = await db
     .from('students')
@@ -54,7 +67,7 @@ export async function makeEnrollment(fullName: string, groupId: string, start: s
   const { data: tariff } = await db
     .from('tariffs')
     .select('id, lessons_in_package, package_price')
-    .eq('group_type', 'mini')
+    .eq('group_type', type)
     .lte('valid_from', start)
     .order('valid_from', { ascending: false })
     .limit(1)

@@ -194,7 +194,7 @@ interface ExitProps {
   startDate: string
   groups: readonly GroupBrief[]
   today: string
-  onDone: (message: string) => void | Promise<void>
+  onDone: (message: string) => void
 }
 
 /** One of the three dialogs; closes itself after the database accepted the change. */
@@ -206,11 +206,11 @@ export function EnrollmentExitDialog({
   const queryClient = useQueryClient()
   const settlement = useQuery(settlementQuery(props.enrollmentId))
   const label = props.group ? groupLabel(props.group) : 'группа'
-  const onDone = async (message: string) => {
-    // balances, rosters, payroll, payments, journal — everything the change touches
-    await queryClient.invalidateQueries()
+  const onDone = (message: string) => {
     toast.success(message)
     onOpenChange(false)
+    // balances, rosters, payroll, payments, journal — everything the change touches
+    void queryClient.invalidateQueries()
   }
 
   let body: ReactNode
@@ -266,8 +266,8 @@ function TransferBody({
 
   const mutation = useMutation({
     mutationFn: transferStudent,
-    onSuccess: async () => {
-      await onDone(`${studentName} переведён(а) в ${target ? groupLabel(target) : 'группу'}`)
+    onSuccess: () => {
+      onDone(`${studentName} переведён(а) в ${target ? groupLabel(target) : 'группу'}`)
     },
     onError: (e) => {
       setError(e.message)
@@ -430,8 +430,8 @@ function WithdrawBody({
 
   const mutation = useMutation({
     mutationFn: withdrawEnrollment,
-    onSuccess: async (_, input) => {
-      await onDone(
+    onSuccess: (_, input) => {
+      onDone(
         input.refund > 0
           ? `${studentName}: зачисление завершено, возврат ${som(input.refund)}`
           : `${studentName}: зачисление завершено`,
@@ -590,8 +590,8 @@ function DeleteBody({
 
   const mutation = useMutation({
     mutationFn: (m: DeleteMoney) => deleteEnrollment(enrollmentId, m),
-    onSuccess: async () => {
-      await onDone(`${studentName}: ошибочное зачисление удалено`)
+    onSuccess: () => {
+      onDone(`${studentName}: ошибочное зачисление удалено`)
     },
     onError: (e) => {
       setError(e.message)

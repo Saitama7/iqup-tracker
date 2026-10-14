@@ -80,13 +80,14 @@ test('убрать ошибочное зачисление: перечень, у
 
   await login(page, KANYKEI)
   await page.goto(`/admin/students/${e.studentId}`)
-  await page.getByRole('button', { name: `Убрать из группы: ${label(groupName)}` }).click()
+  // #81: «Убрать из группы» is now «⋯» → «Записан по ошибке — удалить»
+  await page.getByRole('button', { name: `Действия: ${label(groupName)}` }).click()
+  await page.getByRole('button', { name: 'Записан по ошибке — удалить' }).click()
   const dialog = page.getByRole('dialog')
-  await expect(dialog.getByText(`Зачисление в ${label(groupName)}`)).toBeVisible()
-  await expect(dialog.getByText('Абонементов: 1')).toBeVisible()
-  await expect(dialog.getByText('Отметок «заморожен»: 1')).toBeVisible()
+  await expect(dialog.getByText('Зачисление и абонемент')).toBeVisible()
+  await expect(dialog.getByText('Отметки: «заморожен» — 1')).toBeVisible()
   await shot(page, 'remove', testInfo)
-  await dialog.getByRole('button', { name: 'Убрать из группы', exact: true }).click()
+  await dialog.getByRole('button', { name: 'Удалить зачисление' }).click()
   await expect(dialog).toBeHidden()
 
   const db = service()
@@ -113,14 +114,14 @@ test('перевод зачисления с оплатой в другую гр
 
   await login(page, KANYKEI)
   await page.goto(`/admin/groups/${fromId}`)
-  await page.getByRole('button', { name: `Убрать из группы: ${studentName}` }).click()
+  // #81: same type, nothing written off — «Перевести» moves the enrollment whole (#73)
+  await page.getByRole('button', { name: `Действия: ${studentName}` }).click()
+  await page.getByRole('button', { name: 'Перевести в другую группу' }).click()
   const dialog = page.getByRole('dialog')
-  await expect(dialog.getByText(/Есть оплаты \(1\s?000 сом\) — оплаты не удаляются/)).toBeVisible()
-  await expect(dialog.getByRole('button', { name: 'Убрать из группы', exact: true })).toHaveCount(0)
-  await dialog.getByRole('button', { name: 'Перевести в другую группу' }).click()
   const form = dialog.getByRole('form', { name: 'Перевести в другую группу' })
-  await expect(form.getByLabel('Зачислен с')).toHaveValue('01.09.2026')
-  await form.getByLabel('Новая группа').selectOption({ label: label(to) })
+  await form.getByLabel('Новая группа').selectOption({ label: `${label(to)} · Мини-группа` })
+  await expect(form.getByLabel('С какого дня в новой группе')).toHaveValue('01.09.2026')
+  await expect(form.getByText(/зачисление переедет целиком вместе с абонементом/)).toBeVisible()
   await form.getByRole('button', { name: 'Перевести' }).click()
   await expect(dialog).toBeHidden()
 
@@ -220,16 +221,13 @@ test('удалить пустую группу и отказ для группы
   await shot(page, 'delete-refusal', testInfo)
   await refusal.getByRole('button', { name: 'Закрыть' }).click()
 
-  // the enrollment with «был» cannot be removed either
-  await page.getByRole('button', { name: `Убрать из группы: ${studentName}` }).click()
-  const blocked = page.getByRole('dialog')
-  await expect(
-    blocked.getByText('У ученика есть отметки «был» — за них начислена ЗП.', { exact: false }),
-  ).toBeVisible()
-  await expect(blocked.getByRole('button', { name: 'Убрать из группы', exact: true })).toHaveCount(
-    0,
-  )
-  await blocked.getByRole('button', { name: 'Закрыть' }).click()
+  // «был» no longer blocks «Записан по ошибке» (#81): the dialog shows the payroll it takes back
+  await page.getByRole('button', { name: `Действия: ${studentName}` }).click()
+  await page.getByRole('button', { name: 'Записан по ошибке — удалить' }).click()
+  const mistake = page.getByRole('dialog')
+  await expect(mistake.getByText(/ЗП уменьшится: учителю Бекзат −.+ сом за 1 урок/)).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(mistake).toBeHidden()
 
   // an empty group goes with its schedule and lessons
   await page.goto(`/admin/groups/${empty}`)
