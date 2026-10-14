@@ -41,6 +41,8 @@ export interface EnrollmentAfterschool {
   plans: PlanVersion[]
   /** Current and next month. */
   months: [MonthBill, MonthBill]
+  /** Live invoices of earlier months (oldest first). */
+  earlier: Invoice[]
   /** Frozen hours not yet taken off an invoice (И55). */
   credit: number
 }
@@ -85,6 +87,9 @@ export const enrollmentAfterschoolQuery = (enrollmentId: string, month: string) 
       return {
         plans: z.array(planSchema).parse(plans.data),
         months: [bill(months[0], q1.data), bill(months[1], q2.data)],
+        earlier: list
+          .filter((i) => i.period_month < months[0])
+          .sort((a, b) => a.period_month.localeCompare(b.period_month)),
         credit: z.number().parse(credit.data ?? 0),
       }
     },

@@ -87,7 +87,7 @@ export function AfterschoolPanel({
       </p>
     )
   }
-  const { plans, months, credit } = query.data
+  const { plans, months, credit, earlier } = query.data
   const current = planOn(plans, today)
   const latest = plans.at(-1)
   const hourPrice = (month: string) => {
@@ -124,6 +124,17 @@ export function AfterschoolPanel({
           </span>
         )}
       </p>
+      {earlier.map((i) => (
+        <div
+          key={i.id}
+          className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-line-strong pt-2"
+        >
+          <span className="text-xs font-extrabold">{cap(monthAccusative(i.period_month))}</span>
+          <span className="text-xs font-extrabold whitespace-nowrap text-present-strong">
+            Счёт выставлен · {formatHours(i.hours_total)} ч · {formatSom(i.price_final)} сом
+          </span>
+        </div>
+      ))}
       {months.map((m) => {
         const hours = m.rows.reduce((n, r) => n + r.hours * r.days, 0)
         const price = hourPrice(m.month)

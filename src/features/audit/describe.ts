@@ -101,6 +101,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   attendance_correction_requests: 'Запросы на исправление',
   payroll_adjustments: 'Авансы',
   attendance_presets: 'Заморозки заранее',
+  afterschool_plans: 'График продлёнки',
 }
 
 const STATUS_TONE: Record<AttendanceStatus, TextTone> = {
@@ -762,6 +763,36 @@ function describeEnrollment(row: AuditRow, l: AuditLookups): Described {
   }
 }
 
+const WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС']
+
+/** «ПН 2 · СР 1 · ПТ 2 ч» from afterschool_plans.hours (#82). */
+function planText(s: Snapshot | null): string {
+  const hours = s?.hours
+  if (!Array.isArray(hours)) return ''
+  const parts = hours.flatMap((h, i) =>
+    typeof h === 'number' && h > 0 ? [`${WEEKDAYS[i]} ${String(h).replace('.', ',')}`] : [],
+  )
+  return parts.length > 0 ? `${parts.join(' · ')} ч` : 'без часов'
+}
+
+/** Продлёнка (#82): «Айпери — график продлёнки с 1 октября: ПН 2 · СР 1 · ПТ 2 ч». */
+function describePlan(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const enrollmentId = str(s, 'enrollment_id')
+  const e = enrollmentId ? l.enrollments[enrollmentId] : undefined
+  const from = str(s, 'valid_from')
+  const who: Part[] = [strong((e && l.students[e.studentId]) || 'Ученик'), ' — ']
+  const what = `график продлёнки${from ? ` с ${fullDate(from)}` : ''}`
+  return {
+    badge: { label: 'График', tone: row.action === 'delete' ? 'stone' : 'teal' },
+    link: studentLink(e?.studentId ?? null),
+    parts:
+      row.action === 'delete'
+        ? [...who, `${what} удалён`]
+        : [...who, `${what}: `, strong(planText(row.after))],
+  }
+}
+
 function describeRate(row: AuditRow, l: AuditLookups): Described {
   const s = current(row)
   const teacherId = str(s, 'teacher_id')
@@ -1020,6 +1051,7 @@ const DESCRIBERS: Record<string, (row: AuditRow, l: AuditLookups) => Described> 
   attendance_correction_requests: describeCorrectionRequest,
   payroll_adjustments: describeAdjustment,
   attendance_presets: describePreset,
+  afterschool_plans: describePlan,
 }
 
 /** The author's name: «Система» — service role, migrations, imports (no auth.uid()). */
