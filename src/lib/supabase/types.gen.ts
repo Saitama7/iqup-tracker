@@ -520,10 +520,11 @@ export type Database = {
           created_by: string | null
           id: string
           kind: Database['public']['Enums']['payment_kind']
-          method: Database['public']['Enums']['payment_method']
+          method: Database['public']['Enums']['payment_method'] | null
           paid_at: string
           reason: string | null
           subscription_id: string
+          transfer_id: string | null
         }
         ComputedFields: never
         Insert: {
@@ -532,10 +533,11 @@ export type Database = {
           created_by?: string | null
           id?: string
           kind?: Database['public']['Enums']['payment_kind']
-          method: Database['public']['Enums']['payment_method']
+          method?: Database['public']['Enums']['payment_method'] | null
           paid_at?: string
           reason?: string | null
           subscription_id: string
+          transfer_id?: string | null
         }
         Update: {
           amount?: number
@@ -543,10 +545,11 @@ export type Database = {
           created_by?: string | null
           id?: string
           kind?: Database['public']['Enums']['payment_kind']
-          method?: Database['public']['Enums']['payment_method']
+          method?: Database['public']['Enums']['payment_method'] | null
           paid_at?: string
           reason?: string | null
           subscription_id?: string
+          transfer_id?: string | null
         }
         Relationships: [
           {
@@ -1416,6 +1419,21 @@ export type Database = {
         Returns: Database['public']['Enums']['role'][]
       }
       current_teacher_id: { Args: Record<PropertyKey, never>; Returns: string }
+      delete_enrollment: {
+        Args: {
+          p_enrollment_id: string
+          p_group_id?: string
+          p_method?: Database['public']['Enums']['payment_method']
+          p_money?: string
+          p_paid_on?: string
+          p_start_date?: string
+        }
+        Returns: {
+          kept: boolean
+          marks_deleted: number
+          money: number
+        }[]
+      }
       delete_group: { Args: { p_group_id: string }; Returns: number }
       delete_payroll_adjustment: { Args: { p_id: string; p_reason: string }; Returns: undefined }
       enroll_student: {
@@ -1463,6 +1481,33 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      enrollment_payroll_impact: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          amount: number
+          lessons: number
+          teacher_id: string
+          teacher_name: string
+        }[]
+      }
+      enrollment_settlement: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          burned_marks: number
+          frozen_marks: number
+          has_trial: boolean
+          last_mark_date: string
+          lesson_price: number
+          lessons_used: number
+          locked_marks: number
+          money_som: number
+          paid_som: number
+          payments: number
+          present_marks: number
+          remainder: number
+          used_som: number
+        }[]
+      }
       enrollment_undo_info: {
         Args: { p_enrollment_id: string }
         Returns: {
@@ -1479,6 +1524,7 @@ export type Database = {
       ensure_lessons: { Args: { p_until: string }; Returns: number }
       generate_lessons: { Args: { p_group_id: string; p_until: string }; Returns: number }
       group_delete_blockers: { Args: { p_group_id: string }; Returns: string[] }
+      group_title: { Args: { p_group_id: string }; Returns: string }
       is_accountant: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean }
@@ -1557,6 +1603,18 @@ export type Database = {
           lessons_deleted: number
         }[]
       }
+      subscription_settlement: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          created_at: string
+          lessons_used: number
+          paid_som: number
+          remainder: number
+          started_at: string
+          subscription_id: string
+          used_som: number
+        }[]
+      }
       tariff_duration: {
         Args: { p_date: string; p_group_type: Database['public']['Enums']['group_type'] }
         Returns: number
@@ -1570,15 +1628,63 @@ export type Database = {
       teaches_lesson: { Args: { p_lesson_id: string }; Returns: boolean }
       teaches_student: { Args: { p_student_id: string }; Returns: boolean }
       teaches_subscription: { Args: { p_subscription_id: string }; Returns: boolean }
+      transfer_default_start: {
+        Args: { p_enrollment_id: string; p_group_id: string }
+        Returns: string
+      }
       transfer_enrollment: {
         Args: { p_enrollment_id: string; p_group_id: string; p_start_date?: string }
         Returns: string
+      }
+      transfer_preview: {
+        Args: { p_enrollment_id: string; p_group_id: string; p_start_date?: string }
+        Returns: {
+          lessons_total: number
+          price: number
+          remainder: number
+          start_date: string
+          surplus: number
+          to_pay: number
+          whole_move: boolean
+        }[]
+      }
+      transfer_student: {
+        Args: {
+          p_enrollment_id: string
+          p_group_id: string
+          p_method?: Database['public']['Enums']['payment_method']
+          p_paid_on?: string
+          p_refund_surplus?: boolean
+          p_start_date?: string
+        }
+        Returns: {
+          enrollment_id: string
+          refunded: number
+          start_date: string
+          subscription_id: string
+          transferred: number
+          whole_move: boolean
+        }[]
       }
       user_last_sign_in: {
         Args: Record<PropertyKey, never>
         Returns: {
           last_sign_in_at: string
           user_id: string
+        }[]
+      }
+      withdraw_enrollment: {
+        Args: {
+          p_end_date: string
+          p_enrollment_id: string
+          p_method?: Database['public']['Enums']['payment_method']
+          p_paid_on?: string
+          p_reason?: string
+          p_refund?: number
+        }
+        Returns: {
+          refunded: number
+          remainder: number
         }[]
       }
     }
@@ -1590,7 +1696,7 @@ export type Database = {
       group_status: 'forming' | 'active' | 'archived'
       group_type: 'group' | 'mini' | 'pair' | 'individual' | 'afterschool'
       lesson_status: 'planned' | 'held' | 'cancelled'
-      payment_kind: 'payment' | 'refund'
+      payment_kind: 'payment' | 'refund' | 'transfer'
       payment_method: 'cash' | 'mbank'
       payroll_adjustment_kind: 'advance' | 'bonus' | 'correction'
       role: 'teacher' | 'admin' | 'accountant'
@@ -1718,7 +1824,7 @@ export const Constants = {
       group_status: ['forming', 'active', 'archived'],
       group_type: ['group', 'mini', 'pair', 'individual', 'afterschool'],
       lesson_status: ['planned', 'held', 'cancelled'],
-      payment_kind: ['payment', 'refund'],
+      payment_kind: ['payment', 'refund', 'transfer'],
       payment_method: ['cash', 'mbank'],
       payroll_adjustment_kind: ['advance', 'bonus', 'correction'],
       role: ['teacher', 'admin', 'accountant'],
