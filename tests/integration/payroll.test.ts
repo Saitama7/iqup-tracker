@@ -31,7 +31,7 @@ async function viewRows(supabase: Client) {
   const { data, error } = await supabase
     .from('v_payroll_preview')
     .select(
-      'teacher_id, month, lessons_held, hours, student_lessons, base_amount, no_subscription, advances, to_pay',
+      'teacher_id, month, lessons_held, hours, student_lessons, base_amount, no_subscription, advances, to_pay, student_hours',
     )
   if (error) throw error
   return data
@@ -43,7 +43,7 @@ async function source(supabase: Client) {
     supabase
       .from('lessons')
       .select(
-        'id, group_id, lesson_date, duration_min, status, teacher_id, attendance(status, subscription:subscriptions(price_full, lessons_total))',
+        'id, group_id, lesson_date, duration_min, status, teacher_id, attendance(status, hours, subscription:subscriptions(price_full, lessons_total, hours_total))',
       ),
     supabase.from('teacher_rates').select('teacher_id, percent, valid_from'),
   ])
@@ -78,6 +78,7 @@ describe('v_payroll_preview ↔ calcMonth on the seed', () => {
         hours: row.hours,
         studentLessons: row.student_lessons,
         noSubscription: row.no_subscription,
+        studentHours: row.student_hours,
         amount: row.base_amount,
       })
     }
@@ -112,6 +113,7 @@ describe('v_payroll_preview ↔ calcMonth on the seed', () => {
       hours: 52,
       studentLessons: 318,
       noSubscription: 0,
+      studentHours: 0,
       amount: 38_160,
     })
   })
@@ -163,5 +165,13 @@ const pick = ({
   hours,
   studentLessons,
   noSubscription,
+  studentHours,
   amount,
-}: ReturnType<typeof calcMonth>) => ({ lessonsHeld, hours, studentLessons, noSubscription, amount })
+}: ReturnType<typeof calcMonth>) => ({
+  lessonsHeld,
+  hours,
+  studentLessons,
+  noSubscription,
+  studentHours,
+  amount,
+})
