@@ -137,6 +137,8 @@ export function trialErrorMessage(error: { code?: string; message?: string }): s
     return 'Абонемент начинается после пробного занятия — выберите дату позже'
   if (m.includes('only an attended trial')) return 'Зачислить можно после отметки «был»'
   if (m.includes('archived')) return 'Группа в архиве'
+  if (m.includes('several students match'))
+    return 'В учениках несколько человек с этим именем и телефоном — запишите пробное через «Уже учится»'
   if (m.includes('outside the group dates')) return 'Дата начала — вне дат группы'
   if (m.includes('no tariff')) return 'На эту дату нет тарифа для группы'
   if (error.code === '42501') return 'Недостаточно прав'
@@ -177,6 +179,8 @@ export const bookForm = z
     /** «Привёл друг»: the student who brought the lead — their 5 % (В5) after enroll_trial. */
     referredBy: z.uuid().nullable().default(null),
     note: z.string().trim(),
+    /** «Уже был(а)» (#54): booked after the fact on today's / a past lesson, marked at once. */
+    mark: z.enum(['attended', 'no_show']).nullable().default(null),
   })
   .refine((v) => v.studentId !== null || v.people.length > 0, {
     error: 'Введите имя ученика',
@@ -197,6 +201,8 @@ export async function bookTrials(input: BookInput): Promise<number> {
     group_id: input.groupId, // trials_guard keeps it equal to the lesson's group
     source: input.source,
     note: input.note || null,
+    // trials_guard: admin only, a not cancelled lesson today or earlier; came / marked_* set by the DB
+    status: input.mark ?? ('scheduled' as const),
   }
   // an existing student: name / class / phone are copied from students by trials_guard
   const rows: TablesInsert<'trials'>[] = input.studentId
@@ -288,6 +294,37 @@ export const groupLessonsQuery = (groupId: string | null, from: string, limit = 
         .gte('lesson_date', from)
         .order('lesson_date')
         .order('planned_start')
+        .limit(limit)
+      if (error) throw error
+      return z
+        .array(lessonOptionSchema)
+        .parse(data)
+        .map((l) => ({
+          id: l.id,
+          groupId: l.group_id,
+          date: l.lesson_date,
+          start: l.planned_start.slice(0, 5),
+        }))
+    },
+  })
+
+/**
+ * «Уже был(а)» (#54): lessons of a group that took place — today or earlier, planned (not confirmed
+ * yet) or held, never cancelled; latest first.
+ */
+export const pastLessonsQuery = (groupId: string | null, today: string, limit = 12) =>
+  queryOptions({
+    queryKey: [TRIALS_KEY, 'past-lessons', groupId, today, limit],
+    enabled: !!groupId,
+    queryFn: async (): Promise<LessonOption[]> => {
+      const { data, error } = await supabase
+        .from('lessons')
+        .select('id, group_id, lesson_date, planned_start')
+        .eq('group_id', groupId ?? '')
+        .in('status', ['planned', 'held'])
+        .lte('lesson_date', today)
+        .order('lesson_date', { ascending: false })
+        .order('planned_start', { ascending: false })
         .limit(limit)
       if (error) throw error
       return z

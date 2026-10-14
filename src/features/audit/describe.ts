@@ -697,8 +697,24 @@ function describeTrial(row: AuditRow, l: AuditLookups): Described {
   const badge = { label: 'Пробное', tone: 'trial' as const }
   const link = groupLink(groupId)
 
-  if (row.action === 'insert')
+  if (row.action === 'insert') {
+    // #54: booked after the fact («Уже был(а)») — the mark comes with the booking
+    const mark = str(row.after, 'status')
+    if (mark === 'attended' || mark === 'no_show') {
+      return {
+        badge,
+        link,
+        parts: [
+          ...who,
+          `записан(а) задним числом: ${where} — `,
+          mark === 'attended'
+            ? { text: 'был(а)', tone: 'present' }
+            : { text: 'не пришёл(ла)', tone: 'burned' },
+        ],
+      }
+    }
     return { badge, link, parts: [...who, `записан(а) на пробное: ${where}`] }
+  }
   if (row.action === 'delete') return { badge, link, parts: [...who, 'пробное удалено'] }
   if (changed(row, 'status')) {
     const next = str(row.after, 'status')
