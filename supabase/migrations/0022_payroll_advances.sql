@@ -10,7 +10,8 @@
 -- A row is never edited: a mistake is deleted with a reason (only while the month is open) and
 -- entered again. Every change goes to audit_log (invariant 4).
 -- Open month: no locked lesson of that teacher in it (lessons.is_locked) — payroll_periods (R3) will
--- tighten this, the RPCs keep their signatures.
+-- tighten this, the RPCs keep their signatures. Until then nothing locks lessons (all months are
+-- open, И21), so this check blocks nothing in practice.
 --
 -- Production-safe: only new objects, plus v_payroll_preview with the same columns and two appended
 -- (create or replace). Idempotent: if not exists / create or replace / drop … if exists.
@@ -150,7 +151,7 @@ $$;
 revoke execute on function public.assert_payroll_staff() from public, anon, authenticated;
 
 -- «Выдать аванс»: issued today by default; the payroll month — that of the issue date unless chosen
--- (any day of it is taken as the month).
+-- (any day of it is taken as the month; only the previous, same or next one); comment ≤ 500 chars.
 create or replace function public.issue_advance(
   p_teacher_id uuid,
   p_amount integer,
@@ -165,6 +166,8 @@ set search_path = ''
 as $$
 declare
   v_issued date := coalesce(p_issued_on, public.bishkek_today());
+  v_month date := date_trunc('month', coalesce(p_month, v_issued))::date;
+  v_comment text := nullif(btrim(coalesce(p_comment, '')), '');
   v_id uuid;
 begin
   perform public.assert_payroll_staff();
@@ -174,10 +177,18 @@ begin
   if p_amount is null or p_amount <= 0 then
     raise exception 'amount must be positive' using errcode = 'check_violation';
   end if;
+  -- As the form (И53): the month of the issue date or a neighbour.
+  if v_month not between (date_trunc('month', v_issued) - interval '1 month')::date
+                     and (date_trunc('month', v_issued) + interval '1 month')::date then
+    raise exception 'payroll month % is not next to the issue date %', to_char(v_month, 'YYYY-MM'), v_issued
+      using errcode = 'check_violation';
+  end if;
+  if char_length(v_comment) > 500 then
+    raise exception 'comment is longer than 500 characters' using errcode = 'check_violation';
+  end if;
 
   insert into public.payroll_adjustments (teacher_id, month, kind, amount, issued_on, comment, created_by)
-  values (p_teacher_id, date_trunc('month', coalesce(p_month, v_issued))::date, 'advance', p_amount,
-          v_issued, nullif(btrim(coalesce(p_comment, '')), ''), auth.uid())
+  values (p_teacher_id, v_month, 'advance', p_amount, v_issued, v_comment, auth.uid())
   returning id into v_id;
   return v_id;
 end;
@@ -288,7 +299,7 @@ revoke all on public.v_payroll_preview from anon;
 
 -- ─── journal ────────────────────────────────────────────────────────────────
 
--- А10: advances are money — the «Оплаты» chip; search by the teacher's name. Same as 0019 otherwise.
+-- А10: advances are money — the «Оплаты» chip. Same as 0019 otherwise.
 create or replace function public.audit_kind(
   p_entity text,
   p_action text,
@@ -328,6 +339,7 @@ $$;
 -- Only the new entity's rows (none before this migration) need the stored kind recomputed.
 update public.audit_log set entity = entity where entity = 'payroll_adjustments';
 
+-- Search by the teacher's name. Same as 0021 plus payroll_adjustments.
 create or replace function public.audit_search_text(p_entity text, p_entity_id uuid, p_row jsonb)
 returns text
 language plpgsql
@@ -345,6 +357,9 @@ begin
   case p_entity
     when 'attendance' then
       v_student := (p_row ->> 'student_id')::uuid;
+      select l.group_id into v_group from public.lessons l where l.id = (p_row ->> 'lesson_id')::uuid;
+    when 'attendance_correction_requests' then
+      v_teacher := (p_row ->> 'teacher_id')::uuid;
       select l.group_id into v_group from public.lessons l where l.id = (p_row ->> 'lesson_id')::uuid;
     when 'lessons' then
       v_group := (p_row ->> 'group_id')::uuid;

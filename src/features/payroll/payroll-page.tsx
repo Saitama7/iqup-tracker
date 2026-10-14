@@ -222,15 +222,22 @@ const tileValue = 'font-display text-[26px] font-bold whitespace-nowrap'
 function DesktopPayroll({ view, actions }: { view: PayrollView; actions: AdvanceActions }) {
   const { total } = view
   const { month } = actions
-  const totalPay = toPayCaption(total.toPay)
   return (
     <>
       <div className="grid grid-cols-4 gap-3.5">
         <div className={cn(tile, 'bg-brand text-ink')}>
           <span className={cn(tileLabel, 'opacity-70')}>К выплате всего</span>
           <span className={cn(tileValue, 'font-extrabold')} data-testid="payroll-total">
-            {totalPay.text}
+            {som(total.toPay)}
           </span>
+          {total.overpaid > 0 && (
+            <span
+              className="text-xs font-extrabold whitespace-nowrap text-burned-deep"
+              data-testid="payroll-overpaid"
+            >
+              Переплата {som(total.overpaid)}
+            </span>
+          )}
         </div>
         <div className={cn(tile, 'border border-line bg-card')}>
           <span className={cn(tileLabel, 'text-ink-muted')}>Ученико-уроков</span>
@@ -359,15 +366,7 @@ function DesktopPayroll({ view, actions }: { view: PayrollView; actions: Advance
               <td className={cn('px-3 py-3.5', num, total.advances === 0 && 'text-ink-muted')}>
                 {total.advances > 0 ? minusSom(total.advances) : '—'}
               </td>
-              <td
-                className={cn(
-                  'px-3 py-3.5 font-display',
-                  num,
-                  totalPay.overpaid && 'text-burned-strong',
-                )}
-              >
-                {totalPay.overpaid ? totalPay.text : formatSom(total.toPay)}
-              </td>
+              <td className={cn('px-3 py-3.5 font-display', num)}>{formatSom(total.toPay)}</td>
               <td />
             </tr>
           </tfoot>
@@ -406,7 +405,6 @@ function Unconfirmed({ count }: { count: number }) {
 function MobilePayroll({ view, actions }: { view: PayrollView; actions: AdvanceActions }) {
   const { total } = view
   const { month } = actions
-  const totalPay = toPayCaption(total.toPay)
   const stats = [
     [String(view.teachers), 'учителей'],
     [formatSom(total.studentLessons), 'уч-уроков'],
@@ -422,20 +420,16 @@ function MobilePayroll({ view, actions }: { view: PayrollView; actions: AdvanceA
           <PeriodChip className="px-2.5 py-1" />
         </div>
         <p
-          className={cn(
-            'font-display text-[34px] leading-none font-extrabold whitespace-nowrap',
-            totalPay.overpaid ? 'text-burned' : 'text-brand',
-          )}
+          className="font-display text-[34px] leading-none font-extrabold whitespace-nowrap text-brand"
           data-testid="payroll-total"
         >
-          {totalPay.overpaid ? (
-            totalPay.text
-          ) : (
-            <>
-              {formatSom(total.toPay)} <span className="text-lg font-medium text-paper">сом</span>
-            </>
-          )}
+          {formatSom(total.toPay)} <span className="text-lg font-medium text-paper">сом</span>
         </p>
+        {total.overpaid > 0 && (
+          <p className="text-[13px] font-extrabold text-burned" data-testid="payroll-overpaid">
+            Переплата {som(total.overpaid)}
+          </p>
+        )}
         {total.advances > 0 && (
           <p className="text-[13px] font-bold opacity-70" data-testid="payroll-advances">
             начислено {formatSom(total.amount)} · авансы {minusSom(total.advances)}

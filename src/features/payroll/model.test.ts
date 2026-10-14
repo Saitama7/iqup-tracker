@@ -453,7 +453,34 @@ describe('payrollView (Б1)', () => {
       amount: 41_823,
       advances: 5_000,
       toPay: 36_823,
+      overpaid: 0,
     })
+  })
+
+  it('«К выплате всего» does not net an overpaid teacher against the others (#83)', () => {
+    const v = payrollView(
+      {
+        preview: [
+          [1_000, 0],
+          [500, 2_000],
+        ].map(([amount = 0, advances = 0], i) => ({
+          teacherId: `t${i}`,
+          lessonsHeld: 1,
+          hours: 1,
+          studentLessons: 1,
+          noSubscription: 0,
+          amount,
+          advances,
+          toPay: amount - advances,
+        })),
+        adjustments: [],
+        teachers: [0, 1].map((i) => ({ id: `t${i}`, full_name: `T${i}`, rates: [], groups: [] })),
+        planned: [],
+      },
+      '2026-09',
+      NOW,
+    )
+    expect([v.total.toPay, v.total.overpaid]).toEqual([1_000, 1_500])
   })
 
   it('advances per teacher: Σ, «К выплате», history newest first (#83)', () => {

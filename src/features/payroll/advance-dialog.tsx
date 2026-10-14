@@ -187,6 +187,7 @@ function AdvanceForm({
         <input
           id={`${id}-comment`}
           value={comment}
+          maxLength={500}
           placeholder="необязательно"
           onChange={(e) => {
             setComment(e.target.value)

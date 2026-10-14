@@ -1,9 +1,10 @@
 -- #83 · advances (0022): payroll_adjustments RLS (teacher reads own, staff read all, nobody writes
 -- directly), issue_advance / delete_payroll_adjustment (admin and accountant; teacher / anon 42501),
--- amount > 0, no future date, delete only with a reason, closed month, audit_log, v_payroll_preview
+-- amount > 0, no future date, month ±1 from the issue date, comment ≤ 500, delete only with a reason,
+-- closed month, audit_log, v_payroll_preview
 -- advances / to_pay — the accrual of the seed does not move. Fixtures in 2003 + the seed, rolled back.
 begin;
-select plan(38);
+select plan(41);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 -- users: …1 teacher A, …2 teacher B, …3 admin, …4 accountant
@@ -85,6 +86,18 @@ select throws_ok(
 select throws_ok(
   $$ select public.issue_advance('b8300000-0000-4000-8000-0000000000ff', 500) $$,
   '23503', null, 'unknown teacher'
+);
+select throws_ok(
+  $$ select public.issue_advance('b8300000-0000-4000-8000-000000000001', 500, '2003-03-10', '2003-05-01') $$,
+  '23514', null, 'the month two months after the issue date is rejected'
+);
+select throws_ok(
+  $$ select public.issue_advance('b8300000-0000-4000-8000-000000000001', 500, '2003-03-10', '2003-01-01') $$,
+  '23514', null, 'the month two months before the issue date is rejected'
+);
+select throws_ok(
+  $$ select public.issue_advance('b8300000-0000-4000-8000-000000000001', 500, '2003-03-10', null, repeat('я', 501)) $$,
+  '23514', null, 'a comment longer than 500 characters is rejected'
 );
 select throws_ok(
   $$ insert into public.payroll_adjustments (teacher_id, month, amount, issued_on)

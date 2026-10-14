@@ -452,7 +452,8 @@ export interface PayrollRow extends PayTotals {
 
 export interface PayrollView {
   rows: PayrollRow[]
-  total: PayTotals & { advances: number; toPay: number }
+  /** toPay — Σ max(0, toPay): an overpaid teacher is not netted against the others' payout. */
+  total: PayTotals & { advances: number; toPay: number; overpaid: number }
   teachers: number
   unconfirmed: number
 }
@@ -496,7 +497,8 @@ export function payrollView(source: PayrollSource, month: string, now: number): 
       noSubscription: rows.reduce((n, r) => n + r.noSubscription, 0),
       amount: rows.reduce((n, r) => n + r.amount, 0),
       advances: rows.reduce((n, r) => n + r.advances, 0),
-      toPay: rows.reduce((n, r) => n + r.toPay, 0),
+      toPay: rows.reduce((n, r) => n + Math.max(0, r.toPay), 0),
+      overpaid: rows.reduce((n, r) => n + Math.max(0, -r.toPay), 0),
     },
     teachers: rows.length,
     unconfirmed: source.planned.filter((l) => lessonState(l, now) === 'ended_unconfirmed').length,
