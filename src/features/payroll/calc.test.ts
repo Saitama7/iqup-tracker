@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GroupType } from '@/features/tariffs/current'
 import {
+  advancesTotal,
   byGroup,
   byTeacher,
   calcLessonPay,
@@ -8,6 +9,7 @@ import {
   markPay,
   roundSom,
   subscriptionLessonPrice,
+  toPay,
   totals,
   type PayLesson,
   type PayMark,
@@ -264,5 +266,24 @@ describe('byGroup / totals', () => {
       amount: 1_800,
     })
     expect(totals(groups.get('b') ?? []).amount).toBe(720)
+  })
+})
+
+describe('advances (А8, #83)', () => {
+  const adjustments = [
+    { kind: 'advance' as const, amount: 5000 },
+    { kind: 'advance' as const, amount: 3000 },
+    { kind: 'bonus' as const, amount: 1000 },
+  ]
+
+  it('sums only advances', () => {
+    expect(advancesTotal(adjustments)).toBe(8000)
+    expect(advancesTotal([])).toBe(0)
+  })
+
+  it('«К выплате» = начислено − авансы, may go below zero', () => {
+    expect(toPay(38_160, adjustments)).toBe(30_160)
+    expect(toPay(38_160, [])).toBe(38_160)
+    expect(toPay(2000, adjustments)).toBe(-6000)
   })
 })

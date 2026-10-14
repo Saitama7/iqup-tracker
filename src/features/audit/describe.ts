@@ -99,6 +99,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   trials: 'Пробные',
   groups: 'Группы',
   attendance_correction_requests: 'Запросы на исправление',
+  payroll_adjustments: 'Авансы',
 }
 
 const STATUS_TONE: Record<AttendanceStatus, TextTone> = {
@@ -757,6 +758,51 @@ function describeRate(row: AuditRow, l: AuditLookups): Described {
   }
 }
 
+const MONTH_NAMES = [
+  'январь',
+  'февраль',
+  'март',
+  'апрель',
+  'май',
+  'июнь',
+  'июль',
+  'август',
+  'сентябрь',
+  'октябрь',
+  'ноябрь',
+  'декабрь',
+]
+
+/** «Гульзат Асанова — аванс 5 000 сом от 18.09.2026 в счёт ЗП за сентябрь» (#83). */
+function describeAdjustment(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const teacherId = str(s, 'teacher_id')
+  const who: Part[] = [strong((teacherId && l.teachers[teacherId]) || 'Учитель'), ' — ']
+  const kind = str(s, 'kind')
+  const label = kind === 'bonus' ? 'премия' : kind === 'correction' ? 'исправление' : 'аванс'
+  const issued = str(s, 'issued_on')
+  const month = str(s, 'month')
+  const forMonth = month ? ` в счёт ЗП за ${MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? ''}` : ''
+  const parts: Part[] = [
+    ...who,
+    `${label} `,
+    strong(`${formatSom(num(s, 'amount') ?? 0)} сом`),
+    issued ? ` от ${fullDate(issued)}` : '',
+    forMonth,
+    row.action === 'delete' ? ' — удалён' : row.action === 'update' ? ' — изменён' : '',
+  ]
+  const comment = str(s, 'comment')
+  return {
+    badge:
+      row.action === 'delete'
+        ? { label: 'Аванс', tone: 'stone' }
+        : { label: 'Аванс', tone: 'warn' },
+    link: null,
+    parts,
+    note: comment ? `«${comment}»` : null,
+  }
+}
+
 function describeTariff(row: AuditRow, l: AuditLookups): Described {
   const s = current(row)
   const type = str(s, 'group_type')
@@ -923,6 +969,7 @@ const DESCRIBERS: Record<string, (row: AuditRow, l: AuditLookups) => Described> 
   trials: describeTrial,
   groups: describeGroup,
   attendance_correction_requests: describeCorrectionRequest,
+  payroll_adjustments: describeAdjustment,
 }
 
 /** The author's name: «Система» — service role, migrations, imports (no auth.uid()). */

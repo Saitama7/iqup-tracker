@@ -189,3 +189,23 @@ export function byGroup(paid: readonly LessonPay[]): Map<string, LessonPay[]> {
   }
   return groups
 }
+
+/** payroll_adjustments.kind (0099). Only advances are issued now; bonus / correction — later (И52). */
+export type PayAdjustmentKind = 'advance' | 'bonus' | 'correction'
+
+export interface PayAdjustment {
+  kind: PayAdjustmentKind
+  /** Whole som, always > 0. */
+  amount: number
+}
+
+/** Σ advances of the month (А8) — the same as v_payroll_preview.advances. */
+export const advancesTotal = (adjustments: readonly PayAdjustment[]) =>
+  adjustments.reduce((sum, a) => (a.kind === 'advance' ? sum + a.amount : sum), 0)
+
+/**
+ * «К выплате» = начислено − авансы (А8, #83), v_payroll_preview.to_pay. Negative — overpaid
+ * («переплата»). Advances never change the accrual itself.
+ */
+export const toPay = (amount: number, adjustments: readonly PayAdjustment[]) =>
+  amount - advancesTotal(adjustments)

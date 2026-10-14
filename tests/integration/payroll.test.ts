@@ -4,7 +4,7 @@
 // Needs the local stack: `supabase start && supabase db reset && pnpm seed:users`. Run with
 // `pnpm test:integration`.
 import { createClient } from '@supabase/supabase-js'
-import { calcMonth, type PayLesson } from '../../src/features/payroll/calc'
+import { calcMonth, toPay, type PayLesson } from '../../src/features/payroll/calc'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { phoneToEmail } from '../../supabase/functions/_shared/phone'
 import { localSupabase } from '../../scripts/local-supabase'
@@ -30,7 +30,9 @@ const GULZAT = '00000000-0000-4000-a000-000000000001'
 async function viewRows(supabase: Client) {
   const { data, error } = await supabase
     .from('v_payroll_preview')
-    .select('teacher_id, month, lessons_held, hours, student_lessons, base_amount, no_subscription')
+    .select(
+      'teacher_id, month, lessons_held, hours, student_lessons, base_amount, no_subscription, advances, to_pay',
+    )
   if (error) throw error
   return data
 }
@@ -112,6 +114,47 @@ describe('v_payroll_preview ↔ calcMonth on the seed', () => {
       noSubscription: 0,
       amount: 38_160,
     })
+  })
+})
+
+describe('advances (#83): v_payroll_preview.to_pay ↔ calc.toPay', () => {
+  it('an advance lowers «К выплате», never the accrual; deleted — back as it was', async () => {
+    const accountant = await signIn('0555 300 300')
+    const { data: id, error } = await accountant.rpc('issue_advance', {
+      p_teacher_id: GULZAT,
+      p_amount: 5000,
+      p_issued_on: '2026-09-18',
+      p_comment: 'integration',
+    })
+    if (error) throw error
+    try {
+      const row = (await viewRows(accountant)).find(
+        (r) => r.teacher_id === GULZAT && r.month === '2026-09-01',
+      )
+      const { data: adjustments, error: e2 } = await accountant
+        .from('payroll_adjustments')
+        .select('kind, amount')
+        .eq('teacher_id', GULZAT)
+        .eq('month', '2026-09-01')
+      if (e2) throw e2
+      expect(row).toMatchObject({ base_amount: 38_160, advances: 5000, to_pay: 33_160 })
+      expect(toPay(row?.base_amount ?? 0, adjustments)).toBe(row?.to_pay)
+
+      // Гульзат sees the same under her RLS.
+      const teacher = await signIn('0555 123 456')
+      const own = await teacher.from('payroll_adjustments').select('id, amount')
+      expect(own.data).toEqual([{ id, amount: 5000 }])
+    } finally {
+      const { error: e3 } = await accountant.rpc('delete_payroll_adjustment', {
+        p_id: id,
+        p_reason: 'integration cleanup',
+      })
+      expect(e3).toBeNull()
+    }
+    const after = (await viewRows(accountant)).find(
+      (r) => r.teacher_id === GULZAT && r.month === '2026-09-01',
+    )
+    expect(after).toMatchObject({ base_amount: 38_160, advances: 0, to_pay: 38_160 })
   })
 })
 

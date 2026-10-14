@@ -7,8 +7,9 @@ import { z } from 'zod'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
+import { parseDateRu } from '@/lib/time'
 import { monthEnd, monthStart } from './model'
-import type { MyMonthGroup, MyMonthSource, PayrollSource, PreviewRow } from './model'
+import type { Adjustment, MyMonthGroup, MyMonthSource, PayrollSource, PreviewRow } from './model'
 
 /** Every payroll query starts with this key — realtime and «Провести» invalidate them at once. */
 export const PAYROLL_KEY = 'payroll'
@@ -60,6 +61,48 @@ const myLessonSchema = z.object({
   attendance: z.array(PAY_ATTENDANCE),
 })
 
+const adjustmentSchema = z.object({
+  id: z.uuid(),
+  teacher_id: z.uuid(),
+  month: z.string(),
+  kind: z.enum(['advance', 'bonus', 'correction']),
+  amount: z.number().int(),
+  issued_on: z.string(),
+  comment: z.string().nullable(),
+  created_at: z.string(),
+  author: z.object({ full_name: z.string() }).nullable(),
+})
+
+const ADJUSTMENT_FIELDS =
+  'id, teacher_id, month, kind, amount, issued_on, comment, created_at, author:profiles!created_by(full_name)'
+
+/** payroll_adjustments of `month`, oldest first; RLS leaves a teacher only her own. */
+async function fetchAdjustments(month: string, teacherId?: string): Promise<Adjustment[]> {
+  let query = supabase
+    .from('payroll_adjustments')
+    .select(ADJUSTMENT_FIELDS)
+    .eq('month', monthStart(month))
+    .order('issued_on')
+    .order('created_at')
+  if (teacherId) query = query.eq('teacher_id', teacherId)
+  const { data, error } = await query
+  if (error) throw error
+  return z
+    .array(adjustmentSchema)
+    .parse(data)
+    .map((a) => ({
+      id: a.id,
+      teacherId: a.teacher_id,
+      month: a.month,
+      kind: a.kind,
+      amount: a.amount,
+      issuedOn: a.issued_on,
+      comment: a.comment,
+      author: a.author?.full_name ?? null,
+      createdAt: a.created_at,
+    }))
+}
+
 async function fetchTariffs() {
   const { data, error } = await supabase
     .from('tariffs')
@@ -85,7 +128,7 @@ export const myMonthQuery = (userId: string, month: string) =>
       if (teacher.error) throw teacher.error
       if (!teacher.data) return null
       const me = z.object({ id: z.uuid(), rates: z.array(RATE) }).parse(teacher.data)
-      const [lessons, tariffs] = await Promise.all([
+      const [lessons, tariffs, adjustments] = await Promise.all([
         supabase
           .from('lessons')
           .select(
@@ -97,6 +140,7 @@ export const myMonthQuery = (userId: string, month: string) =>
           .order('lesson_date')
           .order('planned_start'),
         fetchTariffs(),
+        fetchAdjustments(month, me.id),
       ])
       if (lessons.error) throw lessons.error
       const byGroup = new Map<string, MyMonthGroup>()
@@ -105,7 +149,13 @@ export const myMonthQuery = (userId: string, month: string) =>
         entry.lessons.push(lesson)
         byGroup.set(group.id, entry)
       }
-      return { teacherId: me.id, rates: me.rates, groups: [...byGroup.values()], tariffs }
+      return {
+        teacherId: me.id,
+        rates: me.rates,
+        groups: [...byGroup.values()],
+        tariffs,
+        adjustments,
+      }
     },
     refetchInterval: POLL_MS,
   })
@@ -118,13 +168,17 @@ const previewSchema = z.object({
   student_lessons: z.number().int(),
   base_amount: z.number().int(),
   no_subscription: z.number().int(),
+  advances: z.number().int(),
+  to_pay: z.number().int(),
 })
 
 /** v_payroll_preview rows of `month`; RLS leaves a teacher only her own. */
 async function fetchPreview(month: string, teacherId?: string): Promise<PreviewRow[]> {
   let query = supabase
     .from('v_payroll_preview')
-    .select('teacher_id, month, lessons_held, hours, student_lessons, base_amount, no_subscription')
+    .select(
+      'teacher_id, month, lessons_held, hours, student_lessons, base_amount, no_subscription, advances, to_pay',
+    )
     .eq('month', monthStart(month))
   if (teacherId) query = query.eq('teacher_id', teacherId)
   const { data, error } = await query
@@ -139,6 +193,8 @@ async function fetchPreview(month: string, teacherId?: string): Promise<PreviewR
       studentLessons: r.student_lessons,
       noSubscription: r.no_subscription,
       amount: r.base_amount,
+      advances: r.advances,
+      toPay: r.to_pay,
     }))
 }
 
@@ -185,8 +241,9 @@ export const payrollQuery = (month: string, today: string) =>
     queryKey: [PAYROLL_KEY, 'table', month, today],
     queryFn: async (): Promise<PayrollSource> => {
       const last = monthEnd(month) < today ? monthEnd(month) : today
-      const [preview, teachers, planned] = await Promise.all([
+      const [preview, adjustments, teachers, planned] = await Promise.all([
         fetchPreview(month),
+        fetchAdjustments(month),
         supabase
           .from('teachers')
           .select(
@@ -204,12 +261,96 @@ export const payrollQuery = (month: string, today: string) =>
       if (planned.error) throw planned.error
       return {
         preview,
+        adjustments,
         teachers: z.array(payrollTeacherSchema).parse(teachers.data),
         planned: z.array(plannedSchema).parse(planned.data),
       }
     },
     refetchInterval: POLL_MS,
   })
+
+// ─── Advances (А8, #83) ─────────────────────────────────────────────────────
+
+/** «Выдать аванс»: amount in whole som, date ДД.ММ.ГГГГ not after today, payroll month, comment. */
+export const advanceForm = (today: string) =>
+  z.object({
+    teacherId: z.uuid(),
+    amount: z
+      .string()
+      .transform((v) => v.replace(/\s/g, ''))
+      .pipe(
+        z
+          .string()
+          .regex(/^\d+$/, 'Сумма — целое число сом')
+          .transform(Number)
+          .pipe(
+            z.number().int().positive('Сумма больше нуля').max(1_000_000, 'Слишком большая сумма'),
+          ),
+      ),
+    issuedOn: z.string().transform((v, ctx) => {
+      const iso = parseDateRu(v)
+      if (!iso) {
+        ctx.addIssue({ code: 'custom', message: 'Дата в формате ДД.ММ.ГГГГ' })
+        return z.NEVER
+      }
+      if (iso > today) {
+        ctx.addIssue({ code: 'custom', message: 'Дата выдачи — не позже сегодня' })
+        return z.NEVER
+      }
+      return iso
+    }),
+    month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Выберите месяц'),
+    comment: z.string().trim().max(500, 'Слишком длинный комментарий'),
+  })
+
+export type AdvanceInput = z.output<ReturnType<typeof advanceForm>>
+
+export const deleteAdjustmentForm = z.object({
+  id: z.uuid(),
+  reason: z.string().trim().min(1, 'Укажите причину').max(500, 'Слишком длинный текст'),
+})
+
+export type DeleteAdjustmentInput = z.output<typeof deleteAdjustmentForm>
+
+export class AdvanceError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AdvanceError'
+  }
+}
+
+/** Postgres error → staff-facing text (0099 raises one code per rule). */
+export function advanceErrorMessage(error: { code?: string; message?: string }): string {
+  const m = error.message ?? ''
+  if (error.code === '42501') return 'Авансы выдают только администратор и бухгалтер'
+  if (error.code === '23514') {
+    if (m.includes('closed')) return 'Месяц закрыт — аванс уже не изменить'
+    if (m.includes('future')) return 'Дата выдачи — не позже сегодня'
+    if (m.includes('reason')) return 'Укажите причину'
+    return 'Проверьте сумму и дату'
+  }
+  if (error.code === 'P0002') return 'Запись уже удалена'
+  return 'Не удалось записать. Проверьте интернет и попробуйте ещё раз.'
+}
+
+export async function issueAdvance(input: AdvanceInput): Promise<void> {
+  const { error } = await supabase.rpc('issue_advance', {
+    p_teacher_id: input.teacherId,
+    p_amount: input.amount,
+    p_issued_on: input.issuedOn,
+    p_month: monthStart(input.month),
+    p_comment: input.comment === '' ? undefined : input.comment,
+  })
+  if (error) throw new AdvanceError(advanceErrorMessage(error))
+}
+
+export async function deleteAdjustment(input: DeleteAdjustmentInput): Promise<void> {
+  const { error } = await supabase.rpc('delete_payroll_adjustment', {
+    p_id: input.id,
+    p_reason: input.reason,
+  })
+  if (error) throw new AdvanceError(advanceErrorMessage(error))
+}
 
 /**
  * Someone confirmed or edited a lesson → refetch every payroll query. RLS filters the events:
@@ -223,6 +364,11 @@ export function usePayrollRealtime() {
       .channel('lessons:payroll')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'lessons' }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, invalidate)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payroll_adjustments' },
+        invalidate,
+      )
       .subscribe()
     return () => {
       void supabase.removeChannel(channel)
