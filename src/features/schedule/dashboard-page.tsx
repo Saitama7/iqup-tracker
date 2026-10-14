@@ -45,6 +45,7 @@ import {
   type DashboardTrials,
 } from './dashboard-trials'
 import { CHIP, DOT, Notice, R2_STUB } from './parts'
+import { PresetsWidget } from '@/features/presets/dashboard-presets'
 import { CorrectionItems, CorrectionsWidget } from './dashboard-corrections'
 
 /** А1 shows this many of today's lessons, the rest behind «ещё N занятий». */
@@ -228,6 +229,7 @@ function DesktopDashboard({
 
         <aside className="flex flex-col gap-3.5">
           <CorrectionsWidget requests={requests} />
+          <PresetsWidget today={today} />
           <UnconfirmedWidget unconfirmed={unconfirmed} today={today} />
           <section className="flex flex-col gap-2.5 rounded-[20px] border border-line bg-card px-5 py-4">
             <h2 className="text-[15px] font-extrabold">Долги</h2>
@@ -442,6 +444,7 @@ function MobileDashboard({
         )}
 
         <TrialsWidget trials={trials} today={today} compact />
+        <PresetsWidget today={today} compact />
 
         {(unconfirmed.length > 0 || requests.length > 0) && (
           <>

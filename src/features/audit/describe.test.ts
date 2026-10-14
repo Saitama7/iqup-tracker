@@ -214,6 +214,37 @@ describe('attendance corrections (#74)', () => {
   })
 })
 
+describe('attendance_presets (#84)', () => {
+  const preset = { id: 'p1', lesson_id: LESSON, student_id: ALINA, comment: 'заболел' }
+
+  it('set, re-commented, removed', () => {
+    const set = describeAuditRow(
+      row({ entity: 'attendance_presets', action: 'insert', after: preset }),
+      lookups,
+    )
+    expect(plain(set.parts)).toBe(
+      'Заморозка заранее: Алина Исакова · Математика · 8 класс Б, 10.10 в 09:00 — поставлена (предупредил о пропуске)',
+    )
+    expect(set.badge).toEqual({ label: 'Заморозка', tone: 'teal' })
+    expect(set.note).toBe('Комментарий: «заболел»')
+    expect(
+      text(
+        row({
+          entity: 'attendance_presets',
+          before: preset,
+          after: { ...preset, comment: 'мама написала' },
+        }),
+      ),
+    ).toMatch(/— комментарий изменён$/)
+    const removed = describeAuditRow(
+      row({ entity: 'attendance_presets', action: 'delete', before: preset, after: null }),
+      lookups,
+    )
+    expect(plain(removed.parts)).toMatch(/— снята$/)
+    expect(removed.note).toBeNull()
+  })
+})
+
 describe('lessons', () => {
   it('confirmed late: «Занятие … подтверждено с опозданием»', () => {
     const r = row({

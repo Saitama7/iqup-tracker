@@ -100,6 +100,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   groups: 'Группы',
   attendance_correction_requests: 'Запросы на исправление',
   payroll_adjustments: 'Авансы',
+  attendance_presets: 'Заморозки заранее',
 }
 
 const STATUS_TONE: Record<AttendanceStatus, TextTone> = {
@@ -464,6 +465,29 @@ function describeCorrectionRequest(row: AuditRow, l: AuditLookups): Described {
           : ` — ${ACTION_TEXT[row.action]}`,
     ],
     note: rejected && reason ? `Причина: «${reason}»` : null,
+  }
+}
+
+/** #84: «Заморозка заранее: Алина Исакова · Математика · 8 класс Б, 10.10 в 09:00 — поставлена». */
+function describePreset(row: AuditRow, l: AuditLookups): Described {
+  const s = current(row)
+  const studentId = str(s, 'student_id')
+  const lessonId = str(s, 'lesson_id')
+  const lesson = lessonId ? l.lessons[lessonId] : undefined
+  const student = strong((studentId && l.students[studentId]) || 'ученик')
+  const where = lesson ? ` · ${lessonWhere(lesson, l)}` : ''
+  const done =
+    row.action === 'insert'
+      ? 'поставлена (предупредил о пропуске)'
+      : row.action === 'delete'
+        ? 'снята'
+        : 'комментарий изменён'
+  const comment = str(s, 'comment')
+  return {
+    badge: { label: 'Заморозка', tone: 'teal' },
+    link: groupLink(lesson?.groupId ?? null),
+    parts: ['Заморозка заранее: ', student, where, ` — ${done}`],
+    note: comment && row.action !== 'delete' ? `Комментарий: «${comment}»` : null,
   }
 }
 
@@ -970,6 +994,7 @@ const DESCRIBERS: Record<string, (row: AuditRow, l: AuditLookups) => Described> 
   groups: describeGroup,
   attendance_correction_requests: describeCorrectionRequest,
   payroll_adjustments: describeAdjustment,
+  attendance_presets: describePreset,
 }
 
 /** The author's name: «Система» — service role, migrations, imports (no auth.uid()). */

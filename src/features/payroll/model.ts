@@ -189,15 +189,34 @@ export function lessonWhen(l: Pick<LessonTiming, 'lesson_date' | 'planned_start'
   return `${dayShort(l.lesson_date)}, ${dow} · ${l.planned_start.slice(0, 5)}`
 }
 
-/** «Был 7 · Заморозка 1» (УД4 «Отметка»). */
-export function marksCaption(marks: readonly { status: PayMark }[]): string {
-  const order: PayMark[] = ['present', 'absent_frozen', 'absent_burned']
-  return order
-    .map((s) => [s, marks.filter((m) => m.status === s).length] as const)
-    .filter(([, n]) => n > 0)
-    .map(([s, n]) => `${ATTENDANCE_LABEL[s]} ${n}`)
+/**
+ * «Был 5 · Не был 1 → в ЗП 6» (УД4 «Отметка», У1 day rows): the marks and — once there is a
+ * «Заморозка» or «Не был» — how many go into the teacher's pay (А1.3: Был + Не был).
+ */
+export function marksSummary(c: { present: number; frozen: number; burned: number }): string {
+  const parts = [
+    c.present ? `${ATTENDANCE_LABEL.present} ${c.present}` : null,
+    c.frozen ? `${ATTENDANCE_LABEL.absent_frozen} ${c.frozen}` : null,
+    c.burned ? `${ATTENDANCE_LABEL.absent_burned} ${c.burned}` : null,
+  ]
+    .filter(Boolean)
     .join(' · ')
+  return c.frozen || c.burned ? `${parts} → в ЗП ${c.present + c.burned}` : parts
 }
+
+/** marksSummary of a lesson's marks. */
+export function marksCaption(marks: readonly { status: PayMark }[]): string {
+  const count = (s: PayMark) => marks.filter((m) => m.status === s).length
+  return marksSummary({
+    present: count('present'),
+    frozen: count('absent_frozen'),
+    burned: count('absent_burned'),
+  })
+}
+
+/** What an ученико-урок is — under the formula of «Мой месяц» and «Расчёт ЗП». */
+export const STUDENT_LESSON_NOTE =
+  'Ученико-урок — «Был» или «Не был» (урок сгорел); «Заморозка» в ЗП не идёт.'
 
 /** «10:02», or «7 окт 08:40 · поздно» when confirmed on a later day (Б2). */
 export function confirmedCaption(
@@ -429,7 +448,7 @@ export const noSubscriptionCaption = (n: number) =>
 export function formulaNote(v: Pick<MyMonthView, 'lessonPrice' | 'percent'>): string {
   const price = v.lessonPrice !== null ? `${formatLessonPrice(v.lessonPrice)} сом` : 'цена урока'
   const percent = v.percent !== null ? `${v.percent} %` : 'ваш процент'
-  return `Сумма = ученико-уроки × ${price} × ${percent}. Цифры предварительные, пока бухгалтер не закрыл месяц.`
+  return `Сумма = ученико-уроки × ${price} × ${percent}. ${STUDENT_LESSON_NOTE} Цифры предварительные, пока бухгалтер не закрыл месяц.`
 }
 
 /** «14 ч», «66 ч», «1,5 ч». */

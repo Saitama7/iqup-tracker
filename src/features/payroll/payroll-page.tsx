@@ -31,6 +31,7 @@ import {
   payrollView,
   shiftMonth,
   som,
+  STUDENT_LESSON_NOTE,
   toPayCaption,
   type Adjustment,
   type PayrollRow,
@@ -374,9 +375,9 @@ function DesktopPayroll({ view, actions }: { view: PayrollView; actions: Advance
       </div>
 
       <p className="text-[13px] leading-normal font-bold text-ink-muted">
-        Начислено = ученико-уроки × цена урока по тарифу × процент учителя. Скидки учеников не
-        влияют. К выплате = начислено − авансы, выплата {payday(month)}. Цифры предварительные:
-        закрытие периода и сверка со старой схемой появятся в R3.
+        Начислено = ученико-уроки × цена урока по тарифу × процент учителя. {STUDENT_LESSON_NOTE}{' '}
+        Скидки учеников не влияют. К выплате = начислено − авансы, выплата {payday(month)}. Цифры
+        предварительные: закрытие периода и сверка со старой схемой появятся в R3.
       </p>
     </>
   )
