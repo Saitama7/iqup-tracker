@@ -1,6 +1,6 @@
 // У6 «Мой месяц» (docs/design/MyMonth.dc.html) and УД4 (docs/design/TeacherMonthDesk.dc.html).
 // Sums — payroll/calc.ts over the month's lessons; everything time-dependent is a pure function of
-// (rows, now), now = useNow() (§7.1). Advances come with R3: «—» until then, «К выплате» = начислено.
+// (rows, now), now = useNow() (§7.1). Advances — payroll_adjustments (#83): «К выплате» = начислено − авансы.
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { MonthPickerButton } from '@/components/ui/date-picker'
@@ -14,9 +14,12 @@ import { cn } from '@/lib/utils'
 import { fromMyMonth, NEXT_UNCONFIRMED_ID, type LessonSearch } from '@/features/lessons/return-to'
 import { lessonsWord } from '@/features/lessons/select'
 import { formatSom } from '@/features/tariffs/model'
+import { formatDayMonth } from '@/lib/time'
 import { myMonthQuery, usePayrollRealtime } from './api'
 import {
+  adjustmentCaption,
   filterMonthLessons,
+  minusSom,
   formulaNote,
   groupCaption,
   hoursCaption,
@@ -31,7 +34,7 @@ import {
   periodCaption,
   PRELIMINARY_NOTE,
   shiftMonth,
-  som,
+  toPayCaption,
   visibleLessons,
   type MonthLessonLine,
   type MonthLessonsFilter,
@@ -288,13 +291,31 @@ function MobileMonth({
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-between border-t border-paper/12 pt-3 text-[13px] font-bold">
-          <span className="opacity-70">Аванс</span>
-          <span className="text-brand">—</span>
+        <div className="flex flex-col gap-1.5 border-t border-paper/12 pt-3 text-[13px] font-bold">
+          {view.adjustments.length === 0 ? (
+            <div className="flex items-center justify-between">
+              <span className="opacity-70">Аванс</span>
+              <span className="text-brand">—</span>
+            </div>
+          ) : (
+            view.adjustments.map((a) => (
+              <div
+                key={a.id}
+                className="flex items-start justify-between gap-3"
+                data-testid="my-advance"
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="opacity-70">Аванс {formatDayMonth(a.issuedOn)}</span>
+                  {a.comment && <span className="text-xs break-words opacity-55">{a.comment}</span>}
+                </span>
+                <span className="whitespace-nowrap text-brand">{minusSom(a.amount)}</span>
+              </div>
+            ))
+          )}
         </div>
         <div className="flex items-center justify-between text-[15px] font-extrabold">
           <span>К выплате сейчас</span>
-          <span className="font-display text-lg whitespace-nowrap">{som(pay.amount)}</span>
+          <ToPay value={view.toPay} className="font-display text-lg" />
         </div>
       </TiltCard>
 
@@ -471,12 +492,20 @@ function DesktopMonth({
       <div className="grid grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,1fr))] gap-3.5">
         <TiltCard className="flex h-full flex-col gap-2.5 rounded-[20px] bg-ink px-[22px] py-5 text-paper">
           <span className={cn(kpiLabel, 'text-brand')}>К выплате {payday(month)}</span>
-          <p className="font-display text-[34px] leading-none font-extrabold whitespace-nowrap text-brand">
-            <CountUp value={pay.amount} />{' '}
-            <span className="text-base font-medium text-paper">сом</span>
-          </p>
-          <span className="text-xs font-bold opacity-70">
-            начислено {formatSom(pay.amount)} · аванс —
+          {view.toPay < 0 ? (
+            <ToPay
+              value={view.toPay}
+              className="font-display text-[26px] leading-none font-extrabold"
+            />
+          ) : (
+            <p className="font-display text-[34px] leading-none font-extrabold whitespace-nowrap text-brand">
+              <CountUp value={view.toPay} />{' '}
+              <span className="text-base font-medium text-paper">сом</span>
+            </p>
+          )}
+          <span className="text-xs font-bold opacity-70" data-testid="my-month-accrued">
+            начислено {formatSom(pay.amount)} · аванс{' '}
+            {view.advances > 0 ? minusSom(view.advances) : '—'}
           </span>
         </TiltCard>
         <Kpi label="Занятий · часов">
@@ -566,8 +595,30 @@ function DesktopMonth({
           </section>
           <section className={cn(card, 'flex flex-col gap-2.5 px-5 py-[18px]')}>
             <h2 className="text-sm font-extrabold">Авансы и корректировки</h2>
-            <p className="text-[13px] font-bold text-ink-muted">
-              — · бухгалтер внесёт авансы при закрытии месяца
+            {view.adjustments.length === 0 ? (
+              <p className="text-[13px] font-bold text-ink-muted">Авансов за месяц нет</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {view.adjustments.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex items-start justify-between gap-3 text-[13px] font-bold"
+                    data-testid="my-advance"
+                  >
+                    <span className="flex min-w-0 flex-col">
+                      <span>{adjustmentCaption(a)}</span>
+                      {a.comment && (
+                        <span className="text-xs break-words text-ink-muted">{a.comment}</span>
+                      )}
+                    </span>
+                    <span className="font-display whitespace-nowrap">{minusSom(a.amount)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="flex justify-between border-t border-line pt-2.5 text-sm font-extrabold">
+              <span>К выплате {payday(month)}</span>
+              <ToPay value={view.toPay} className="font-display" />
             </p>
           </section>
           <p className="rounded-2xl bg-stone px-4 py-3.5 text-xs leading-normal font-bold text-ink-muted">
@@ -576,6 +627,19 @@ function DesktopMonth({
         </aside>
       </div>
     </>
+  )
+}
+
+/** «К выплате»: below zero — «переплата N сом» in red (#83). */
+function ToPay({ value, className }: { value: number; className?: string }) {
+  const pay = toPayCaption(value)
+  return (
+    <span
+      className={cn('whitespace-nowrap', pay.overpaid && 'text-burned', className)}
+      data-testid="my-to-pay"
+    >
+      {pay.text}
+    </span>
   )
 }
 

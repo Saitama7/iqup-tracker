@@ -2,7 +2,7 @@
 -- correct them (attendance_correction_requests), the admin applies / rejects (0021).
 -- Self-contained fixtures in September 2004 (no seed holidays), rolled back.
 begin;
-select plan(56);
+select plan(57);
 
 -- ─── Seed payroll is untouched ──────────────────────────────────────────────
 select results_eq(
@@ -407,6 +407,15 @@ select results_eq(
      where teacher_id = '00000000-0000-4000-a000-000000000001' and month = '2026-09-01' $$,
   $$ values (38160) $$,
   'seed: Гульзат is still 38 160'
+);
+
+-- А10 search finds a request by the teacher and the group (0021, kept by 0022).
+select ok(
+  exists (select 1 from public.v_audit_feed
+          where entity = 'attendance_correction_requests'
+            and search like '%' || public.person_name_key('Teacher 74 A') || '%'
+            and search like '%' || public.person_name_key('S74 G1') || '%'),
+  'journal search finds a correction request by teacher and group'
 );
 
 select * from finish();

@@ -42,7 +42,7 @@ erDiagram
     LESSON }o--o| LESSON : "доп. урок восполняет"
     PAYROLL_PERIOD ||--o{ PAYROLL_LINE : "содержит"
     TEACHER ||--o{ PAYROLL_LINE : "начислено"
-    PAYROLL_LINE ||--o{ PAYROLL_ADJUSTMENT : "аванс / премия"
+    TEACHER ||--o{ PAYROLL_ADJUSTMENT : "аванс / премия за месяц"
     USER ||--o{ AUDIT_LOG : "совершил"
     GROUP ||--o{ TRIAL : "пробные в группу"
     LESSON ||--o{ TRIAL : "на конкретное занятие"
@@ -212,11 +212,14 @@ erDiagram
     }
     PAYROLL_ADJUSTMENT {
         uuid id
-        uuid payroll_line_id
+        uuid teacher_id
+        date month "месяц расчёта, 1-е число"
         enum kind "advance | bonus | correction"
-        numeric amount "+ или −"
-        string reason
+        int amount "> 0, сом; аванс вычитается"
+        date issued_on "дата выдачи"
+        string comment
         uuid created_by
+        timestamp created_at
     }
     AUDIT_LOG {
         uuid id
@@ -343,6 +346,9 @@ stateDiagram-v2
         Σ по attendance с consumes_credit = true   (present + absent_burned)
             за ученико-урок
   + Σ корректировок за M  (авансы со знаком минус, премии плюс)
+
+К выплате за M (15-го M+1) = ЗП за M − Σ авансов с month = M        (#83, И53)
+    аванс по умолчанию идёт в месяц даты выдачи; < 0 — «переплата»
 ```
 
 Пример: групповая, 8 учеников, все 12 занятий в месяце проведены, никто не пропускал, 45 % → 8 × 12 × 266,67 × 0,45 = **11 520 сом**. Если Айжан записалась 15-го и была на 6 занятиях → +6 × 120 = 720 сом.

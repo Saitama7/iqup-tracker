@@ -12,7 +12,7 @@ const searchSchema = z.object({
   month: z.string().regex(MONTH_RE).optional().catch(undefined),
 })
 
-// Б1 / БМ1 «Расчёт ЗП»: accountant, and admin read-only (И2).
+// Б1 / БМ1 «Расчёт ЗП»: accountant and admin (И2); both issue advances (И53), closing a period is R3.
 export const Route = createFileRoute('/_app/payroll')({
   validateSearch: searchSchema,
   beforeLoad: ({ context }) => {

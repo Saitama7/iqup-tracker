@@ -168,7 +168,7 @@ sequenceDiagram
 | `teacher_rates` | read свой процент | CRUD | read |
 | `subscriptions`, `payments` | read по своим ученикам (остаток и долг с суммами) | CRUD | read |
 | `payroll_periods` | read | read | open/close |
-| `payroll_adjustments` | read свои | CRUD (авансы) | CRUD |
+| `payroll_adjustments` | read свои | read; авансы — RPC `issue_advance` / `delete_payroll_adjustment` (с причиной, открытый месяц), 0099 | то же, что админ |
 | `audit_log` | — | read | read |
 
 Запись в `audit_log` — триггером `AFTER INSERT OR UPDATE OR DELETE`. Экран А10 читает `v_audit_feed` (0014, `security_invoker`): та же RLS, плюс `kind` для фильтра (`late` — подтверждено не в день занятия; `retro` — отметка изменена вне «Провести», проведённое занятие отменено/удалено, ставка исправлена с уже наступившей даты; `payment` — абонементы/оплаты; `attendance` — проведено в срок; `other`) и отметки «Провести», свёрнутые в строку занятия (`marks`). С 0019 `kind` — stored generated column `audit_log.kind` (`audit_kind()`, индекс `(kind, at, id)`; `retro` — ещё и вставка ставки с прошедшей `valid_from`), `search` — текущие имена ученика/группы/учителя строки для поиска (`person_name_key`), счётчики чипов — RPC `audit_feed_counts`.

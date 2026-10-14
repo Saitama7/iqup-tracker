@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { TariffTerms } from '@/features/tariffs/current'
 import {
+  adjustmentCaption,
+  advanceMonths,
   confirmedCaption,
   formulaNote,
   groupCaption,
@@ -18,6 +20,7 @@ import {
   pickMonth,
   ROUNDING_NOTE,
   shiftMonth,
+  toPayCaption,
   visibleLessons,
   type MonthLessonLine,
   type MyMonthGroup,
@@ -173,7 +176,7 @@ describe('myMonthView', () => {
     6,
   )
   const view = myMonthView(
-    { teacherId: 't', rates: RATES, groups: [a, b], tariffs: TARIFFS },
+    { teacherId: 't', rates: RATES, groups: [a, b], tariffs: TARIFFS, adjustments: [] },
     '2026-10',
     NOW,
   )
@@ -240,6 +243,7 @@ describe('myMonthView', () => {
         rates: [{ percent: 50, valid_from: '2026-09-01' }],
         groups: [mini],
         tariffs: TARIFFS,
+        adjustments: [],
       },
       '2026-10',
       NOW,
@@ -267,7 +271,7 @@ describe('myMonthView', () => {
       group_type: 'individual' as const,
     }
     const mixed = myMonthView(
-      { teacherId: 't', rates: RATES, groups: [a, solo], tariffs: TARIFFS },
+      { teacherId: 't', rates: RATES, groups: [a, solo], tariffs: TARIFFS, adjustments: [] },
       '2026-10',
       NOW,
     )
@@ -283,7 +287,7 @@ describe('myMonthView', () => {
       lesson({ attendance: [{ status: 'present', subscription: old }] }),
     ])
     const v = myMonthView(
-      { teacherId: 't', rates: RATES, groups: [g], tariffs: TARIFFS },
+      { teacherId: 't', rates: RATES, groups: [g], tariffs: TARIFFS, adjustments: [] },
       '2026-10',
       NOW,
     )
@@ -295,7 +299,7 @@ describe('myMonthView', () => {
   it("nothing held yet → the price of the groups' tariffs", () => {
     const g = group('e', 'Пусто', [])
     const v = myMonthView(
-      { teacherId: 't', rates: RATES, groups: [g], tariffs: TARIFFS },
+      { teacherId: 't', rates: RATES, groups: [g], tariffs: TARIFFS, adjustments: [] },
       '2026-10',
       NOW,
     )
@@ -312,7 +316,7 @@ describe('myMonthView', () => {
       }),
     ])
     const v = myMonthView(
-      { teacherId: 't', rates: RATES, groups: [g], tariffs: TARIFFS },
+      { teacherId: 't', rates: RATES, groups: [g], tariffs: TARIFFS, adjustments: [] },
       '2026-10',
       NOW,
     )
@@ -370,6 +374,8 @@ describe('payrollView (Б1)', () => {
           studentLessons: 318,
           noSubscription: 0,
           amount: 38_160,
+          advances: 5_000,
+          toPay: 33_160,
         },
         {
           teacherId: 'n',
@@ -378,6 +384,32 @@ describe('payrollView (Б1)', () => {
           studentLessons: 22,
           noSubscription: 0,
           amount: 3_663,
+          advances: 0,
+          toPay: 3_663,
+        },
+      ],
+      adjustments: [
+        {
+          id: 'a1',
+          teacherId: 'g',
+          month: '2026-09-01',
+          kind: 'advance',
+          amount: 2_000,
+          issuedOn: '2026-09-10',
+          comment: null,
+          author: 'Айгерим Маматова',
+          createdAt: '2026-09-10T05:00:00Z',
+        },
+        {
+          id: 'a2',
+          teacherId: 'g',
+          month: '2026-09-01',
+          kind: 'advance',
+          amount: 3_000,
+          issuedOn: '2026-09-18',
+          comment: 'по просьбе',
+          author: 'Каныкей',
+          createdAt: '2026-09-18T05:00:00Z',
         },
       ],
       teachers: [
@@ -419,7 +451,46 @@ describe('payrollView (Б1)', () => {
       noSubscription: 0,
       studentLessons: 340,
       amount: 41_823,
+      advances: 5_000,
+      toPay: 36_823,
+      overpaid: 0,
     })
+  })
+
+  it('«К выплате всего» does not net an overpaid teacher against the others (#83)', () => {
+    const v = payrollView(
+      {
+        preview: [
+          [1_000, 0],
+          [500, 2_000],
+        ].map(([amount = 0, advances = 0], i) => ({
+          teacherId: `t${i}`,
+          lessonsHeld: 1,
+          hours: 1,
+          studentLessons: 1,
+          noSubscription: 0,
+          amount,
+          advances,
+          toPay: amount - advances,
+        })),
+        adjustments: [],
+        teachers: [0, 1].map((i) => ({ id: `t${i}`, full_name: `T${i}`, rates: [], groups: [] })),
+        planned: [],
+      },
+      '2026-09',
+      NOW,
+    )
+    expect([v.total.toPay, v.total.overpaid]).toEqual([1_000, 1_500])
+  })
+
+  it('advances per teacher: Σ, «К выплате», history newest first (#83)', () => {
+    const g = view.rows[0]
+    expect([g?.advances, g?.toPay]).toEqual([5_000, 33_160])
+    expect(g?.adjustments.map(adjustmentCaption)).toEqual([
+      '18 сен · аванс · Каныкей',
+      '10 сен · аванс · Айгерим',
+    ])
+    expect(view.rows[2]?.adjustments).toEqual([])
   })
 
   it('total hours are rounded to 2 decimals, not float noise', () => {
@@ -432,7 +503,10 @@ describe('payrollView (Б1)', () => {
           studentLessons: 1,
           noSubscription: 0,
           amount: 100,
+          advances: 0,
+          toPay: 100,
         })),
+        adjustments: [],
         teachers: [0, 1, 2].map((i) => ({
           id: `t${i}`,
           full_name: `T${i}`,
@@ -453,5 +527,17 @@ describe('payrollView (Б1)', () => {
     expect(payrollCaption(view, '2026-09')).toBe(
       'Выплата 15 октября · 3 учителя · 74 занятия проведено · 1 не подтверждено',
     )
+  })
+})
+
+describe('advances captions (#83)', () => {
+  it('«К выплате» below zero reads «переплата»', () => {
+    expect(toPayCaption(33_160)).toEqual({ text: '33\u00a0160 сом', overpaid: false })
+    expect(toPayCaption(-2_000)).toEqual({ text: 'переплата 2\u00a0000 сом', overpaid: true })
+  })
+
+  it('an advance counts against the issue month by default; the one before and after may be chosen', () => {
+    expect(advanceMonths('2026-10-14')).toEqual(['2026-09', '2026-10', '2026-11'])
+    expect(advanceMonths('2026-01-05')).toEqual(['2025-12', '2026-01', '2026-02'])
   })
 })

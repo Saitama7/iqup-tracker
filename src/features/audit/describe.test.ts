@@ -419,6 +419,45 @@ describe('teacher_rates', () => {
   })
 })
 
+describe('payroll_adjustments (#83)', () => {
+  const advance = {
+    id: 'pa1',
+    teacher_id: GULZAT,
+    month: '2026-09-01',
+    kind: 'advance',
+    amount: 5000,
+    issued_on: '2026-09-18',
+    comment: 'по просьбе',
+  }
+
+  it('advance issued, deleted with a reason', () => {
+    const issued = describeAuditRow(
+      row({ entity: 'payroll_adjustments', action: 'insert', kind: 'payment', after: advance }),
+      lookups,
+    )
+    expect(plain(issued.parts)).toBe(
+      'Гульзат Асанова — аванс 5 000 сом от 18.09.2026 в счёт ЗП за сентябрь',
+    )
+    expect(issued.badge).toEqual({ label: 'Аванс', tone: 'warn' })
+    expect(issued.note).toBe('«по просьбе»')
+
+    const removed = describeAuditRow(
+      row({
+        entity: 'payroll_adjustments',
+        action: 'delete',
+        kind: 'payment',
+        before: advance,
+        reason: 'ошиблись суммой',
+      }),
+      lookups,
+    )
+    expect(plain(removed.parts)).toBe(
+      'Гульзат Асанова — аванс 5 000 сом от 18.09.2026 в счёт ЗП за сентябрь — удалён',
+    )
+    expect(removed.note).toBe('Причина: «ошиблись суммой» · «по просьбе»')
+  })
+})
+
 describe('tariffs', () => {
   const t = {
     id: 't3',

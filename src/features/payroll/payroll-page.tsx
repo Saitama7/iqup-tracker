@@ -4,8 +4,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { MonthPickerButton } from '@/components/ui/date-picker'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { Avatar } from '@/components/shell/shell-parts'
 import { formatSom } from '@/features/tariffs/model'
 import { useNow } from '@/lib/now'
@@ -14,7 +14,14 @@ import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import { payrollQuery, usePayrollRealtime } from './api'
 import {
+  AdvanceDialog,
+  AdvancesList,
+  DeleteAdvanceDialog,
+  type AdvanceTarget,
+} from './advance-dialog'
+import {
   hoursCaption,
+  minusSom,
   monthNom,
   monthOf,
   monthTitle,
@@ -24,10 +31,23 @@ import {
   payrollView,
   shiftMonth,
   som,
+  toPayCaption,
+  type Adjustment,
+  type PayrollRow,
   type PayrollView,
 } from './model'
 
 const R3_HINT = 'Закрытие периода и сверка появятся в R3'
+
+/** Dialog openers shared by both layouts (#83). */
+interface AdvanceActions {
+  month: string
+  /** Rows whose advances history is open. */
+  open: ReadonlySet<string>
+  toggle: (teacherId: string) => void
+  issue: (row: PayrollRow) => void
+  remove: (row: PayrollRow, a: Adjustment) => void
+}
 
 export function PayrollPage({ month }: { month: string }) {
   const now = useNow()
@@ -39,6 +59,32 @@ export function PayrollPage({ month }: { month: string }) {
   const source = useQuery(payrollQuery(month, today))
 
   const view = source.data ? payrollView(source.data, month, now) : null
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
+  const [issuing, setIssuing] = useState<AdvanceTarget | null>(null)
+  const [removing, setRemoving] = useState<{ name: string; adjustment: Adjustment } | null>(null)
+  const actions: AdvanceActions = {
+    month,
+    open,
+    toggle: (teacherId) => {
+      setOpen((prev) => {
+        const next = new Set(prev)
+        if (!next.delete(teacherId)) next.add(teacherId)
+        return next
+      })
+    },
+    issue: (r) => {
+      setIssuing({
+        teacherId: r.teacherId,
+        name: r.name,
+        month,
+        amount: r.amount,
+        advances: r.advances,
+      })
+    },
+    remove: (r, adjustment) => {
+      setRemoving({ name: r.name, adjustment })
+    },
+  }
   let body: ReactNode
   if (source.isError) {
     body = <Notice>Не удалось загрузить расчёт. Проверьте интернет — обновим сами.</Notice>
@@ -46,9 +92,9 @@ export function PayrollPage({ month }: { month: string }) {
     body = <Notice>Считаем зарплату…</Notice>
   } else {
     body = isDesktop ? (
-      <DesktopPayroll view={view} month={month} />
+      <DesktopPayroll view={view} actions={actions} />
     ) : (
-      <MobilePayroll view={view} month={month} />
+      <MobilePayroll view={view} actions={actions} />
     )
   }
 
@@ -102,6 +148,20 @@ export function PayrollPage({ month }: { month: string }) {
         </div>
       </header>
       {body}
+      <AdvanceDialog
+        target={issuing}
+        today={today}
+        onOpenChange={(o) => {
+          if (!o) setIssuing(null)
+        }}
+      />
+      <DeleteAdvanceDialog
+        adjustment={removing?.adjustment ?? null}
+        name={removing?.name ?? ''}
+        onOpenChange={(o) => {
+          if (!o) setRemoving(null)
+        }}
+      />
     </section>
   )
 }
@@ -159,16 +219,25 @@ const tile = 'flex flex-col gap-1 rounded-[18px] p-[18px]'
 const tileLabel = 'text-xs font-extrabold'
 const tileValue = 'font-display text-[26px] font-bold whitespace-nowrap'
 
-function DesktopPayroll({ view, month }: { view: PayrollView; month: string }) {
+function DesktopPayroll({ view, actions }: { view: PayrollView; actions: AdvanceActions }) {
   const { total } = view
+  const { month } = actions
   return (
     <>
       <div className="grid grid-cols-4 gap-3.5">
         <div className={cn(tile, 'bg-brand text-ink')}>
           <span className={cn(tileLabel, 'opacity-70')}>К выплате всего</span>
           <span className={cn(tileValue, 'font-extrabold')} data-testid="payroll-total">
-            {som(total.amount)}
+            {som(total.toPay)}
           </span>
+          {total.overpaid > 0 && (
+            <span
+              className="text-xs font-extrabold whitespace-nowrap text-burned-deep"
+              data-testid="payroll-overpaid"
+            >
+              Переплата {som(total.overpaid)}
+            </span>
+          )}
         </div>
         <div className={cn(tile, 'border border-line bg-card')}>
           <span className={cn(tileLabel, 'text-ink-muted')}>Ученико-уроков</span>
@@ -176,13 +245,15 @@ function DesktopPayroll({ view, month }: { view: PayrollView; month: string }) {
         </div>
         <div className={cn(tile, 'border border-line bg-card')}>
           <span className={cn(tileLabel, 'text-ink-muted')}>Авансов выдано</span>
-          <span className={tileValue}>—</span>
+          <span className={tileValue} data-testid="payroll-advances">
+            {total.advances > 0 ? som(total.advances) : '—'}
+          </span>
         </div>
         <Unconfirmed count={view.unconfirmed} />
       </div>
 
       <div className="overflow-x-auto rounded-[20px] border border-line bg-card">
-        <table className="w-full min-w-[900px] border-collapse" aria-label="Учителя">
+        <table className="w-full min-w-[1000px] border-collapse" aria-label="Учителя">
           <thead>
             <tr className="border-b border-line">
               <th className={th}>Учитель</th>
@@ -193,34 +264,96 @@ function DesktopPayroll({ view, month }: { view: PayrollView; month: string }) {
               <th className={cn(th, 'text-right')}>Начислено</th>
               <th className={cn(th, 'text-right')}>Авансы</th>
               <th className={cn(th, 'text-right')}>К выплате</th>
+              <th className={th}>
+                <span className="sr-only">Действия</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {view.rows.map((r) => (
-              <tr key={r.teacherId}>
-                <td className={td}>
-                  <div className="flex items-center gap-2.5">
-                    <Avatar name={r.name} className="size-8 text-[11px]" />
-                    <div>
-                      <div className="font-extrabold">{r.name}</div>
-                      <div className="text-xs font-bold text-ink-muted">{r.caption}</div>
-                      {r.noSubscription > 0 && (
-                        <div className="text-xs font-bold text-burned-strong">
-                          {noSubscriptionCaption(r.noSubscription)}
+            {view.rows.map((r) => {
+              const open = actions.open.has(r.teacherId)
+              const pay = toPayCaption(r.toPay)
+              return (
+                <Fragment key={r.teacherId}>
+                  <tr data-testid={`payroll-row-${r.teacherId}`}>
+                    <td className={td}>
+                      <div className="flex items-center gap-2.5">
+                        <Avatar name={r.name} className="size-8 text-[11px]" />
+                        <div>
+                          <div className="font-extrabold">{r.name}</div>
+                          <div className="text-xs font-bold text-ink-muted">{r.caption}</div>
+                          {r.noSubscription > 0 && (
+                            <div className="text-xs font-bold text-burned-strong">
+                              {noSubscriptionCaption(r.noSubscription)}
+                            </div>
+                          )}
                         </div>
+                      </div>
+                    </td>
+                    <td className={cn(td, num)}>{r.lessonsHeld}</td>
+                    <td className={cn(td, num)}>{String(r.hours).replace('.', ',')}</td>
+                    <td className={cn(td, num)}>{r.studentLessons}</td>
+                    <td className={cn(td, num)}>{r.percent ?? '—'}</td>
+                    <td className={cn(td, num, 'font-extrabold')}>{formatSom(r.amount)}</td>
+                    <td className={cn(td, num)}>
+                      {r.adjustments.length > 0 ? (
+                        <button
+                          type="button"
+                          aria-expanded={open}
+                          onClick={() => {
+                            actions.toggle(r.teacherId)
+                          }}
+                          className="inline-flex min-h-11 items-center gap-1 font-bold text-ink"
+                        >
+                          {minusSom(r.advances)}
+                          <ChevronDown
+                            className={cn('size-4 transition-transform', open && 'rotate-180')}
+                            aria-hidden
+                          />
+                          <span className="sr-only">История авансов</span>
+                        </button>
+                      ) : (
+                        <span className="text-ink-muted">—</span>
                       )}
-                    </div>
-                  </div>
-                </td>
-                <td className={cn(td, num)}>{r.lessonsHeld}</td>
-                <td className={cn(td, num)}>{String(r.hours).replace('.', ',')}</td>
-                <td className={cn(td, num)}>{r.studentLessons}</td>
-                <td className={cn(td, num)}>{r.percent ?? '—'}</td>
-                <td className={cn(td, num, 'font-extrabold')}>{formatSom(r.amount)}</td>
-                <td className={cn(td, num, 'text-ink-muted')}>—</td>
-                <td className={cn(td, num, 'font-display font-bold')}>{formatSom(r.amount)}</td>
-              </tr>
-            ))}
+                    </td>
+                    <td
+                      className={cn(
+                        td,
+                        num,
+                        'font-display font-bold',
+                        pay.overpaid && 'text-burned-strong',
+                      )}
+                      data-testid="payroll-to-pay"
+                    >
+                      {pay.overpaid ? pay.text : formatSom(r.toPay)}
+                    </td>
+                    <td className={cn(td, 'text-right')}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          actions.issue(r)
+                        }}
+                        className="min-h-11 rounded-xl border-[1.5px] border-line-strong bg-card px-3 text-[13px] font-extrabold whitespace-nowrap text-ink"
+                      >
+                        Выдать аванс
+                      </button>
+                    </td>
+                  </tr>
+                  {open && (
+                    <tr>
+                      <td colSpan={9} className="border-b border-line bg-band px-6 py-2">
+                        <AdvancesList
+                          adjustments={r.adjustments}
+                          onDelete={(a) => {
+                            actions.remove(r, a)
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              )
+            })}
           </tbody>
           <tfoot>
             <tr className="text-sm font-extrabold">
@@ -230,8 +363,11 @@ function DesktopPayroll({ view, month }: { view: PayrollView; month: string }) {
               <td className={cn('px-3 py-3.5', num)}>{formatSom(total.studentLessons)}</td>
               <td />
               <td className={cn('px-3 py-3.5', num)}>{formatSom(total.amount)}</td>
-              <td className={cn('px-3 py-3.5 text-ink-muted', num)}>—</td>
-              <td className={cn('px-3 py-3.5 font-display', num)}>{formatSom(total.amount)}</td>
+              <td className={cn('px-3 py-3.5', num, total.advances === 0 && 'text-ink-muted')}>
+                {total.advances > 0 ? minusSom(total.advances) : '—'}
+              </td>
+              <td className={cn('px-3 py-3.5 font-display', num)}>{formatSom(total.toPay)}</td>
+              <td />
             </tr>
           </tfoot>
         </table>
@@ -239,8 +375,8 @@ function DesktopPayroll({ view, month }: { view: PayrollView; month: string }) {
 
       <p className="text-[13px] leading-normal font-bold text-ink-muted">
         Начислено = ученико-уроки × цена урока по тарифу × процент учителя. Скидки учеников не
-        влияют. Выплата {payday(month)}. Цифры предварительные: закрытие периода, авансы и сверка со
-        старой схемой появятся в R3.
+        влияют. К выплате = начислено − авансы, выплата {payday(month)}. Цифры предварительные:
+        закрытие периода и сверка со старой схемой появятся в R3.
       </p>
     </>
   )
@@ -266,8 +402,9 @@ function Unconfirmed({ count }: { count: number }) {
 
 // ─── БМ1 · phone ────────────────────────────────────────────────────────────
 
-function MobilePayroll({ view, month }: { view: PayrollView; month: string }) {
+function MobilePayroll({ view, actions }: { view: PayrollView; actions: AdvanceActions }) {
   const { total } = view
+  const { month } = actions
   const stats = [
     [String(view.teachers), 'учителей'],
     [formatSom(total.studentLessons), 'уч-уроков'],
@@ -286,8 +423,18 @@ function MobilePayroll({ view, month }: { view: PayrollView; month: string }) {
           className="font-display text-[34px] leading-none font-extrabold whitespace-nowrap text-brand"
           data-testid="payroll-total"
         >
-          {formatSom(total.amount)} <span className="text-lg font-medium text-paper">сом</span>
+          {formatSom(total.toPay)} <span className="text-lg font-medium text-paper">сом</span>
         </p>
+        {total.overpaid > 0 && (
+          <p className="text-[13px] font-extrabold text-burned" data-testid="payroll-overpaid">
+            Переплата {som(total.overpaid)}
+          </p>
+        )}
+        {total.advances > 0 && (
+          <p className="text-[13px] font-bold opacity-70" data-testid="payroll-advances">
+            начислено {formatSom(total.amount)} · авансы {minusSom(total.advances)}
+          </p>
+        )}
         <div className="grid grid-cols-3 gap-2">
           {stats.map(([value, label]) => (
             <div key={label} className="flex flex-col gap-0.5 rounded-[14px] bg-paper/8 p-2.5">
@@ -301,36 +448,100 @@ function MobilePayroll({ view, month }: { view: PayrollView; month: string }) {
       <section className="flex flex-col gap-2" aria-label="По учителям">
         <h2 className="text-sm font-extrabold">По учителям</h2>
         <ul className="flex flex-col rounded-2xl border border-line bg-card px-3.5">
-          {view.rows.map((r) => (
-            <li
-              key={r.teacherId}
-              className="flex items-center gap-3 border-b border-line py-3 last:border-b-0"
-            >
-              <Avatar name={r.name} className="size-9 text-xs" />
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-sm font-extrabold">{r.name.split(' ')[0]}</span>
-                <span className="text-xs font-bold text-ink-muted">
-                  {[
-                    `${r.lessonsHeld} зан`,
-                    r.hours !== r.lessonsHeld ? hoursCaption(r.hours) : null,
-                    `${r.studentLessons} уч-ур`,
-                    r.percent !== null ? `${r.percent} %` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  {r.noSubscription > 0 && (
-                    <span className="text-burned-strong">
-                      {' · '}
-                      {noSubscriptionCaption(r.noSubscription)}
+          {view.rows.map((r) => {
+            const open = actions.open.has(r.teacherId)
+            const pay = toPayCaption(r.toPay)
+            return (
+              <li key={r.teacherId} className="flex flex-col border-b border-line last:border-b-0">
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() => {
+                    actions.toggle(r.teacherId)
+                  }}
+                  className="flex min-h-11 items-center gap-3 py-3 text-left"
+                  data-testid={`payroll-row-${r.teacherId}`}
+                >
+                  <Avatar name={r.name} className="size-9 text-xs" />
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="text-sm font-extrabold">{r.name.split(' ')[0]}</span>
+                    <span className="text-xs font-bold text-ink-muted">
+                      {[
+                        `${r.lessonsHeld} зан`,
+                        r.hours !== r.lessonsHeld ? hoursCaption(r.hours) : null,
+                        `${r.studentLessons} уч-ур`,
+                        r.percent !== null ? `${r.percent} %` : null,
+                        r.advances > 0 ? `аванс ${minusSom(r.advances)}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                      {r.noSubscription > 0 && (
+                        <span className="text-burned-strong">
+                          {' · '}
+                          {noSubscriptionCaption(r.noSubscription)}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-              </span>
-              <span className="font-display text-sm font-bold whitespace-nowrap">
-                {formatSom(r.amount)}
-              </span>
-            </li>
-          ))}
+                  </span>
+                  <span
+                    className={cn(
+                      'font-display text-sm font-bold whitespace-nowrap',
+                      pay.overpaid && 'text-burned-strong',
+                    )}
+                    data-testid="payroll-to-pay"
+                  >
+                    {pay.overpaid ? pay.text : formatSom(r.toPay)}
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      'size-4 shrink-0 text-ink-muted transition-transform',
+                      open && 'rotate-180',
+                    )}
+                    aria-hidden
+                  />
+                </button>
+                {open && (
+                  <div className="flex flex-col gap-2.5 pb-3.5">
+                    <div className="flex flex-col gap-1 rounded-xl bg-band px-3 py-2.5 text-[13px] font-bold">
+                      <div className="flex justify-between gap-3">
+                        <span className="text-ink-muted">Начислено</span>
+                        <span className="whitespace-nowrap">{som(r.amount)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-ink-muted">Авансы</span>
+                        <span className="whitespace-nowrap">
+                          {r.advances > 0 ? minusSom(r.advances) : '—'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between gap-3 font-extrabold">
+                        <span>К выплате {payday(month)}</span>
+                        <span
+                          className={cn('whitespace-nowrap', pay.overpaid && 'text-burned-strong')}
+                        >
+                          {pay.text}
+                        </span>
+                      </div>
+                    </div>
+                    <AdvancesList
+                      adjustments={r.adjustments}
+                      onDelete={(a) => {
+                        actions.remove(r, a)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        actions.issue(r)
+                      }}
+                      className="min-h-11 rounded-[14px] border-[1.5px] border-line-strong bg-card px-4 text-sm font-extrabold text-ink"
+                    >
+                      Выдать аванс
+                    </button>
+                  </div>
+                )}
+              </li>
+            )
+          })}
         </ul>
       </section>
 

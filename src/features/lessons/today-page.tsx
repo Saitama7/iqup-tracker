@@ -13,7 +13,7 @@ import { bishkekDate, formatDayLong, formatMonthNom, formatWeekdayLower } from '
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import { myPreviewQuery } from '@/features/payroll/api'
-import { monthOf } from '@/features/payroll/model'
+import { minusSom, monthOf, toPayCaption } from '@/features/payroll/model'
 import { formatSom } from '@/features/tariffs/model'
 import { trialsQuery, useTrialsRealtime } from '@/features/trials/api'
 import { TrialChip } from '@/features/trials/parts'
@@ -338,13 +338,15 @@ function MonthCard({ now }: { now: number }) {
     ...myPreviewQuery(teacher.data?.id ?? '', monthOf(bishkekDate(now))),
     enabled: !!teacher.data,
   })
+  // A row with only advances (nothing held yet) has zero lessons and accrual — read as is.
   const row = preview.data
   const ready = preview.isSuccess
+  const advances = row?.advances ?? 0
+  const pay = toPayCaption(row?.toPay ?? 0)
   const stats = [
     [ready ? String(row?.lessonsHeld ?? 0) : '—', 'занятий'],
     [ready ? String(row?.studentLessons ?? 0) : '—', 'ученико-уроков'],
-    // TODO(R3): advances (payroll_adjustments)
-    ['—', 'аванс'],
+    [ready && advances > 0 ? minusSom(advances) : '—', 'аванс'],
   ] as const
   return (
     <div className="flex min-h-[260px] flex-col justify-between gap-[18px] rounded-[24px] bg-ink p-[26px] text-paper">
@@ -363,6 +365,17 @@ function MonthCard({ now }: { now: number }) {
         {ready ? formatSom(row?.amount ?? 0) : '—'}{' '}
         <span className="text-lg font-medium text-paper">сом</span>
       </p>
+      {ready && advances > 0 && (
+        <p
+          className={cn(
+            '-mt-2 text-[13px] font-extrabold',
+            pay.overpaid ? 'text-burned' : 'opacity-70',
+          )}
+          data-testid="month-card-to-pay"
+        >
+          К выплате: {pay.text}
+        </p>
+      )}
       <div className="grid grid-cols-3 gap-2.5">
         {stats.map(([value, label]) => (
           <div key={label} className="flex flex-col gap-0.5 rounded-[14px] bg-paper/8 p-3">

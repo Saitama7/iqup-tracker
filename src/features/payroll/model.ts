@@ -14,6 +14,7 @@ import { tariffFor, type GroupType, type TariffTerms } from '@/features/tariffs/
 import { formatLessonPrice, formatSom } from '@/features/tariffs/model'
 import { bishkekDate, formatDayMonth } from '@/lib/time'
 import {
+  advancesTotal,
   byGroup,
   calcLessonPay,
   calcMonth,
@@ -21,8 +22,10 @@ import {
   rateOn,
   roundSom,
   subscriptionLessonPrice,
+  toPay,
   totals,
   type MonthPay,
+  type PayAdjustmentKind,
   type PayAttendance,
   type PayMark,
   type PayRate,
@@ -30,8 +33,8 @@ import {
 } from './calc'
 
 // TODO(R3, docs/03-project-plan.md «R3 — закрытие периода»): payroll_periods does not exist yet,
-// so every month is open and every sum is preliminary; «закрыт DD.MM», advances and «К выплате»
-// minus advances come with close_period / payroll_adjustments.
+// so every month is open and every sum is preliminary; «закрыт DD.MM» comes with close_period.
+// Advances are real since #83 (payroll_adjustments): «К выплате» = начислено − авансы.
 export const PRELIMINARY_NOTE = 'Предварительно — пока бухгалтер не закрыл месяц'
 
 // ─── Months (`YYYY-MM`) ─────────────────────────────────────────────────────
@@ -128,20 +131,44 @@ export interface MyMonthGroup {
   lessons: MyMonthLesson[]
 }
 
+/** A payroll_adjustments row (0022): an advance for now (#83). */
+export interface Adjustment {
+  id: string
+  teacherId: string
+  /** Payroll month, `YYYY-MM-01`. */
+  month: string
+  kind: PayAdjustmentKind
+  /** Whole som, > 0. */
+  amount: number
+  issuedOn: string
+  comment: string | null
+  /** Who entered it; null for a teacher (RLS hides other profiles) or a system entry. */
+  author: string | null
+  createdAt: string
+}
+
 export interface MyMonthSource {
   teacherId: string
   rates: PayRate[]
   groups: MyMonthGroup[]
   tariffs: TariffTerms[]
+  /** The month's adjustments of this teacher, oldest first. */
+  adjustments: Adjustment[]
 }
 
 /** One row of v_payroll_preview. */
 export interface PreviewRow extends PayTotals {
   teacherId: string
+  /** Σ advances of the month. */
+  advances: number
+  /** amount − advances; negative — overpaid. */
+  toPay: number
 }
 
 export interface PayrollSource {
   preview: PreviewRow[]
+  /** Every adjustment of the month, oldest first. */
+  adjustments: Adjustment[]
   teachers: {
     id: string
     full_name: string
@@ -211,6 +238,11 @@ export interface MonthGroupLine extends PayTotals {
 
 export interface MyMonthView {
   pay: MonthPay
+  /** Σ advances of the month (А8). */
+  advances: number
+  /** «К выплате» = начислено − авансы; negative — overpaid. */
+  toPay: number
+  adjustments: Adjustment[]
   percent: number | null
   /** Full lesson price when every group has the same one (266,67); null otherwise. */
   lessonPrice: number | null
@@ -285,6 +317,9 @@ export function myMonthView(source: MyMonthSource, month: string, now: number): 
 
   return {
     pay,
+    advances: advancesTotal(source.adjustments),
+    toPay: toPay(pay.amount, source.adjustments),
+    adjustments: source.adjustments,
     percent,
     lessonPrice,
     share:
@@ -408,11 +443,17 @@ export interface PayrollRow extends PayTotals {
   /** «Математика · 4 группы». */
   caption: string
   percent: number | null
+  advances: number
+  /** amount − advances; negative — overpaid. */
+  toPay: number
+  /** The teacher's adjustments of the month, newest first. */
+  adjustments: Adjustment[]
 }
 
 export interface PayrollView {
   rows: PayrollRow[]
-  total: PayTotals
+  /** toPay — Σ max(0, toPay): an overpaid teacher is not netted against the others' payout. */
+  total: PayTotals & { advances: number; toPay: number; overpaid: number }
   teachers: number
   unconfirmed: number
 }
@@ -440,6 +481,9 @@ export function payrollView(source: PayrollSource, month: string, now: number): 
         studentLessons: p?.studentLessons ?? 0,
         noSubscription: p?.noSubscription ?? 0,
         amount: p?.amount ?? 0,
+        advances: p?.advances ?? 0,
+        toPay: p?.toPay ?? 0,
+        adjustments: source.adjustments.filter((a) => a.teacherId === t.id).reverse(),
       }
     })
     .sort((a, b) => b.amount - a.amount || a.name.localeCompare(b.name, 'ru'))
@@ -452,6 +496,9 @@ export function payrollView(source: PayrollSource, month: string, now: number): 
       studentLessons: rows.reduce((n, r) => n + r.studentLessons, 0),
       noSubscription: rows.reduce((n, r) => n + r.noSubscription, 0),
       amount: rows.reduce((n, r) => n + r.amount, 0),
+      advances: rows.reduce((n, r) => n + r.advances, 0),
+      toPay: rows.reduce((n, r) => n + Math.max(0, r.toPay), 0),
+      overpaid: rows.reduce((n, r) => n + Math.max(0, -r.toPay), 0),
     },
     teachers: rows.length,
     unconfirmed: source.planned.filter((l) => lessonState(l, now) === 'ended_unconfirmed').length,
@@ -472,3 +519,37 @@ export function payrollCaption(v: PayrollView, month: string): string {
 
 /** «118 340» → with «сом» where the screen needs it. */
 export const som = (n: number) => `${formatSom(n)} сом`
+
+// ─── Advances (А8, #83) ─────────────────────────────────────────────────────
+
+/** «− 5 000» — an advance as it reduces the payout. */
+export const minusSom = (n: number) => `− ${formatSom(n)}`
+
+/** «К выплате»: «33 160 сом», below zero — «переплата 2 000 сом». */
+export function toPayCaption(n: number): { text: string; overpaid: boolean } {
+  return n < 0
+    ? { text: `переплата ${som(-n)}`, overpaid: true }
+    : { text: som(n), overpaid: false }
+}
+
+const ADJUSTMENT_LABEL: Record<PayAdjustmentKind, string> = {
+  advance: 'аванс',
+  bonus: 'премия',
+  correction: 'исправление',
+}
+
+/** «18 сен · аванс · Каныкей» (Б2а / УД4). */
+export function adjustmentCaption(a: Adjustment): string {
+  return [dayShort(a.issuedOn), ADJUSTMENT_LABEL[a.kind], a.author?.split(' ')[0] ?? null]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/**
+ * Months an advance may count against: the issue month by default (А8), the one before it (an
+ * advance for a month just over, before the 15th) and the one after.
+ */
+export function advanceMonths(issuedOn: string): string[] {
+  const m = monthOf(issuedOn)
+  return [shiftMonth(m, -1), m, shiftMonth(m, 1)]
+}
