@@ -4,6 +4,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { GULZAT, KANYKEI, login } from './support/auth'
+import { groupTeacher } from './support/db'
 
 // Needs the local stack + `pnpm seed:users`. Seed: Гульзат teaches 8 класс А 09:00, 6 класс 11:00,
 // 8 класс Б 14:00 on ВТ/ЧТ/СБ and 5 класс 15:00 on ПН/СР/ПТ (lessons from 1 Sep, ensure_lessons).
@@ -170,7 +171,13 @@ test('realtime: admin cancels a lesson → its card leaves the deck without relo
   await cleanup()
   const { data: extra, error } = await db
     .from('lessons')
-    .insert({ group_id: GROUP_8B, lesson_date: day, planned_start: '18:00', duration_min: 60 })
+    .insert({
+      group_id: GROUP_8B,
+      teacher_id: await groupTeacher(db, GROUP_8B),
+      lesson_date: day,
+      planned_start: '18:00',
+      duration_min: 60,
+    })
     .select('id')
     .single()
   if (error) throw error

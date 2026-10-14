@@ -41,7 +41,7 @@ async function source(supabase: Client) {
     supabase
       .from('lessons')
       .select(
-        'id, group_id, lesson_date, duration_min, status, group:groups!inner(teacher_id), attendance(status, subscription:subscriptions(price_full, lessons_total))',
+        'id, group_id, lesson_date, duration_min, status, teacher_id, attendance(status, subscription:subscriptions(price_full, lessons_total))',
       ),
     supabase.from('teacher_rates').select('teacher_id, percent, valid_from'),
   ])
@@ -50,7 +50,7 @@ async function source(supabase: Client) {
 
   const byKey = new Map<string, PayLesson[]>()
   for (const l of lessons.data) {
-    const key = `${l.group.teacher_id}|${l.lesson_date.slice(0, 7)}-01`
+    const key = `${l.teacher_id}|${l.lesson_date.slice(0, 7)}-01`
     const list = byKey.get(key) ?? []
     list.push(l)
     byKey.set(key, list)

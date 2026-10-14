@@ -121,7 +121,7 @@ export interface MonthPay extends PayTotals {
 
 /**
  * One teacher's pay for the lessons given — callers pass one calendar month of one teacher's groups
- * (groups.teacher_id; substitutes never matter, А7) and that teacher's rates. Only `held` lessons
+ * (lessons.teacher_id — the teacher paid for the lesson, kept when the group is handed over, 0020; substitutes never matter, А7) and that teacher's rates. Only `held` lessons
  * count: planned (not confirmed yet) and cancelled ones pay nothing (А6, Б2). Each consumed mark is
  * priced by its subscription (markPay, К6); the percent is taken on each lesson date
  * (`valid_from`), so a rate changed mid-month splits the month.
@@ -140,6 +140,22 @@ export function calcMonth(lessons: readonly PayLesson[], rates: readonly PayRate
     })
   }
   return { ...totals(paid), lessons: paid }
+}
+
+/**
+ * Lessons per paid teacher: by lessons.teacher_id, never by the group's current teacher (0020) —
+ * the same grouping as v_payroll_preview.
+ */
+export function byTeacher<T extends { teacher_id: string }>(
+  lessons: readonly T[],
+): Map<string, T[]> {
+  const teachers = new Map<string, T[]>()
+  for (const l of lessons) {
+    const list = teachers.get(l.teacher_id)
+    if (list) list.push(l)
+    else teachers.set(l.teacher_id, [l])
+  }
+  return teachers
 }
 
 /** Totals of some of the paid lessons (a group, a list page) — rounded once, like the month. */

@@ -26,6 +26,8 @@ const lessonSchema = z.object({
   makes_up_for_lesson_id: z.uuid().nullable(),
   cancel_reason: z.enum(['center', 'teacher', 'holiday', 'all_frozen']).nullable(),
   confirmed_at: z.string().nullable(),
+  // the teacher paid for the lesson (lessons.teacher_id, 0020), not the group's current one
+  teacher: z.object({ id: z.uuid(), full_name: z.string() }),
   group: z.object({
     id: z.uuid(),
     name: z.string(),
@@ -33,7 +35,6 @@ const lessonSchema = z.object({
     group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
     room: z.string().nullable(),
     status: z.enum(['forming', 'active', 'archived']),
-    teacher: z.object({ id: z.uuid(), full_name: z.string() }),
     enrollments: z.array(z.object({ status: z.enum(['active', 'finished']) })),
   }),
   attendance: z.array(z.object({ status: z.enum(['present', 'absent_frozen', 'absent_burned']) })),
@@ -65,7 +66,7 @@ export interface AdminLesson {
 }
 
 const LESSON_FIELDS =
-  'id, lesson_date, planned_start, duration_min, status, is_extra, makes_up_for_lesson_id, cancel_reason, confirmed_at, group:groups!inner(id, name, subject:subjects(name), group_type, room, status, teacher:teachers!inner(id, full_name), enrollments(status)), attendance(status)'
+  'id, lesson_date, planned_start, duration_min, status, is_extra, makes_up_for_lesson_id, cancel_reason, confirmed_at, group:groups!inner(id, name, subject:subjects(name), group_type, room, status, enrollments(status)), teacher:teachers!lessons_teacher_id_fkey(id, full_name), attendance(status)'
 
 async function toLessons(data: unknown): Promise<AdminLesson[]> {
   const rows = z.array(lessonSchema).parse(data)
@@ -84,7 +85,7 @@ async function toLessons(data: unknown): Promise<AdminLesson[]> {
     }
   }
   return rows.map((r) => {
-    const { teacher, enrollments, ...group } = r.group
+    const { enrollments, ...group } = r.group
     return {
       id: r.id,
       lesson_date: r.lesson_date,
@@ -96,7 +97,7 @@ async function toLessons(data: unknown): Promise<AdminLesson[]> {
       confirmed_at: r.confirmed_at,
       makesUpFor: r.makes_up_for_lesson_id ? (dates.get(r.makes_up_for_lesson_id) ?? null) : null,
       group,
-      teacher: { id: teacher.id, name: teacher.full_name },
+      teacher: { id: r.teacher.id, name: r.teacher.full_name },
       students: enrollments.filter((e) => e.status === 'active').length,
       attendance: r.attendance,
     }

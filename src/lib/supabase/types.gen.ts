@@ -288,6 +288,7 @@ export type Database = {
           planned_start: string
           status: Database['public']['Enums']['lesson_status']
           substitute_teacher_id: string | null
+          teacher_id: string
         }
         ComputedFields: never
         Insert: {
@@ -307,6 +308,7 @@ export type Database = {
           planned_start: string
           status?: Database['public']['Enums']['lesson_status']
           substitute_teacher_id?: string | null
+          teacher_id: string
         }
         Update: {
           cancel_reason?: Database['public']['Enums']['cancel_reason'] | null
@@ -325,6 +327,7 @@ export type Database = {
           planned_start?: string
           status?: Database['public']['Enums']['lesson_status']
           substitute_teacher_id?: string | null
+          teacher_id?: string
         }
         Relationships: [
           {
@@ -358,6 +361,13 @@ export type Database = {
           {
             foreignKeyName: 'lessons_substitute_teacher_id_fkey'
             columns: ['substitute_teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teachers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lessons_teacher_id_fkey'
+            columns: ['teacher_id']
             isOneToOne: false
             referencedRelation: 'teachers'
             referencedColumns: ['id']
@@ -916,6 +926,7 @@ export type Database = {
           planned_start: string | null
           status: Database['public']['Enums']['lesson_status'] | null
           substitute_teacher_id: string | null
+          teacher_id: string | null
         }
         ComputedFields: never
         Insert: {
@@ -936,6 +947,7 @@ export type Database = {
           planned_start?: string | null
           status?: Database['public']['Enums']['lesson_status'] | null
           substitute_teacher_id?: string | null
+          teacher_id?: string | null
         }
         Update: {
           cancel_reason?: Database['public']['Enums']['cancel_reason'] | null
@@ -955,6 +967,7 @@ export type Database = {
           planned_start?: string | null
           status?: Database['public']['Enums']['lesson_status'] | null
           substitute_teacher_id?: string | null
+          teacher_id?: string | null
         }
         Relationships: [
           {
@@ -992,6 +1005,13 @@ export type Database = {
             referencedRelation: 'teachers'
             referencedColumns: ['id']
           },
+          {
+            foreignKeyName: 'lessons_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teachers'
+            referencedColumns: ['id']
+          },
         ]
       }
       v_payroll_preview: {
@@ -1007,7 +1027,7 @@ export type Database = {
         ComputedFields: never
         Relationships: [
           {
-            foreignKeyName: 'groups_teacher_id_fkey'
+            foreignKeyName: 'lessons_teacher_id_fkey'
             columns: ['teacher_id']
             isOneToOne: false
             referencedRelation: 'teachers'
@@ -1106,6 +1126,7 @@ export type Database = {
     Functions: {
       archive_group: { Args: { p_group_id: string }; Returns: number }
       assert_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
+      assert_enrollment_undoable: { Args: { p_enrollment_id: string }; Returns: undefined }
       assert_payment_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
       attendance_subscription: {
         Args: { p_lesson_id: string; p_student_id: string }
@@ -1156,6 +1177,21 @@ export type Database = {
         }
         Returns: undefined
       }
+      change_group_teacher: {
+        Args: { p_from?: string; p_group_id: string; p_teacher_id: string }
+        Returns: {
+          lessons_held: number
+          lessons_moved: number
+        }[]
+      }
+      change_group_teacher_preview: {
+        Args: { p_from?: string; p_group_id: string; p_teacher_id: string }
+        Returns: {
+          lessons_held: number
+          lessons_locked: number
+          lessons_total: number
+        }[]
+      }
       confirm_lesson: { Args: { p_lesson_id: string; p_marks: Json }; Returns: string }
       create_extra_lesson: {
         Args: { p_date: string; p_group_id: string; p_makes_up_for?: string; p_start: string }
@@ -1184,6 +1220,7 @@ export type Database = {
         Returns: Database['public']['Enums']['role'][]
       }
       current_teacher_id: { Args: Record<PropertyKey, never>; Returns: string }
+      delete_group: { Args: { p_group_id: string }; Returns: number }
       enroll_student: {
         Args: {
           p_discount_pct?: number
@@ -1210,11 +1247,45 @@ export type Database = {
           subscription_id: string
         }[]
       }
+      enrollment_attendance: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          consumes_credit: boolean | null
+          id: string
+          lesson_id: string
+          marked_at: string
+          marked_by: string | null
+          status: Database['public']['Enums']['attendance_status']
+          student_id: string
+          subscription_id: string | null
+        }[]
+        SetofOptions: {
+          from: '*'
+          to: 'attendance'
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      enrollment_undo_info: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          burned_marks: number
+          frozen_marks: number
+          locked_marks: number
+          paid_total: number
+          payments: number
+          present_marks: number
+          subscriptions: number
+          trial_id: string
+        }[]
+      }
       ensure_lessons: { Args: { p_until: string }; Returns: number }
       generate_lessons: { Args: { p_group_id: string; p_until: string }; Returns: number }
+      group_delete_blockers: { Args: { p_group_id: string }; Returns: string[] }
       is_accountant: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean }
+      leads_group: { Args: { p_group_id: string }; Returns: boolean }
       lesson_starts_at: { Args: { p_date: string; p_start: string }; Returns: string }
       payment_time: { Args: { p_paid_on: string }; Returns: string }
       person_name_key: { Args: { p_name: string }; Returns: string }
@@ -1237,6 +1308,13 @@ export type Database = {
           p_subscription_id: string
         }
         Returns: string
+      }
+      remove_enrollment: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          marks_deleted: number
+          subscriptions_deleted: number
+        }[]
       }
       reschedule_group: {
         Args: {
@@ -1276,6 +1354,10 @@ export type Database = {
       teaches_lesson: { Args: { p_lesson_id: string }; Returns: boolean }
       teaches_student: { Args: { p_student_id: string }; Returns: boolean }
       teaches_subscription: { Args: { p_subscription_id: string }; Returns: boolean }
+      transfer_enrollment: {
+        Args: { p_enrollment_id: string; p_group_id: string; p_start_date?: string }
+        Returns: string
+      }
       user_last_sign_in: {
         Args: Record<PropertyKey, never>
         Returns: {

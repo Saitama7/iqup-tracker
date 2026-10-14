@@ -5,6 +5,7 @@ import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { GULZAT, login } from './support/auth'
 import { lockSeed } from './support/seed-lock'
+import { groupTeacher } from './support/db'
 
 // Needs the local stack + `pnpm seed:users`. Seed: Гульзат teaches 8 класс А and 8 класс Б (8 students
 // each, ВТ/ЧТ/СБ, from 1 Sep). Each test works on its own extra lesson at 19:00 on a September day and
@@ -47,6 +48,7 @@ async function extraLesson(db: Db, group: string, day: string) {
     .from('lessons')
     .insert({
       group_id: group,
+      teacher_id: await groupTeacher(db, group),
       lesson_date: day,
       planned_start: '19:00',
       duration_min: 60,
@@ -226,6 +228,7 @@ test('третья заморозка на абонементе — кнопка
       .from('lessons')
       .insert({
         group_id: GROUP_8B,
+        teacher_id: await groupTeacher(db, GROUP_8B),
         lesson_date: d,
         planned_start: '19:00',
         duration_min: 60,

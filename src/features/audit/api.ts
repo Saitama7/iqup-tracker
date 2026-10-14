@@ -78,6 +78,11 @@ const field = (row: AuditRow, key: string) => {
   return typeof v === 'string' ? v : null
 }
 
+const before = (row: AuditRow, key: string) => {
+  const v = row.before?.[key]
+  return typeof v === 'string' ? v : null
+}
+
 const lessonSchema = z.object({
   id: z.uuid(),
   group_id: z.uuid(),
@@ -172,6 +177,8 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
     ...rows
       .filter((r) => r.entity === 'lessons' || r.entity === 'enrollments' || r.entity === 'trials')
       .map((r) => field(r, 'group_id')),
+    // a transferred enrollment: the group it left (0020)
+    ...rows.filter((r) => r.entity === 'enrollments').map((r) => before(r, 'group_id')),
     ...rows.filter((r) => r.entity === 'groups').map((r) => r.entityId),
     ...lessons.map((l) => l.group_id),
     ...enrollments.map((e) => e.group_id),
@@ -179,6 +186,10 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
   const teacherIds = ids([
     ...rows.filter((r) => r.entity === 'teacher_rates').map((r) => field(r, 'teacher_id')),
     ...rows.filter((r) => r.entity === 'lessons').map((r) => field(r, 'substitute_teacher_id')),
+    // teacher changes (0020): who it was and who it became, groups and lessons
+    ...rows
+      .filter((r) => r.entity === 'groups' || r.entity === 'lessons')
+      .flatMap((r) => [before(r, 'teacher_id'), field(r, 'teacher_id')]),
   ])
   const [students, groups, teachers] = await Promise.all([
     select(

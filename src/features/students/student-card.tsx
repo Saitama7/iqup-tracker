@@ -141,14 +141,30 @@ function EditStartButton({ e, onClick }: { e: EnrollmentView; onClick: () => voi
   )
 }
 
+/** «Убрать из группы» (#73) — a mistaken enrollment; the dialog says what it deletes or why not. */
+function RemoveButton({ e, onClick }: { e: EnrollmentView; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Убрать из группы: ${e.groupLabel}`}
+      className="flex min-h-11 items-center self-start text-xs font-extrabold whitespace-nowrap text-burned-strong"
+    >
+      Убрать из группы
+    </button>
+  )
+}
+
 export function EnrollmentCard({
   e,
   today,
   onEditStart,
+  onRemove,
 }: {
   e: EnrollmentView
   today: string
   onEditStart?: () => void
+  onRemove?: () => void
 }) {
   const sub = e.subscription
   const b = e.balance
@@ -162,7 +178,10 @@ export function EnrollmentCard({
         <div className="flex flex-col gap-0.5">
           <h2 className="text-base font-extrabold">{e.groupLabel}</h2>
           <p className="text-xs font-bold text-ink-muted">{enrollmentCaption(e, today)}</p>
-          {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
+          <div className="flex flex-wrap gap-x-4">
+            {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
+            {onRemove && <RemoveButton e={e} onClick={onRemove} />}
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
           {b ? <BalanceChip b={b} /> : !sub && e.refunded && <RefundedChip />}
@@ -218,10 +237,12 @@ export function MobileEnrollment({
   e,
   today,
   onEditStart,
+  onRemove,
 }: {
   e: EnrollmentView
   today: string
   onEditStart?: () => void
+  onRemove?: () => void
 }) {
   const sub = e.subscription
   const b = e.balance
@@ -243,7 +264,10 @@ export function MobileEnrollment({
           ? `${sub.lessons_total} уроков · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
           : enrollmentCaption(e, today)}
       </p>
-      {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
+      <div className="flex flex-wrap gap-x-4">
+        {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
+        {onRemove && <RemoveButton e={e} onClick={onRemove} />}
+      </div>
       {sub && b ? (
         <>
           <UsageBar b={b} thin />

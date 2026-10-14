@@ -247,6 +247,8 @@ function lateBy(row: AuditRow): string | null {
     : `через ${days} ${pluralRu(days, ['день', 'дня', 'дней'])}`
 }
 
+const teacherName = (id: string | null, l: AuditLookups) => (id && l.teachers[id]) || 'учитель'
+
 function describeLesson(row: AuditRow, l: AuditLookups): Described {
   const s = current(row)
   const groupId = str(s, 'group_id')
@@ -318,6 +320,23 @@ function describeLesson(row: AuditRow, l: AuditLookups): Described {
       note: comment ? `Комментарий: «${comment}»` : null,
     }
   }
+  if (
+    changed(row, 'teacher_id') &&
+    !changed(row, 'lesson_date') &&
+    !changed(row, 'planned_start')
+  ) {
+    const day = str(s, 'lesson_date')
+    return {
+      badge: { label: 'Учитель', tone: 'teal' },
+      link,
+      parts: [
+        `Занятие ${day ? dayMonth(day) : where}: учитель `,
+        strong(teacherName(str(row.before, 'teacher_id'), l)),
+        ' → ',
+        strong(teacherName(str(row.after, 'teacher_id'), l)),
+      ],
+    }
+  }
   if (changed(row, 'lesson_date') || changed(row, 'planned_start')) {
     const from = lessonWhere(
       { groupId, date: str(row.before, 'lesson_date'), start: str(row.before, 'planned_start') },
@@ -372,7 +391,16 @@ function moved(row: AuditRow, key: string): Part[] {
   return [` с ${was ? dayMonth(was) : '—'} на `, strong(now ? dayMonth(now) : '—')]
 }
 
-/** groups are audited for start_date only (0017): «старт группы перенесён с 18.09 на 01.09». */
+const TEACHER_REASON = 'change_group_teacher:'
+/** Service reasons of the undo RPCs (0020) are not a human «Причина». */
+const isServiceReason = (r: string) =>
+  r === 'confirm_lesson' ||
+  r === 'remove_enrollment' ||
+  r === 'transfer_enrollment' ||
+  r === 'delete_group' ||
+  r.startsWith(TEACHER_REASON)
+
+/** groups are audited on start_date / teacher_id update and on delete (0017, 0020): «старт группы перенесён с 18.09 на 01.09». */
 function describeGroup(row: AuditRow, l: AuditLookups): Described {
   const name = l.groups[row.entityId]
     ? groupName(row.entityId, l)
@@ -383,6 +411,32 @@ function describeGroup(row: AuditRow, l: AuditLookups): Described {
       badge: { label: 'Группа', tone: 'teal' },
       link,
       parts: [strong(name), ' — старт группы перенесён', ...moved(row, 'start_date')],
+    }
+  }
+  if (row.action === 'update' && changed(row, 'teacher_id')) {
+    // reason «change_group_teacher:YYYY-MM-DD» carries the date the lessons moved from (#73)
+    const from = row.reason?.startsWith(TEACHER_REASON)
+      ? row.reason.slice(TEACHER_REASON.length)
+      : ''
+    return {
+      badge: { label: 'Учитель', tone: 'teal' },
+      link,
+      parts: [
+        'учитель группы ',
+        strong(name),
+        ' сменён с ',
+        strong(teacherName(str(row.before, 'teacher_id'), l)),
+        ' на ',
+        strong(teacherName(str(row.after, 'teacher_id'), l)),
+        ...(/^\d{4}-\d{2}-\d{2}$/.test(from) ? [` с ${dayMonth(from)}`] : []),
+      ],
+    }
+  }
+  if (row.action === 'delete') {
+    return {
+      badge: { label: 'Удалено', tone: 'stone' },
+      link: null,
+      parts: ['группа ', strong(name), ' удалена'],
     }
   }
   return {
@@ -541,7 +595,24 @@ function describeEnrollment(row: AuditRow, l: AuditLookups): Described {
     return {
       badge: { label: 'Зачисление', tone: 'stone' },
       link,
-      parts: [...who, `зачисление в ${group} удалено`],
+      parts: [
+        ...who,
+        `зачисление в ${group} удалено`,
+        row.reason === 'remove_enrollment' ? ' (ошибочное)' : '',
+      ],
+    }
+  }
+  if (changed(row, 'group_id')) {
+    return {
+      badge,
+      link,
+      parts: [
+        ...who,
+        'переведён(а) из ',
+        strong(groupName(str(row.before, 'group_id'), l)),
+        ' в ',
+        strong(group),
+      ],
     }
   }
   if (changed(row, 'start_date')) {
@@ -799,7 +870,7 @@ const REASON_LABEL: Record<string, string> = {
  */
 function reasonNote(row: AuditRow, note: string | null): string | null {
   const reason = row.reason?.trim()
-  if (!reason || reason === 'confirm_lesson') return null
+  if (!reason || reason === 'confirm_lesson' || isServiceReason(reason)) return null
   const cancel = /^cancel:\s*(\S+)$/.exec(reason)
   if (cancel) {
     if (row.entity === 'lessons') return null
