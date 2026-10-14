@@ -1,5 +1,5 @@
 // #81: leaving a group — «Перевести в другую группу» (the remainder moves), «Ушёл из группы» (finish +
-// refund or keep), «Записан по ошибке — удалить» (marks deleted, payroll drops). Admin-only RPCs of 0099;
+// refund or keep), «Записан по ошибке — удалить» (marks deleted, payroll drops). Admin-only RPCs of 0024;
 // the database checks every rule and computes every number the dialogs show.
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'

@@ -1,5 +1,5 @@
 -- Issue #81: transfer to a group of another type with the remainder of the money, «Ушёл» with a refund,
--- «Записан по ошибке» with the payroll going down (0099). Hadija's case, surplus, debt, refusals,
+-- «Записан по ошибке» with the payroll going down (0024). Hadija's case, surplus, debt, refusals,
 -- closed period, access, journal; review #86: a discount, the new teacher's payroll, several
 -- subscriptions with a carried debt (И37), a carried debt before the first lesson, «остаток центру»,
 -- the void record out of the way of a new enrollment; the seed payroll stays. Fixtures in 2003 (no seed holidays), rolled back.

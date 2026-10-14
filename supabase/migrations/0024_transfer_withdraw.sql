@@ -236,7 +236,7 @@ begin
       and e.id <> v_enrollment.id
       and e.start_date <= coalesce(v_enrollment.end_date, 'infinity'::date)
       and coalesce(e.end_date, 'infinity'::date) >= p_start_date
-      and not (e.status = 'finished' and e.end_date is null) -- a void record (0099) holds no dates
+      and not (e.status = 'finished' and e.end_date is null) -- a void record (0024) holds no dates
   ) then
     raise exception 'another enrollment of the student in this group overlaps these dates'
       using errcode = 'unique_violation';
@@ -318,7 +318,7 @@ begin
       and e.group_id = p_group_id
       and e.start_date <= coalesce(v_enrollment.end_date, 'infinity'::date)
       and coalesce(e.end_date, 'infinity'::date) >= v_start
-      and not (e.status = 'finished' and e.end_date is null) -- a void record (0099) holds no dates
+      and not (e.status = 'finished' and e.end_date is null) -- a void record (0024) holds no dates
   ) then
     raise exception 'the student is already enrolled in the target group on these dates'
       using errcode = 'unique_violation';

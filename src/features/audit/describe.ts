@@ -1034,7 +1034,7 @@ export const authorShort = (author: string) =>
 /** audit_log.reason written by an RPC (iqup.audit_reason) as words, not codes. */
 const REASON_LABEL: Record<string, string> = {
   archive_group: 'группа переведена в архив',
-  // #81 (0099)
+  // #81 (0024)
   transfer_student: 'перевод в другую группу',
   withdraw_enrollment: 'ученик ушёл из группы',
   delete_enrollment: 'записан(а) по ошибке',

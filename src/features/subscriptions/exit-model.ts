@@ -1,5 +1,5 @@
 // #81: words and dates of the «⋯» dialogs of an enrollment (transfer / left / mistake). The numbers come
-// from the database (enrollment_settlement, transfer_preview, enrollment_payroll_impact, 0099).
+// from the database (enrollment_settlement, transfer_preview, enrollment_payroll_impact, 0024).
 import { pluralRu } from '@/features/lessons/select'
 import { groupLabel, firstName, type GroupBrief } from '@/features/students/model'
 import { formatLessonPrice, formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'

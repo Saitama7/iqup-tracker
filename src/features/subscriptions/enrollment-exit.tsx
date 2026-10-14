@@ -35,7 +35,7 @@ import {
 
 // #81: the «⋯» of an enrollment on А6 and on the group page — «Перевести в другую группу», «Ушёл из
 // группы», «Записан по ошибке — удалить». Each dialog shows the money (and the payroll) before the
-// button; the database recomputes and checks everything (0099).
+// button; the database recomputes and checks everything (0024).
 
 export type ExitAction = 'transfer' | 'withdraw' | 'delete'
 
