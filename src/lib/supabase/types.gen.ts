@@ -186,6 +186,66 @@ export type Database = {
           },
         ]
       }
+      attendance_presets: {
+        Row: {
+          comment: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          lesson_id: string
+          status: Database['public']['Enums']['attendance_status']
+          student_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lesson_id: string
+          status?: Database['public']['Enums']['attendance_status']
+          student_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lesson_id?: string
+          status?: Database['public']['Enums']['attendance_status']
+          student_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'attendance_presets_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'attendance_presets_lesson_id_fkey'
+            columns: ['lesson_id']
+            isOneToOne: false
+            referencedRelation: 'lessons'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'attendance_presets_lesson_id_fkey'
+            columns: ['lesson_id']
+            isOneToOne: false
+            referencedRelation: 'v_lesson_status'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'attendance_presets_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -1320,6 +1380,10 @@ export type Database = {
           lessons_total: number
         }[]
       }
+      clear_attendance_preset: {
+        Args: { p_lesson_id: string; p_student_id: string }
+        Returns: boolean
+      }
       confirm_lesson: { Args: { p_lesson_id: string; p_marks: Json }; Returns: string }
       correct_attendance: {
         Args: { p_lesson_id: string; p_marks: Json; p_reason: string }
@@ -1478,6 +1542,10 @@ export type Database = {
         }[]
       }
       server_now: { Args: Record<PropertyKey, never>; Returns: string }
+      set_attendance_preset: {
+        Args: { p_comment?: string; p_lesson_id: string; p_student_id: string }
+        Returns: string
+      }
       set_enrollment_start: {
         Args: { p_enrollment_id: string; p_start_date: string }
         Returns: undefined
