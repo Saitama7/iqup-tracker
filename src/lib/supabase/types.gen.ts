@@ -519,6 +519,58 @@ export type Database = {
           },
         ]
       }
+      payroll_adjustments: {
+        Row: {
+          amount: number
+          comment: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          issued_on: string
+          kind: Database['public']['Enums']['payroll_adjustment_kind']
+          month: string
+          teacher_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          amount: number
+          comment?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          issued_on: string
+          kind?: Database['public']['Enums']['payroll_adjustment_kind']
+          month: string
+          teacher_id: string
+        }
+        Update: {
+          amount?: number
+          comment?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          issued_on?: string
+          kind?: Database['public']['Enums']['payroll_adjustment_kind']
+          month?: string
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'payroll_adjustments_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'payroll_adjustments_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teachers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -1095,6 +1147,7 @@ export type Database = {
       }
       v_payroll_preview: {
         Row: {
+          advances: number | null
           base_amount: number | null
           hours: number | null
           lessons_held: number | null
@@ -1102,17 +1155,10 @@ export type Database = {
           no_subscription: number | null
           student_lessons: number | null
           teacher_id: string | null
+          to_pay: number | null
         }
         ComputedFields: never
-        Relationships: [
-          {
-            foreignKeyName: 'lessons_teacher_id_fkey'
-            columns: ['teacher_id']
-            isOneToOne: false
-            referencedRelation: 'teachers'
-            referencedColumns: ['id']
-          },
-        ]
+        Relationships: []
       }
       v_student_balance: {
         Row: {
@@ -1209,6 +1255,7 @@ export type Database = {
       assert_correction_marks: { Args: { p_lesson_id: string; p_marks: Json }; Returns: undefined }
       assert_enrollment_undoable: { Args: { p_enrollment_id: string }; Returns: undefined }
       assert_payment_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
+      assert_payroll_staff: { Args: Record<PropertyKey, never>; Returns: undefined }
       attendance_subscription: {
         Args: { p_lesson_id: string; p_student_id: string }
         Returns: string
@@ -1306,6 +1353,7 @@ export type Database = {
       }
       current_teacher_id: { Args: Record<PropertyKey, never>; Returns: string }
       delete_group: { Args: { p_group_id: string }; Returns: number }
+      delete_payroll_adjustment: { Args: { p_id: string; p_reason: string }; Returns: undefined }
       enroll_student: {
         Args: {
           p_discount_pct?: number
@@ -1370,9 +1418,20 @@ export type Database = {
       is_accountant: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean }
+      issue_advance: {
+        Args: {
+          p_amount: number
+          p_comment?: string
+          p_issued_on?: string
+          p_month?: string
+          p_teacher_id: string
+        }
+        Returns: string
+      }
       leads_group: { Args: { p_group_id: string }; Returns: boolean }
       lesson_starts_at: { Args: { p_date: string; p_start: string }; Returns: string }
       payment_time: { Args: { p_paid_on: string }; Returns: string }
+      payroll_month_locked: { Args: { p_month: string; p_teacher_id: string }; Returns: boolean }
       person_name_key: { Args: { p_name: string }; Returns: string }
       record_payment: {
         Args: {
@@ -1465,6 +1524,7 @@ export type Database = {
       lesson_status: 'planned' | 'held' | 'cancelled'
       payment_kind: 'payment' | 'refund'
       payment_method: 'cash' | 'mbank'
+      payroll_adjustment_kind: 'advance' | 'bonus' | 'correction'
       role: 'teacher' | 'admin' | 'accountant'
       subscription_status: 'active' | 'exhausted' | 'refunded'
       trial_source: 'instagram' | 'referral' | '2gis' | 'other'
@@ -1592,6 +1652,7 @@ export const Constants = {
       lesson_status: ['planned', 'held', 'cancelled'],
       payment_kind: ['payment', 'refund'],
       payment_method: ['cash', 'mbank'],
+      payroll_adjustment_kind: ['advance', 'bonus', 'correction'],
       role: ['teacher', 'admin', 'accountant'],
       subscription_status: ['active', 'exhausted', 'refunded'],
       trial_source: ['instagram', 'referral', '2gis', 'other'],
