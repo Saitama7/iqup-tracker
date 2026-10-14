@@ -5,6 +5,7 @@ import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { KANYKEI, login } from './support/auth'
 import { lockSeed } from './support/seed-lock'
+import { groupTeacher } from './support/db'
 
 // А1 / АМ1 / А2. Needs the local stack + `pnpm seed:users`. The browser clock is pinned to the
 // artboards' moment — Thursday 8 October, 14:24 — and server_now() answers the same instant
@@ -203,6 +204,7 @@ test('realtime: a lesson gets confirmed → «Не подтверждено» dr
     .from('lessons')
     .insert({
       group_id: CHEMISTRY,
+      teacher_id: await groupTeacher(db, CHEMISTRY),
       lesson_date: yesterday,
       planned_start: '19:00',
       duration_min: 60,

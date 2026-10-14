@@ -95,7 +95,7 @@ export function summarizeTeacher(
 }
 
 // Teacher's own row: RLS lets a teacher read only their teachers row, rates and groups.
-// Admin+teacher (staff) sees all groups — the embed is still scoped by groups.teacher_id.
+// Admin+teacher (staff) sees all groups — the embed is the teacher's current groups (groups.teacher_id); lessons are by lessons.teacher_id.
 export const teacherSummaryQuery = (userId: string, nowMs: number) => {
   const today = bishkekDate(nowMs)
   return queryOptions({

@@ -1,5 +1,5 @@
-// «Сегодня» (У2 / УД1) and the attendance sheet (У3 / УД2). Reads under RLS: a teacher sees only own groups' lessons.
-// Admin+teacher (Каныкей) is staff and sees everything, so rows are also scoped by groups.teacher_id.
+// «Сегодня» (У2 / УД1) and the attendance sheet (У3 / УД2). Reads under RLS: a teacher sees only own lessons.
+// Admin+teacher (Каныкей) is staff and sees everything, so rows are also scoped by lessons.teacher_id.
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { z } from 'zod'
@@ -108,7 +108,7 @@ export const todayLessonsQuery = (teacherId: string, date: string) =>
       const { data, error } = await supabase
         .from('lessons')
         .select(LESSON_FIELDS)
-        .eq('group.teacher_id', teacherId)
+        .eq('teacher_id', teacherId)
         .gte('lesson_date', `${date.slice(0, 8)}01`)
         .lte('lesson_date', addDays(date, 1))
         .order('lesson_date')
@@ -128,20 +128,21 @@ export function useTodayLessons(teacherId: string | undefined, date: string) {
 
 /**
  * Someone else's change (admin cancelled a lesson, added an extra one) → refetch.
- * Supabase Realtime on lessons of my groups; RLS applies to the events as well.
+ * Supabase Realtime on lessons paid to me (lessons.teacher_id); RLS applies to the events as well.
+ * A lesson handed over to another teacher (UPDATE) reaches both sides: the old row is not in the
+ * filter, so the payroll channel in usePayrollRealtime and the poll cover the one who lost it.
  */
 export function useLessonsRealtime(teacher: MyTeacher | null | undefined) {
   const queryClient = useQueryClient()
-  const groups = teacher?.groupIds.join(',') ?? ''
   const teacherId = teacher?.id
 
   useEffect(() => {
-    if (!teacherId || !groups) return
+    if (!teacherId) return
     const channel = supabase
       .channel(`lessons:teacher:${teacherId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'lessons', filter: `group_id=in.(${groups})` },
+        { event: '*', schema: 'public', table: 'lessons', filter: `teacher_id=eq.${teacherId}` },
         () => {
           void queryClient.invalidateQueries({ queryKey: [TODAY_KEY] })
           void queryClient.invalidateQueries({ queryKey: [PAYROLL_KEY] })
@@ -151,7 +152,7 @@ export function useLessonsRealtime(teacher: MyTeacher | null | undefined) {
     return () => {
       void supabase.removeChannel(channel)
     }
-  }, [queryClient, teacherId, groups])
+  }, [queryClient, teacherId])
 }
 
 // ─── One lesson: attendance sheet (У3 / УД2) ────────────────────────────────
@@ -204,15 +205,15 @@ const sheetSchema = z.object({
   is_extra: z.boolean(),
   confirmed_at: z.string().nullable(),
   confirmed_late: z.boolean(),
+  teacher: z.object({
+    rates: z.array(z.object({ percent: z.number(), valid_from: z.string() })),
+  }),
   group: z.object({
     id: z.uuid(),
     name: z.string(),
     subject: subjectName,
     group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
     room: z.string().nullable(),
-    teacher: z.object({
-      rates: z.array(z.object({ percent: z.number(), valid_from: z.string() })),
-    }),
     enrollments: z.array(enrollmentSchema),
   }),
   attendance: z.array(z.object({ student_id: z.uuid(), status: markSchema })),
@@ -228,7 +229,7 @@ export interface LessonSheet {
   confirmed_at: string | null
   confirmed_late: boolean
   group: { id: string; name: string; subject: string; group_type: GroupType; room: string | null }
-  /** Rates of the group's teacher — payroll goes to groups.teacher_id (invariant 6). */
+  /** Rates of the lesson's teacher — payroll goes to lessons.teacher_id (invariant 6, 0020). */
   rates: { percent: number; valid_from: string }[]
   enrollments: EnrollmentSource[]
   /** Marks saved on this lesson. */
@@ -245,14 +246,14 @@ export const lessonSheetQuery = (lessonId: string) =>
       const lesson = await supabase
         .from('lessons')
         .select(
-          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, group:groups!inner(id, name, subject:subjects(name), group_type, room, teacher:teachers!inner(rates:teacher_rates(percent, valid_from)), enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status)`,
+          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, teacher:teachers!lessons_teacher_id_fkey(rates:teacher_rates(percent, valid_from)), group:groups!inner(id, name, subject:subjects(name), group_type, room, enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status)`,
         )
         .eq('id', lessonId)
         .maybeSingle()
       if (lesson.error) throw lesson.error
       if (!lesson.data) return null
-      const { group, attendance, ...rest } = sheetSchema.parse(lesson.data)
-      const { teacher, enrollments, ...g } = group
+      const { group, teacher, attendance, ...rest } = sheetSchema.parse(lesson.data)
+      const { enrollments, ...g } = group
       return {
         ...rest,
         group: g,
