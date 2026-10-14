@@ -2,6 +2,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { cardClass } from '@/features/tariffs/parts'
+import { lessonStartMs } from '@/features/lessons/select'
+import { useNow } from '@/lib/now'
 import { cn } from '@/lib/utils'
 import { studentPresetsQuery, upcomingLessonsQuery, usePresetsRealtime } from './api'
 import { PresetDialog, presetLessonLabel, useClearPreset } from './preset-dialog'
@@ -19,13 +21,15 @@ export function StudentPresets({
   today: string
 }) {
   usePresetsRealtime()
+  const now = useNow()
   const presets = useQuery(studentPresetsQuery(studentId, today))
   const lessons = useQuery(upcomingLessonsQuery(groupIds, today))
   const clear = useClearPreset()
   const [open, setOpen] = useState(false)
   const rows = presets.data ?? []
   const taken = new Set(rows.map((r) => r.lesson.id))
-  const free = (lessons.data ?? []).filter((l) => !taken.has(l.id))
+  // a lesson that has started is not «in advance» anymore (И62)
+  const free = (lessons.data ?? []).filter((l) => !taken.has(l.id) && lessonStartMs(l) > now)
 
   return (
     <section

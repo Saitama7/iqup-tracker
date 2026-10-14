@@ -3,7 +3,7 @@
 -- the payroll, «Заморозка» does not (0099).
 -- Self-contained fixtures in September 2099 (lessons must be today or later), rolled back.
 begin;
-select plan(33);
+select plan(45);
 
 -- ─── Seed payroll is untouched ──────────────────────────────────────────────
 select results_eq(
@@ -21,14 +21,16 @@ select is(
 insert into auth.users (id, email) values
   ('a8400000-0000-4000-8000-000000000001', 'admin84@test.local'),
   ('a8400000-0000-4000-8000-000000000002', 'teacher84a@test.local'),
-  ('a8400000-0000-4000-8000-000000000003', 'teacher84b@test.local');
+  ('a8400000-0000-4000-8000-000000000003', 'teacher84b@test.local'),
+  ('a8400000-0000-4000-8000-000000000004', 'admin84b@test.local');
 insert into public.teachers (id, user_id, full_name, phone) values
   ('b8400000-0000-4000-8000-000000000001', null, 'Teacher 84 A', '996000008401'),
   ('b8400000-0000-4000-8000-000000000002', null, 'Teacher 84 B', '996000008402');
 insert into public.profiles (id, phone, full_name, roles) values
   ('a8400000-0000-4000-8000-000000000001', '996000008400', 'Admin 84', '{admin}'),
   ('a8400000-0000-4000-8000-000000000002', '996000008401', 'Teacher 84 A', '{teacher}'),
-  ('a8400000-0000-4000-8000-000000000003', '996000008402', 'Teacher 84 B', '{teacher}');
+  ('a8400000-0000-4000-8000-000000000003', '996000008402', 'Teacher 84 B', '{teacher}'),
+  ('a8400000-0000-4000-8000-000000000004', '996000008403', 'Admin 84 B', '{admin}');
 update public.teachers set user_id = 'a8400000-0000-4000-8000-000000000002' where id = 'b8400000-0000-4000-8000-000000000001';
 update public.teachers set user_id = 'a8400000-0000-4000-8000-000000000003' where id = 'b8400000-0000-4000-8000-000000000002';
 insert into public.teacher_rates (teacher_id, percent, valid_from) values
@@ -246,13 +248,100 @@ select ok(
   'audit: presets are found by the student''s name'
 );
 
+-- ─── Author stays on a re-comment by another admin ──────────────────────────
+select lives_ok(
+  $$ select public.set_attendance_preset((select id from l84 where grp = 'S84 G1' and n = 5),
+       'e8400000-0000-4000-8000-000000000002', 'первый') $$,
+  'admin A: preset on lesson 5'
+);
+set local request.jwt.claims = '{"sub":"a8400000-0000-4000-8000-000000000004","role":"authenticated","app_metadata":{"roles":["admin"]}}';
+select lives_ok(
+  $$ select public.set_attendance_preset((select id from l84 where grp = 'S84 G1' and n = 5),
+       'e8400000-0000-4000-8000-000000000002', 'второй') $$,
+  'admin B: re-comments it'
+);
+select results_eq(
+  $$ select comment, created_by from public.attendance_presets
+     where lesson_id = (select id from l84 where grp = 'S84 G1' and n = 5) $$,
+  $$ values ('второй'::text, 'a8400000-0000-4000-8000-000000000001'::uuid) $$,
+  're-comment: the new comment, created_by stays the first admin'
+);
+
+-- ─── A cancelled lesson: the preset can be removed ──────────────────────────
+reset role;
+update public.lessons set status = 'cancelled', cancel_reason = 'center'
+where id = (select id from l84 where grp = 'S84 G1' and n = 5);
+-- lesson 7 is today and has started (00:00 Bishkek) — not «in advance» anymore
+update public.lessons set lesson_date = public.bishkek_today(), planned_start = '00:00'
+where id = (select id from l84 where grp = 'S84 G1' and n = 7);
+-- G2 lesson 2 is paid to teacher A (lessons.teacher_id), the group is still teacher B's
+update public.lessons set teacher_id = 'b8400000-0000-4000-8000-000000000001'
+where id = (select id from l84 where grp = 'S84 G2' and n = 2);
+set local role authenticated;
+select is(
+  public.clear_attendance_preset((select id from l84 where grp = 'S84 G1' and n = 5), 'e8400000-0000-4000-8000-000000000002'),
+  true, 'cancelled lesson: «Снять» removes the preset'
+);
+
+-- ─── A closed period: neither set nor remove ────────────────────────────────
+select lives_ok(
+  $$ select public.set_attendance_preset((select id from l84 where grp = 'S84 G1' and n = 6),
+       'e8400000-0000-4000-8000-000000000002', null) $$,
+  'admin: preset on lesson 6'
+);
+reset role;
+update public.lessons set is_locked = true where id = (select id from l84 where grp = 'S84 G1' and n = 6);
+set local role authenticated;
+select throws_ok(
+  $$ select public.set_attendance_preset((select id from l84 where grp = 'S84 G1' and n = 6),
+       'e8400000-0000-4000-8000-000000000002', 'поздно') $$,
+  '23514', null, 'locked lesson: the preset cannot be changed'
+);
+select throws_ok(
+  $$ select public.clear_attendance_preset((select id from l84 where grp = 'S84 G1' and n = 6), 'e8400000-0000-4000-8000-000000000002') $$,
+  '23514', null, 'locked lesson: the preset cannot be removed'
+);
+
+-- ─── After the planned start it is not «in advance» ─────────────────────────
+select throws_ok(
+  $$ select public.set_attendance_preset((select id from l84 where grp = 'S84 G1' and n = 7),
+       'e8400000-0000-4000-8000-000000000002', null) $$,
+  '23514', null, 'started lesson: no preset'
+);
+
+-- ─── The lesson's teacher is lessons.teacher_id, not the group's ────────────
+select lives_ok(
+  $$ select public.set_attendance_preset((select id from l84 where grp = 'S84 G2' and n = 2),
+       'e8400000-0000-4000-8000-000000000003', 'на даче') $$,
+  'admin: preset on G2 lesson 2'
+);
+set local request.jwt.claims = '{"sub":"a8400000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"roles":["teacher"]}}';
+select results_eq(
+  $$ select p.comment from public.attendance_presets p join l84 l on l.id = p.lesson_id
+     where l.grp = 'S84 G2' $$,
+  $$ values ('на даче'::text) $$,
+  'teacher A: sees the preset of the G2 lesson paid to them'
+);
+set local request.jwt.claims = '{"sub":"a8400000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"roles":["teacher"]}}';
+select results_eq(
+  $$ select l.n from public.attendance_presets p join l84 l on l.id = p.lesson_id $$,
+  $$ values (1) $$,
+  'teacher B: leads G2 but does not see the preset of a lesson that is not theirs'
+);
+
 -- ─── A deleted lesson takes its presets along (FK cascade) ──────────────────
 reset role;
-reset request.jwt.claims;
 delete from public.attendance where lesson_id = (select id from l84 where grp = 'S84 G1' and n = 1);
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"a8400000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"roles":["admin"]}}';
 select lives_ok(
   $$ delete from public.lessons where id = (select id from l84 where grp = 'S84 G1' and n = 1) $$,
-  'cascade: a held lesson with a preset can be deleted'
+  'cascade: the admin deletes a held lesson with a preset'
+);
+select is(
+  (select count(*)::integer from public.attendance_presets
+   where lesson_id = (select id from l84 where grp = 'S84 G1' and n = 1)),
+  0, 'cascade: the preset went along'
 );
 
 select * from finish();

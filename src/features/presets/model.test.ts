@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Balance, Mark } from '@/features/lessons/attendance'
-import { applyPresets, dayWord, presetCaption, presetEditable, presetErrorReason } from './model'
+import { applyPresets, dayWord, draftMarks, presetCaption, presetClearable, presetEditable, presetErrorReason } from './model'
 import { presetLine } from './dashboard-presets'
 
 const balance = (freezes: number): Balance => ({
@@ -50,12 +50,25 @@ describe('presets copy', () => {
     expect(presetCaption({ comment: null })).toBe('Админ: предупредил')
   })
 
-  it('editable: planned, open, today or later', () => {
-    const l = { status: 'planned' as const, lesson_date: '2026-10-15', is_locked: false }
-    expect(presetEditable(l, '2026-10-15')).toBe(true)
-    expect(presetEditable(l, '2026-10-16')).toBe(false)
-    expect(presetEditable({ ...l, status: 'held' }, '2026-10-14')).toBe(false)
-    expect(presetEditable({ ...l, is_locked: true }, '2026-10-14')).toBe(false)
+  it('editable: planned, open, not started yet (И62)', () => {
+    const l = {
+      status: 'planned' as const,
+      lesson_date: '2026-10-15',
+      planned_start: '14:00:00',
+      is_locked: false,
+    }
+    const at = (t: string) => Date.parse(`2026-10-15T${t}:00+06:00`)
+    expect(presetEditable(l, at('13:59'))).toBe(true)
+    expect(presetEditable(l, at('14:00'))).toBe(false)
+    expect(presetEditable({ ...l, status: 'held' }, at('09:00'))).toBe(false)
+    expect(presetEditable({ ...l, is_locked: true }, at('09:00'))).toBe(false)
+  })
+
+  it('clearable until held, a cancelled lesson too', () => {
+    expect(presetClearable({ status: 'planned', is_locked: false })).toBe(true)
+    expect(presetClearable({ status: 'cancelled', is_locked: false })).toBe(true)
+    expect(presetClearable({ status: 'held', is_locked: false })).toBe(false)
+    expect(presetClearable({ status: 'cancelled', is_locked: true })).toBe(false)
   })
 
   it('error reasons', () => {
@@ -67,6 +80,9 @@ describe('presets copy', () => {
     )
     expect(presetErrorReason({ code: '23514', message: 'lesson x is in the past' })).toBe(
       'занятие уже прошло',
+    )
+    expect(presetErrorReason({ code: '23514', message: 'lesson x has already started' })).toBe(
+      'занятие уже началось — это не «заранее»',
     )
     expect(presetErrorReason({ message: 'Failed to fetch' })).toBe(
       'нет связи с сервером — проверьте интернет',
@@ -94,5 +110,26 @@ describe('presets copy', () => {
         '2026-10-14',
       ),
     ).toBe('Завтра 11:00 · Математика · 8 класс А — Айжан Б. · заболела')
+  })
+})
+
+describe('draftMarks', () => {
+  it('keeps only the teacher\'s marks, not the prefilled «Заморозка» (И27)', () => {
+    const own = new Map<string, Mark>([['b', 'present']])
+    const shown = new Map<string, Mark>([
+      ['b', 'present'],
+      ['a', 'absent_frozen'],
+    ])
+    const next = new Map(shown).set('c', 'present')
+    expect([...draftMarks(next, own, shown)]).toEqual([
+      ['b', 'present'],
+      ['c', 'present'],
+    ])
+  })
+
+  it('a changed preset student is the teacher\'s mark', () => {
+    const shown = new Map<string, Mark>([['a', 'absent_frozen']])
+    const next = new Map(shown).set('a', 'present')
+    expect([...draftMarks(next, new Map(), shown)]).toEqual([['a', 'present']])
   })
 })

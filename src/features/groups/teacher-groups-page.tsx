@@ -652,7 +652,7 @@ function DesktopDetail({
 
   const kpi: [string, string, boolean?][] = [
     [inMonth(today), lessonsWord(summary.held)],
-    ['Ученико-уроков', String(summary.studentLessons)],
+    ['Ученико-уроков (был + не был)', String(summary.studentLessons)],
     ['Начислено · предварительно', `${formatSom(summary.accrued)} сом`, true],
     [
       'Долги',

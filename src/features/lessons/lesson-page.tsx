@@ -13,7 +13,9 @@ import { PRELIMINARY_NOTE } from '@/features/payroll/model'
 import { usePresetsRealtime } from '@/features/presets/api'
 import {
   applyPresets,
+  draftMarks,
   presetCaption,
+  presetClearable,
   presetEditable,
   type PresetInfo,
 } from '@/features/presets/model'
@@ -114,8 +116,10 @@ interface SheetModel {
   confirm: () => void
   /** The admin's «Заморозка» set before the lesson, by student (#84). */
   presets: ReadonlyMap<string, PresetInfo>
-  /** The admin may set / remove presets: a planned lesson of today or later (#84). */
-  canPreset: boolean
+  /** The admin may set a preset: a planned lesson not started yet (#84, И62). */
+  canSetPreset: boolean
+  /** The admin may remove a preset: until the lesson is held, a cancelled one too (И62). */
+  canClearPreset: boolean
   presetBusy: boolean
   openPreset: (row: RosterRow) => void
   clearPreset: (row: RosterRow) => void
@@ -159,11 +163,10 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   const copy = confirmCopy(state)
   const editable = sheet.status === 'planned' && state !== 'upcoming'
   // #84: the admin's «Заморозка» set in advance fills students not marked yet (the teacher may change it)
+  const own = editable ? (draft ?? sheet.marks) : sheet.marks
   const marks: ReadonlyMap<string, Mark> =
     corrections.fix ??
-    (sheet.status === 'planned'
-      ? applyPresets(editable ? (draft ?? sheet.marks) : sheet.marks, sheet.presets, roster)
-      : sheet.marks)
+    (sheet.status === 'planned' ? applyPresets(own, sheet.presets, roster) : sheet.marks)
   const counts = tally(roster, marks)
 
   const percent = rateOn(sheet.rates, sheet.lesson_date)
@@ -186,7 +189,8 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
     trials,
     trialsMarkable: sheet.lesson_date <= bishkekDate(now) && sheet.status !== 'cancelled',
     presets: sheet.presets,
-    canPreset: isAdmin && presetEditable(sheet, bishkekDate(now)),
+    canSetPreset: isAdmin && presetEditable(sheet, now),
+    canClearPreset: isAdmin && presetClearable(sheet),
     presetBusy: clearPresetMutation.isPending,
     openPreset: setPresetFor,
     clearPreset: (row) => {
@@ -204,10 +208,10 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
         return
       }
       if (!editable || mutation.isPending) return
-      setDraft(new Map(marks).set(studentId, mark))
+      setDraft(draftMarks(new Map(marks).set(studentId, mark), own, marks))
     },
     allPresent: () => {
-      if (editable && !mutation.isPending) setDraft(markAllPresent(roster, marks))
+      if (editable && !mutation.isPending) setDraft(draftMarks(markAllPresent(roster, marks), own, marks))
     },
     // Back to the list only after the database said held (#41, И27); a refusal leaves the sheet
     // and the draft as they are, the toast says why. Opened from «Мой месяц» — the same month and
@@ -393,13 +397,14 @@ function FreezeHint({ id, row, mark }: { id: string; row: RosterRow; mark: Mark 
  */
 function PresetNote({ m, row }: { m: SheetModel; row: RosterRow }) {
   const preset = m.presets.get(row.studentId)
-  if (!preset && !m.canPreset) return null
+  const action = preset ? m.canClearPreset : m.canSetPreset
+  if (!preset && !action) return null
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       {preset && (
         <span className="text-xs font-extrabold text-teal-strong">{presetCaption(preset)}</span>
       )}
-      {m.canPreset && (
+      {action && (
         <button
           type="button"
           disabled={m.presetBusy}

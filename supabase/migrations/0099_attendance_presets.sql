@@ -1,6 +1,6 @@
 -- #84 · Заморозка заранее от администратора («Предупредил о пропуске»).
 -- The student warned the center before the lesson (В2) → the admin sets «Заморозка» for a planned
--- lesson of today or later, with an optional comment. It is not a mark: attendance is written only by
+-- lesson that has not started yet, with an optional comment. It is not a mark: attendance is written only by
 -- confirm_lesson after the lesson is held (И19, attendance_guard), so a preset lives in its own table
 -- and touches neither the balance nor the payroll until the lesson is confirmed.
 -- 1. attendance_presets (lesson, student, status = absent_frozen, comment, who, when) — admin only,
@@ -32,9 +32,10 @@ comment on table public.attendance_presets is
   'Admin''s «Заморозка» set before the lesson (#84). Not a mark: confirm_lesson takes it as the default.';
 create index if not exists attendance_presets_student_idx on public.attendance_presets (student_id);
 
--- Insert / update: an admin (or the service role), a planned lesson of today or later outside a closed
--- period, the student enrolled on its date, the freeze limit of the subscription. Author and time —
--- from the database. Delete: only while the lesson is planned (a held lesson keeps its history);
+-- Insert / update: an admin (or the service role), a planned lesson not started yet outside a closed
+-- period, the student enrolled on its date, the freeze limit of the subscription (a soft check — the
+-- hard one is enforce_freeze_limit when confirm_lesson writes the marks, И62). Author and time — from
+-- the database. Delete: until the lesson is held (a cancelled one too), outside a closed period;
 -- a deleted lesson or student takes its presets along.
 create or replace function public.attendance_presets_guard()
 returns trigger
@@ -48,8 +49,13 @@ declare
   v_limit integer;
   v_used integer;
 begin
-  -- a deleted lesson / student takes its presets along (FK cascade runs one trigger level deeper)
-  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+  -- a deleted lesson / student takes its presets along: the FK cascade runs after the parent row
+  -- is gone, so a missing parent means a cascade — before the role check (the admin deletes a
+  -- student, the service role a lesson)
+  if tg_op = 'DELETE' and (
+    not exists (select 1 from public.lessons l where l.id = old.lesson_id)
+    or not exists (select 1 from public.students s where s.id = old.student_id)
+  ) then
     return old;
   end if;
 
@@ -57,10 +63,15 @@ begin
     raise exception 'only an admin may set a freeze in advance' using errcode = 'insufficient_privilege';
   end if;
 
+  -- «Снять»: until the lesson is held (a held lesson keeps its history), a cancelled one too;
+  -- never in a closed period (invariant 2)
   if tg_op = 'DELETE' then
     select * into v_lesson from public.lessons l where l.id = old.lesson_id;
-    if found and v_lesson.status <> 'planned' then
-      raise exception 'lesson % is not planned — the preset stays', old.lesson_id
+    if v_lesson.is_locked then
+      raise exception 'lesson % is in a closed period', old.lesson_id using errcode = 'check_violation';
+    end if;
+    if v_lesson.status = 'held' then
+      raise exception 'lesson % is held — the preset stays', old.lesson_id
         using errcode = 'check_violation';
     end if;
     return old;
@@ -78,6 +89,10 @@ begin
   end if;
   if v_lesson.lesson_date < public.bishkek_today() then
     raise exception 'lesson % is in the past', new.lesson_id using errcode = 'check_violation';
+  end if;
+  -- after the planned start it is not «in advance» anymore — the teacher marks (И62)
+  if now() >= (v_lesson.lesson_date + v_lesson.planned_start) at time zone 'Asia/Bishkek' then
+    raise exception 'lesson % has already started', new.lesson_id using errcode = 'check_violation';
   end if;
   if tg_op = 'UPDATE' and (new.lesson_id <> old.lesson_id or new.student_id <> old.student_id) then
     raise exception 'a preset cannot move to another lesson or student' using errcode = 'check_violation';
@@ -179,7 +194,7 @@ begin
 end;
 $$;
 
--- «Снять»: removes the preset of a planned lesson; false — there was none.
+-- «Снять»: removes the preset of a lesson not held yet; false — there was none.
 create or replace function public.clear_attendance_preset(p_lesson_id uuid, p_student_id uuid)
 returns boolean
 language plpgsql

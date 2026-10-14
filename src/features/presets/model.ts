@@ -3,6 +3,7 @@
 // default. Pure: callers pass rows they already have.
 import { addDays, dayShort } from '@/features/groups/model'
 import { freezeBlocked, type Mark, type RosterRow } from '@/features/lessons/attendance'
+import { lessonStartMs, type LessonTiming } from '@/features/lessons/select'
 
 export interface PresetInfo {
   comment: string | null
@@ -27,16 +28,45 @@ export function applyPresets(
   return next
 }
 
+/**
+ * What goes to the draft (И27): the teacher's own marks only. A mark equal to what the preset
+ * prefilled is not the teacher's — if the admin removes the preset, the student is unmarked again,
+ * not left with a «Заморозка» nobody signed.
+ */
+export function draftMarks(
+  next: ReadonlyMap<string, Mark>,
+  own: ReadonlyMap<string, Mark>,
+  shown: ReadonlyMap<string, Mark>,
+): Map<string, Mark> {
+  const out = new Map<string, Mark>()
+  for (const [id, mark] of next) if (own.has(id) || shown.get(id) !== mark) out.set(id, mark)
+  return out
+}
+
 /** «Админ: предупредил · мама написала» — under the student on У3 / УД2. */
 export const presetCaption = (p: PresetInfo) =>
   p.comment ? `Админ: предупредил · ${p.comment}` : 'Админ: предупредил'
 
-/** A preset can be set / removed: a planned lesson of today or later outside a closed period. */
+/**
+ * A preset can be set: a planned lesson outside a closed period that has not started yet — after
+ * the start it is not «in advance» anymore, the teacher marks (И62).
+ */
 export function presetEditable(
-  lesson: { status: 'planned' | 'held' | 'cancelled'; lesson_date: string; is_locked: boolean },
-  today: string,
+  lesson: { status: 'planned' | 'held' | 'cancelled'; is_locked: boolean } & Pick<
+    LessonTiming,
+    'lesson_date' | 'planned_start'
+  >,
+  now: number,
 ): boolean {
-  return lesson.status === 'planned' && !lesson.is_locked && lesson.lesson_date >= today
+  return lesson.status === 'planned' && !lesson.is_locked && now < lessonStartMs(lesson)
+}
+
+/** A preset can be removed until the lesson is held — a cancelled lesson's too (И62). */
+export function presetClearable(lesson: {
+  status: 'planned' | 'held' | 'cancelled'
+  is_locked: boolean
+}): boolean {
+  return lesson.status !== 'held' && !lesson.is_locked
 }
 
 /** set_ / clear_attendance_preset error → why (0099). Lower case — it follows a colon. */
@@ -48,7 +78,9 @@ export function presetErrorReason(error: { code?: string; message?: string }): s
     return 'сервер не обновлён — сообщите администратору'
   if (m.includes('freeze limit')) return 'лимит заморозок 2 на абонемент исчерпан'
   if (m.includes('in the past')) return 'занятие уже прошло'
+  if (m.includes('already started')) return 'занятие уже началось — это не «заранее»'
   if (m.includes('closed period')) return 'период закрыт'
+  if (m.includes('is held')) return 'занятие уже проведено'
   if (m.includes('not planned')) return 'занятие уже проведено или отменено'
   if (m.includes('not enrolled')) return 'ученик не в группе на дату занятия'
   if (m.includes('500')) return 'комментарий длиннее 500 символов'
