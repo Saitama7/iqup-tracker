@@ -20,7 +20,7 @@
 -- other      — everything else.
 -- Declared immutable for the generated column: the inputs are the row itself; dates in the snapshots
 -- are ISO (to_jsonb), parsed the same under any DateStyle; Bishkek has no DST.
--- Changing a rule later: create or replace this function, then `update public.audit_log set kind = default`
+-- Changing a rule later: create or replace this function, then `update public.audit_log set entity = entity` (SET kind = DEFAULT does NOT recompute a stored generated column)
 -- recomputes the stored values.
 create or replace function public.audit_kind(
   p_entity text,
