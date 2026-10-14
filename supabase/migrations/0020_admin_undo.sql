@@ -113,6 +113,21 @@ alter table public.lessons enable trigger audit_log;
 alter table public.lessons alter column teacher_id set not null;
 create index if not exists lessons_teacher_date_idx on public.lessons (teacher_id, lesson_date);
 
+-- v_lesson_status: same as 0001 (l.* as it was then), lessons.teacher_id appended.
+create or replace view public.v_lesson_status
+with (security_invoker = true)
+as
+select
+  l.id, l.group_id, l.lesson_date, l.planned_start, l.duration_min, l.is_extra, l.makes_up_for_lesson_id,
+  l.substitute_teacher_id, l.status, l.cancel_reason, l.confirmed_at, l.confirmed_by, l.confirmed_late,
+  l.comment, l.is_locked, l.created_at,
+  case
+    when l.status = 'planned' and l.lesson_date < public.bishkek_today() then 'unconfirmed'
+    else l.status::text
+  end as effective_status,
+  l.teacher_id
+from public.lessons l;
+
 -- ─── 2. teacher access ──────────────────────────────────────────────────────
 
 -- I lead the group now.
@@ -898,13 +913,13 @@ begin
     select 1 from public.attendance a join public.lessons l on l.id = a.lesson_id
     where l.group_id = p_group_id
   ) then
-    v_reasons := v_reasons || 'marks';
+    v_reasons := v_reasons || 'marks'::text;
   end if;
   if exists (select 1 from public.enrollments e where e.group_id = p_group_id) then
-    v_reasons := v_reasons || 'enrollments';
+    v_reasons := v_reasons || 'enrollments'::text;
   end if;
   if exists (select 1 from public.trials t where t.group_id = p_group_id) then
-    v_reasons := v_reasons || 'trials';
+    v_reasons := v_reasons || 'trials'::text;
   end if;
   if exists (
     select 1 from public.payments p
@@ -912,10 +927,10 @@ begin
     join public.enrollments e on e.id = s.enrollment_id
     where e.group_id = p_group_id
   ) then
-    v_reasons := v_reasons || 'payments';
+    v_reasons := v_reasons || 'payments'::text;
   end if;
   if exists (select 1 from public.lessons l where l.group_id = p_group_id and l.is_locked) then
-    v_reasons := v_reasons || 'locked';
+    v_reasons := v_reasons || 'locked'::text;
   end if;
   return v_reasons;
 end;

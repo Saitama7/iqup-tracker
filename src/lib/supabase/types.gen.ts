@@ -926,6 +926,7 @@ export type Database = {
           planned_start: string | null
           status: Database['public']['Enums']['lesson_status'] | null
           substitute_teacher_id: string | null
+          teacher_id: string | null
         }
         ComputedFields: never
         Insert: {
@@ -946,6 +947,7 @@ export type Database = {
           planned_start?: string | null
           status?: Database['public']['Enums']['lesson_status'] | null
           substitute_teacher_id?: string | null
+          teacher_id?: string | null
         }
         Update: {
           cancel_reason?: Database['public']['Enums']['cancel_reason'] | null
@@ -965,6 +967,7 @@ export type Database = {
           planned_start?: string | null
           status?: Database['public']['Enums']['lesson_status'] | null
           substitute_teacher_id?: string | null
+          teacher_id?: string | null
         }
         Relationships: [
           {
@@ -998,6 +1001,13 @@ export type Database = {
           {
             foreignKeyName: 'lessons_substitute_teacher_id_fkey'
             columns: ['substitute_teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teachers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lessons_teacher_id_fkey'
+            columns: ['teacher_id']
             isOneToOne: false
             referencedRelation: 'teachers'
             referencedColumns: ['id']
