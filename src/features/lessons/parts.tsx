@@ -9,6 +9,7 @@ import { trialsCaption, type Trial } from '@/features/trials/model'
 import { formatDayMonth } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import type { TeacherLesson } from './api'
+import { FROM_TODAY } from './return-to'
 import {
   bishkekTime,
   lessonState,
@@ -136,6 +137,7 @@ export function UnconfirmedBanner({
       <Link
         to="/lessons/$lessonId"
         params={{ lessonId: only.id }}
+        search={FROM_TODAY}
         className="flex min-h-11 items-center gap-2.5 rounded-[14px] bg-burned-soft px-3.5 py-2.5 text-burned-deep"
       >
         {ALERT_ICON}
@@ -164,6 +166,7 @@ export function UnconfirmedBanner({
             <Link
               to="/lessons/$lessonId"
               params={{ lessonId: l.id }}
+              search={FROM_TODAY}
               className="flex min-h-11 items-center gap-2.5 border-t border-burned-deep/10 pl-7"
             >
               <span className="flex-1 text-[13px] font-bold">

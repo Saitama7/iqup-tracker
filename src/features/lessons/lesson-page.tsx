@@ -50,7 +50,7 @@ import {
 import { clearDraft, loadDraft, saveDraft } from './draft'
 import { HeldPanel, useCorrections, type Corrections } from './lesson-corrections'
 import { DesktopTrials, MobileTrials } from './lesson-trials'
-import { lessonReturn, type LessonSearch } from './return-to'
+import { lessonReturn, lessonSource, type LessonSearch } from './return-to'
 import { studentsWord } from './parts'
 import {
   bishkekTime,
@@ -141,7 +141,29 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
 
   const roster = useMemo(() => lessonRoster(sheet.enrollments, sheet, sheet.marks), [sheet])
   const isAdmin = roles.includes('admin')
-  const corrections = useCorrections(sheet, roster, isAdmin)
+  // Back to the screen the sheet was opened from, with its tab / month / filters (#72, #76, #89).
+  // With an in-app history — history.back(), like «назад»: no second entry of the source, the
+  // next system «назад» leaves it. The entry it lands on is replaced by the exact source when
+  // they differ (the anchor of the next unconfirmed lesson, another screen before the sheet).
+  // Without history (reload, a direct link) — replace the sheet by the source.
+  const source = lessonSource(search)
+  const returnToSource = () => {
+    // no source: a teacher — «Сегодня»; an admin without the teacher role — the dashboard
+    const target = source ?? (roles.includes('teacher') ? lessonReturn(search) : { to: '/admin' })
+    if (!router.history.canGoBack()) {
+      void navigate({ ...target, replace: true })
+      return
+    }
+    const sheetPath = router.history.location.pathname
+    const { href } = router.buildLocation(target)
+    const unsubscribe = router.history.subscribe(({ location }) => {
+      if (location.pathname === sheetPath) return
+      unsubscribe()
+      if (location.href !== href) void navigate({ ...target, replace: true })
+    })
+    router.history.back()
+  }
+  const corrections = useCorrections(sheet, roster, isAdmin, source ? returnToSource : undefined)
   usePresetsRealtime(sheet.status === 'planned')
   const clearPresetMutation = useClearPreset()
   const [presetFor, setPresetFor] = useState<RosterRow | null>(null)
@@ -216,22 +238,10 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
     },
     // Back to the list only after the database said held (#41, И27); a refusal leaves the sheet
     // and the draft as they are, the toast says why. Opened from «Мой месяц» — the same month and
-    // group filter, scrolled to the next unconfirmed lesson (#72); from the group page — that
-    // group (#76); else «Сегодня». Replace: system «назад» never reopens the confirmed sheet.
+    // group filter, scrolled to the next unconfirmed lesson (#72); from a group page — that group
+    // on the same tab (#76, #89); from А2 — the same week; else «Сегодня».
     confirm: () => {
-      mutation.mutate(
-        { marks: marksPayload(roster, marks), copy },
-        {
-          onSuccess: () => {
-            // an admin without the teacher role has no «Сегодня» of a teacher — back to the list
-            if (!search.from && !roles.includes('teacher')) {
-              router.history.back()
-              return
-            }
-            void navigate({ ...lessonReturn(search), replace: true })
-          },
-        },
-      )
+      mutation.mutate({ marks: marksPayload(roster, marks), copy }, { onSuccess: returnToSource })
     },
   }
 

@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import type { Trial } from '@/features/trials/model'
 import type { TeacherLesson } from './api'
 import { groupCaption, TrialPill } from './parts'
+import { FROM_TODAY } from './return-to'
 import { lessonState, minutesLeft, timeRange, untilLabel } from './select'
 
 const SWIPE_PX = 80
@@ -210,6 +211,7 @@ function TopCard({
       <Link
         to="/lessons/$lessonId"
         params={{ lessonId: lesson.id }}
+        search={FROM_TODAY}
         draggable={false}
         onClickCapture={(e) => {
           if (dragged.current) {
@@ -284,6 +286,7 @@ export function CurrentLessonCard({
     <Link
       to="/lessons/$lessonId"
       params={{ lessonId: lesson.id }}
+      search={FROM_TODAY}
       className="flex min-h-[260px] flex-col justify-between gap-6 rounded-[24px] bg-brand p-[26px] text-ink shadow-brand"
       aria-label={`${lesson.group.subject} · ${lesson.group.name}, ${chip}. Отметить посещаемость`}
     >

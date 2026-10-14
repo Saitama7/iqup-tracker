@@ -3,6 +3,7 @@
 import { Link } from '@tanstack/react-router'
 import { firstName } from '@/components/shell/shell-parts'
 import type { PendingRequest } from '@/features/lessons/corrections-api'
+import { FROM_DASHBOARD } from '@/features/lessons/return-to'
 
 const LOCKED_NOTE = 'период закрыт — можно только отклонить'
 
@@ -20,6 +21,7 @@ export function CorrectionItems({ requests }: { requests: readonly PendingReques
       <Link
         to="/lessons/$lessonId"
         params={{ lessonId: r.lessonId }}
+        search={FROM_DASHBOARD}
         className="flex min-h-11 items-center gap-2.5 rounded-[14px] bg-warn-soft px-3.5 py-2.5 text-warn-strong"
       >
         <span className="flex-1 text-[13px] font-bold">{requestLine(r)}</span>
@@ -52,6 +54,7 @@ export function CorrectionsWidget({ requests }: { requests: readonly PendingRequ
             <Link
               to="/lessons/$lessonId"
               params={{ lessonId: r.lessonId }}
+              search={FROM_DASHBOARD}
               className="font-extrabold whitespace-nowrap text-teal"
             >
               Открыть

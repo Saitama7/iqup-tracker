@@ -7,7 +7,7 @@ import { Info, Plus } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { PageHeader, PageTitle } from '@/components/page'
 import { BackButton } from '@/components/shell/back-button'
-import { fromGroup } from '@/features/lessons/return-to'
+import { fromGroup, type GroupTab } from '@/features/lessons/return-to'
 import { lessonState, lessonsWord, pluralRu } from '@/features/lessons/select'
 import { displayPhone, groupLabel } from '@/features/students/model'
 import { tariffFor } from '@/features/tariffs/current'
@@ -75,7 +75,27 @@ function useTeacherGroups() {
   return { query, items, today, now }
 }
 
-export function TeacherGroupsPage({ groupId }: { groupId?: string }) {
+/** State of У4 / У5 / УД3 kept in the URL: «назад» from a lesson restores it (#89). */
+export interface TeacherGroupsSearch {
+  /** «Ученики» / «Занятия» of the open group. */
+  tab?: GroupTab
+  /** У4 day filter «ВТ · ЧТ». */
+  days?: string
+}
+
+export function TeacherGroupsPage({
+  groupId,
+  search,
+  onSearchChange,
+}: {
+  groupId?: string
+  search: TeacherGroupsSearch
+  onSearchChange: (next: TeacherGroupsSearch) => void
+}) {
+  const tab = search.tab ?? 'students'
+  const setTab = (next: GroupTab) => {
+    onSearchChange({ ...search, tab: next === 'students' ? undefined : next })
+  }
   const isDesktop = useIsDesktop()
   const { query, items, today, now } = useTeacherGroups()
 
@@ -119,6 +139,8 @@ export function TeacherGroupsPage({ groupId }: { groupId?: string }) {
             {current && source ? (
               <DesktopDetail
                 key={current.group.id}
+                tab={tab}
+                setTab={setTab}
                 item={current}
                 source={source}
                 today={today}
@@ -135,7 +157,16 @@ export function TeacherGroupsPage({ groupId }: { groupId?: string }) {
 
   if (groupId) {
     if (selected && source) {
-      return <MobileDetail item={selected} source={source} today={today} now={now} />
+      return (
+        <MobileDetail
+          item={selected}
+          source={source}
+          today={today}
+          now={now}
+          tab={tab}
+          setTab={setTab}
+        />
+      )
     }
     return (
       <section className="flex flex-col gap-4">
@@ -145,7 +176,17 @@ export function TeacherGroupsPage({ groupId }: { groupId?: string }) {
     )
   }
 
-  return <MobileList items={items} notice={notice} today={today} />
+  return (
+    <MobileList
+      items={items}
+      notice={notice}
+      today={today}
+      filter={search.days ?? null}
+      setFilter={(days) => {
+        onSearchChange({ ...search, days: days ?? undefined })
+      }}
+    />
+  )
 }
 
 function Notice({ children }: { children: ReactNode }) {
@@ -168,12 +209,15 @@ function MobileList({
   items,
   notice,
   today,
+  filter,
+  setFilter,
 }: {
   items: Item[]
   notice: string | null
   today: string
+  filter: string | null
+  setFilter: (days: string | null) => void
 }) {
-  const [filter, setFilter] = useState<string | null>(null)
   const keys = [
     ...new Set(items.map((i) => daysKey(i.group.schedule_rules, today)).filter(Boolean)),
   ].sort()
@@ -355,7 +399,7 @@ function MonthLessons({ group, today }: { group: TeacherGroup; today: string }) 
               <Link
                 to="/lessons/$lessonId"
                 params={{ lessonId: v.id }}
-                search={fromGroup(group.id)}
+                search={fromGroup(group.id, 'lessons')}
                 className="flex min-h-14 items-center gap-3 px-4 py-2.5"
               >
                 {inner}
@@ -390,14 +434,17 @@ function MobileDetail({
   source,
   today,
   now,
+  tab,
+  setTab,
 }: {
   item: Item
   source: TeacherGroupsSource
   today: string
   now: number
+  tab: GroupTab
+  setTab: (tab: GroupTab) => void
 }) {
   const { group, summary } = item
-  const [tab, setTab] = useState<'students' | 'lessons'>('students')
   const [all, setAll] = useState(false)
   const [extra, setExtra] = useState(false)
   const members = memberRows(group, today)
@@ -628,14 +675,17 @@ function DesktopDetail({
   source,
   today,
   now,
+  tab,
+  setTab,
 }: {
   item: Item
   source: TeacherGroupsSource
   today: string
   now: number
+  tab: GroupTab
+  setTab: (tab: GroupTab) => void
 }) {
   const { group, summary } = item
-  const [tab, setTab] = useState<'students' | 'lessons'>('students')
   const [extra, setExtra] = useState(false)
   const members = memberRows(group, today)
   const tariff = tariffFor(group.group_type, today, source.tariffs)

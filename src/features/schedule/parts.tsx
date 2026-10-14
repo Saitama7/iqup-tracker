@@ -1,6 +1,7 @@
 // Pieces shared by А1 / АМ1 / А2: status colours, the week-grid card, the legend.
-import { Link } from '@tanstack/react-router'
+import { Link, useSearch } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import { fromSchedule } from '@/features/lessons/return-to'
 import type { LessonState } from '@/features/lessons/select'
 import { cn } from '@/lib/utils'
 import { trialsCaption, type Trial } from '@/features/trials/model'
@@ -56,11 +57,17 @@ export function LessonCard({
 }) {
   const tone = cardTone(lesson, now, trials.length)
   const { title, caption } = cardText(lesson, now, trials.length)
+  // «назад» from the marks returns to the same week, teacher and filter (#89)
+  const search = useSearch({ from: '/_app/admin/schedule' })
   return (
     <Link
       // a held lesson opens its marks (correction, #74), the rest — the group
       {...(lesson.status === 'held'
-        ? { to: '/lessons/$lessonId', params: { lessonId: lesson.id } }
+        ? {
+            to: '/lessons/$lessonId',
+            params: { lessonId: lesson.id },
+            search: fromSchedule(search),
+          }
         : { to: '/admin/groups/$groupId', params: { groupId: lesson.group.id } })}
       data-tone={tone}
       className={cn('block rounded-[10px] px-2.5 py-2 text-xs font-extrabold text-ink', CARD[tone])}

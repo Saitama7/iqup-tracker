@@ -174,6 +174,15 @@ describe('backTarget (#57)', () => {
       to: '/groups/$groupId',
       label: 'Группа',
       params: { groupId: 'g1' },
+      search: {},
+    })
+    expect(
+      backTarget('/lessons/1f0c', 'teacher', { from: 'group', group: 'g1', tab: 'lessons' }),
+    ).toEqual({
+      to: '/groups/$groupId',
+      label: 'Группа',
+      params: { groupId: 'g1' },
+      search: { tab: 'lessons' },
     })
     expect(backTarget('/lessons/1f0c', 'teacher', { from: 'group' })).toEqual({
       to: '/today',
@@ -183,6 +192,37 @@ describe('backTarget (#57)', () => {
 
   it('a lesson opened by an admin-only user leads to the dashboard', () => {
     expect(backTarget('/lessons/1f0c', 'admin')).toEqual({ to: '/admin', label: 'Сегодня' })
+    // «Мой месяц» / a teacher's group are not screens of the admin view
+    expect(backTarget('/lessons/1f0c', 'admin', { from: 'my-month' })).toEqual({
+      to: '/admin',
+      label: 'Сегодня',
+    })
+  })
+
+  it('a lesson opened from an admin screen leads back to it, with its tab and week (#89)', () => {
+    const fromGroupTab = { from: 'admin-group', group: 'g1', tab: 'lessons' } as const
+    const group = {
+      to: '/admin/groups/$groupId',
+      label: 'Группа',
+      params: { groupId: 'g1' },
+      search: { tab: 'lessons' },
+    }
+    // admin-only and admin + teacher (Каныкей: the lesson route resolves to the teacher view)
+    expect(backTarget('/lessons/1f0c', 'admin', fromGroupTab)).toEqual(group)
+    expect(backTarget('/lessons/1f0c', 'teacher', fromGroupTab)).toEqual(group)
+    expect(backTarget('/lessons/1f0c', 'admin', { from: 'schedule', date: '2026-09-23' })).toEqual({
+      to: '/admin/schedule',
+      label: 'Расписание',
+      search: { date: '2026-09-23' },
+    })
+    expect(backTarget('/lessons/1f0c', 'teacher', { from: 'dashboard' })).toEqual({
+      to: '/admin',
+      label: 'Сегодня',
+    })
+    expect(backTarget('/lessons/1f0c', 'teacher', { from: 'today' })).toEqual({
+      to: '/today',
+      label: 'Сегодня',
+    })
   })
 
   it('«Ещё» screens and the profile lead to the home of the view', () => {

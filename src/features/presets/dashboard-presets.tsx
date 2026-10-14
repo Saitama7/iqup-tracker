@@ -5,6 +5,7 @@ import { addDays } from '@/features/groups/model'
 import { cn } from '@/lib/utils'
 import { presetsQuery, usePresetsRealtime, type PresetRow } from './api'
 import { dayWord } from './model'
+import { FROM_DASHBOARD } from '@/features/lessons/return-to'
 
 /** «Завтра 11:00 · Математика · 8 класс А — Айжан Б. · заболел». */
 export function presetLine(r: PresetRow, today: string): string {
@@ -40,6 +41,7 @@ export function PresetsWidget({ today, compact = false }: { today: string; compa
             <Link
               to="/lessons/$lessonId"
               params={{ lessonId: r.lesson.id }}
+              search={FROM_DASHBOARD}
               className="flex min-h-11 items-center text-[13px] font-bold"
             >
               {presetLine(r, today)}
