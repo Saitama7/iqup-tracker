@@ -9,6 +9,7 @@ import { firstName, useDisplayName } from '@/components/shell/shell-parts'
 import { monthName } from '@/features/groups/model'
 import { useEnsureLessons } from '@/features/groups/use-ensure-lessons'
 import { monthTotalQuery } from '@/features/payroll/api'
+import { usePendingRequests, type PendingRequest } from '@/features/lessons/corrections-api'
 import { lessonState, lessonsWord } from '@/features/lessons/select'
 import { formatSom } from '@/features/tariffs/model'
 import { useNow } from '@/lib/now'
@@ -44,6 +45,7 @@ import {
   type DashboardTrials,
 } from './dashboard-trials'
 import { CHIP, DOT, Notice, R2_STUB } from './parts'
+import { CorrectionItems, CorrectionsWidget } from './dashboard-corrections'
 
 /** А1 shows this many of today's lessons, the rest behind «ещё N занятий». */
 const TODAY_SHOWN = 7
@@ -68,6 +70,7 @@ export function DashboardPage() {
   const day = useQuery(adminLessonsQuery(today, today))
   const pending = useQuery(adminUnconfirmedQuery(today))
   const trials = useDashboardTrials(today)
+  const requests = usePendingRequests(true)
 
   let body: ReactNode
   if (day.isError || pending.isError) {
@@ -82,6 +85,7 @@ export function DashboardPage() {
       today,
       now,
       trials,
+      requests: requests.data ?? [],
     }
     body = isDesktop ? <DesktopDashboard {...data} /> : <MobileDashboard {...data} />
   }
@@ -133,6 +137,8 @@ interface DashboardData {
   today: string
   now: number
   trials: DashboardTrials
+  /** Teachers' requests to correct marks (#74), oldest first. */
+  requests: PendingRequest[]
 }
 
 // ─── А1 · desktop ───────────────────────────────────────────────────────────
@@ -142,7 +148,15 @@ const tileLabel = 'text-xs font-extrabold'
 const tileValue = 'font-display text-[26px] font-bold'
 const tileCaption = 'text-xs font-bold'
 
-function DesktopDashboard({ lessons, kpi, unconfirmed, today, now, trials }: DashboardData) {
+function DesktopDashboard({
+  lessons,
+  kpi,
+  unconfirmed,
+  today,
+  now,
+  trials,
+  requests,
+}: DashboardData) {
   const [expanded, setExpanded] = useState(false)
   const spread = unconfirmedSpread(unconfirmed)
   const shown = expanded ? lessons : lessons.slice(0, TODAY_SHOWN)
@@ -213,6 +227,7 @@ function DesktopDashboard({ lessons, kpi, unconfirmed, today, now, trials }: Das
         </section>
 
         <aside className="flex flex-col gap-3.5">
+          <CorrectionsWidget requests={requests} />
           <UnconfirmedWidget unconfirmed={unconfirmed} today={today} />
           <section className="flex flex-col gap-2.5 rounded-[20px] border border-line bg-card px-5 py-4">
             <h2 className="text-[15px] font-extrabold">Долги</h2>
@@ -364,7 +379,15 @@ const mLabel = 'text-[11px] font-extrabold tracking-[0.04em] uppercase'
 const mValue = 'font-display text-[22px] font-bold'
 const mCaption = 'text-[11px] font-bold'
 
-function MobileDashboard({ lessons, kpi, unconfirmed, today, now, trials }: DashboardData) {
+function MobileDashboard({
+  lessons,
+  kpi,
+  unconfirmed,
+  today,
+  now,
+  trials,
+  requests,
+}: DashboardData) {
   const spread = unconfirmedSpread(unconfirmed)
   const more = unconfirmed.length - WIDGET_SHOWN
   return (
@@ -420,10 +443,11 @@ function MobileDashboard({ lessons, kpi, unconfirmed, today, now, trials }: Dash
 
         <TrialsWidget trials={trials} today={today} compact />
 
-        {unconfirmed.length > 0 && (
+        {(unconfirmed.length > 0 || requests.length > 0) && (
           <>
             <h2 className="pt-2 text-sm font-extrabold">Требует внимания</h2>
             <ul aria-label="Требует внимания" className="flex flex-col gap-2">
+              <CorrectionItems requests={requests} />
               {unconfirmed.slice(0, WIDGET_SHOWN).map((l) => (
                 <li key={l.id}>
                   <Link

@@ -133,7 +133,7 @@ export type Database = {
           lesson_id: string
           marks: NonNullable<Json>
           status?: string
-          teacher_id: string
+          teacher_id?: string
         }
         Update: {
           comment?: string

@@ -43,7 +43,7 @@ const CAPTION: Record<CardTone, string> = {
   forming: '',
 }
 
-/** А2 card: group · teacher · status by colour and words; opens the group (lesson screen — #12). */
+/** А2 card: group · teacher · status by colour and words; opens the group, a held lesson — its marks. */
 export function LessonCard({
   lesson,
   now,
@@ -58,8 +58,10 @@ export function LessonCard({
   const { title, caption } = cardText(lesson, now, trials.length)
   return (
     <Link
-      to="/admin/groups/$groupId"
-      params={{ groupId: lesson.group.id }}
+      // a held lesson opens its marks (correction, #74), the rest — the group
+      {...(lesson.status === 'held'
+        ? { to: '/lessons/$lessonId', params: { lessonId: lesson.id } }
+        : { to: '/admin/groups/$groupId', params: { groupId: lesson.group.id } })}
       data-tone={tone}
       className={cn('block rounded-[10px] px-2.5 py-2 text-xs font-extrabold text-ink', CARD[tone])}
     >

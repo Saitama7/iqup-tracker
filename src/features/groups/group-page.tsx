@@ -790,6 +790,16 @@ function LessonActions({
     'min-h-11 rounded-xl border-[1.5px] border-line-strong bg-card px-3 text-xs font-extrabold whitespace-nowrap min-[900px]:min-h-9'
   return (
     <span className="flex gap-1.5">
+      {(v.tone === 'held' || v.tone === 'late') && (
+        <Link
+          to="/lessons/$lessonId"
+          params={{ lessonId: v.id }}
+          className={cn(btn, 'inline-flex items-center text-ink')}
+          aria-label={`Отметки: ${v.when}`}
+        >
+          Отметки
+        </Link>
+      )}
       {v.canCancel && (
         <>
           <button

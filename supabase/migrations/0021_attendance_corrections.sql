@@ -145,7 +145,7 @@ $$;
 create table if not exists public.attendance_correction_requests (
   id uuid primary key default gen_random_uuid(),
   lesson_id uuid not null references public.lessons (id) on delete cascade,
-  teacher_id uuid not null references public.teachers (id),
+  teacher_id uuid not null default public.current_teacher_id() references public.teachers (id),
   -- proposed marks, same shape as correct_attendance: [{student_id, status}, …]
   marks jsonb not null check (jsonb_typeof(marks) = 'array' and jsonb_array_length(marks) > 0),
   comment text not null check (length(btrim(comment)) between 1 and 500),

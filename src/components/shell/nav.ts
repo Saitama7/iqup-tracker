@@ -27,6 +27,8 @@ export interface NavItem {
   to: AppPath | null
   /** Active only on this exact path — section roots like /admin that have child screens. */
   exact?: boolean
+  /** A counter next to the label: teachers' requests to correct marks waiting for the admin (#74). */
+  badge?: 'corrections'
 }
 
 export interface TabItem extends NavItem {
@@ -43,7 +45,7 @@ export const NAV: Record<View, NavItem[]> = {
     { label: 'Мой месяц', to: '/my-month' },
   ],
   admin: [
-    { label: 'Дашборд', to: '/admin', exact: true },
+    { label: 'Дашборд', to: '/admin', exact: true, badge: 'corrections' },
     { label: 'Расписание', to: '/admin/schedule' },
     { label: 'Группы', to: '/admin/groups' },
     { label: 'Ученики', to: '/admin/students' },
@@ -73,7 +75,7 @@ export const TABS: Record<View, TabItem[]> = {
     { label: 'Мой месяц', icon: CreditCard, to: '/my-month' },
   ],
   admin: [
-    { label: 'Сегодня', icon: Calendar, to: '/admin', exact: true },
+    { label: 'Сегодня', icon: Calendar, to: '/admin', exact: true, badge: 'corrections' },
     { label: 'Ученики', icon: User, to: '/admin/students' },
     { label: 'Оплата', icon: CreditCard, to: '/admin/payments' },
     { label: 'Группы', icon: Users, to: '/admin/groups' },

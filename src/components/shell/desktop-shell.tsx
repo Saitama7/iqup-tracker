@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { LoaderCircle, LogOut } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { usePendingRequests } from '@/features/lessons/corrections-api'
 import { teacherSummaryQuery } from '@/features/profile/api'
 import { useSession } from '@/lib/auth'
 import { useNow } from '@/lib/now'
 import { cn } from '@/lib/utils'
 import { NAV, viewCaption } from './nav'
-import { Avatar, Brand, firstName, useDisplayName, ViewSwitch } from './shell-parts'
+import { Avatar, Brand, firstName, NavBadge, useDisplayName, ViewSwitch } from './shell-parts'
 import { useSignOut } from './use-sign-out'
 import { useView } from './use-view'
 
@@ -21,6 +22,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
   const now = useNow()
   const summary = useQuery({ ...teacherSummaryQuery(userId, now), enabled: view === 'teacher' })
   const items = view ? NAV[view] : []
+  const corrections = usePendingRequests(view === 'admin').data?.length ?? 0
   const { signingOut, signOut } = useSignOut()
 
   return (
@@ -44,6 +46,7 @@ export function DesktopShell({ children }: { children: ReactNode }) {
                 )}
               >
                 {item.label}
+                {item.badge && <NavBadge count={corrections} className="ml-auto" />}
               </Link>
             ) : (
               <span

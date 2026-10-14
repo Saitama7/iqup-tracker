@@ -83,3 +83,19 @@ export function ViewSwitch({
     </>
   )
 }
+
+/** Requests to correct marks waiting for the admin (#74): a number by the menu item, none at 0. */
+export function NavBadge({ count, className }: { count: number; className?: string }) {
+  if (count <= 0) return null
+  return (
+    <span
+      aria-label={`запросов на исправление: ${count}`}
+      className={cn(
+        'inline-flex min-w-5 items-center justify-center rounded-full bg-burned px-1.5 text-[11px] leading-5 font-extrabold whitespace-nowrap text-white',
+        className,
+      )}
+    >
+      {count}
+    </span>
+  )
+}
