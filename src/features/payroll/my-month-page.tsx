@@ -33,6 +33,7 @@ import {
   payday,
   periodCaption,
   PRELIMINARY_NOTE,
+  STUDENT_LESSON_NOTE,
   shiftMonth,
   toPayCaption,
   visibleLessons,
@@ -414,7 +415,9 @@ function MobileMonth({
         </section>
       )}
 
-      <p className="text-xs font-bold text-ink-muted">{PRELIMINARY_NOTE}.</p>
+      <p className="text-xs font-bold text-ink-muted">
+        {STUDENT_LESSON_NOTE} {PRELIMINARY_NOTE}.
+      </p>
     </>
   )
 }

@@ -9,6 +9,7 @@ import { availableLessons, totalDebt } from '@/features/payments/balance'
 import { EnrollDialog, type EnrollStudent } from '@/features/subscriptions/enroll-dialog'
 import { EnrollmentStartDialog } from '@/features/subscriptions/enrollment-start-dialog'
 import { RemoveEnrollmentDialog } from '@/features/subscriptions/remove-enrollment-dialog'
+import { StudentPresets } from '@/features/presets/student-presets'
 import { formatSom } from '@/features/tariffs/model'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
 import { useNow } from '@/lib/now'
@@ -305,6 +306,7 @@ function DesktopStudent({
               />
             ))
           )}
+          <Presets view={view} today={today} />
           <AttendanceTable view={view} records={records} />
         </div>
         <aside className="flex flex-col gap-3.5">
@@ -319,6 +321,20 @@ function DesktopStudent({
         </aside>
       </div>
     </div>
+  )
+}
+
+/** «Предупредил о пропуске» (#84) — only while the student is in a group. */
+function Presets({ view, today }: { view: StudentView; today: string }) {
+  const groupIds = view.active.flatMap((e) => (e.group ? [e.group.id] : []))
+  if (groupIds.length === 0) return null
+  return (
+    <StudentPresets
+      studentId={view.student.id}
+      studentName={view.student.full_name}
+      groupIds={groupIds}
+      today={today}
+    />
   )
 }
 
@@ -599,6 +615,8 @@ function MobileStudent({
           />
         ))
       )}
+
+      <Presets view={view} today={today} />
 
       <PaymentsSection
         studentId={s.id}

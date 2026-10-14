@@ -9,6 +9,8 @@ import {
   hoursCaption,
   lessonWhen,
   marksCaption,
+  marksSummary,
+  STUDENT_LESSON_NOTE,
   monthEnd,
   filterMonthLessons,
   myMonthView,
@@ -106,14 +108,26 @@ describe('lesson captions (УД4)', () => {
     )
   })
 
-  it('«Был 7 · Заморозка 1 · Не был 1»', () => {
+  it('«Был 7 · Заморозка 1 · Не был 1 → в ЗП 8»: «Не был» is paid, «Заморозка» is not (#84)', () => {
     expect(
       marksCaption([
         ...Array.from({ length: 7 }, () => ({ status: 'present' as const })),
         { status: 'absent_burned' },
         { status: 'absent_frozen' },
       ]),
-    ).toBe('Был 7 · Заморозка 1 · Не был 1')
+    ).toBe('Был 7 · Заморозка 1 · Не был 1 → в ЗП 8')
+  })
+
+  it('marksSummary: only «Был» — no «в ЗП» suffix; «Не был» alone is paid', () => {
+    expect(marksSummary({ present: 5, frozen: 0, burned: 0 })).toBe('Был 5')
+    expect(marksSummary({ present: 5, frozen: 0, burned: 1 })).toBe('Был 5 · Не был 1 → в ЗП 6')
+    expect(marksSummary({ present: 0, frozen: 2, burned: 0 })).toBe('Заморозка 2 → в ЗП 0')
+    expect(marksSummary({ present: 0, frozen: 0, burned: 0 })).toBe('')
+  })
+
+  it('formulaNote says what an ученико-урок is', () => {
+    expect(formulaNote({ lessonPrice: null, percent: null })).toContain(STUDENT_LESSON_NOTE)
+    expect(STUDENT_LESSON_NOTE).toContain('«Не был»')
   })
 
   it('confirmed: time on the day, «поздно» on a later day', () => {

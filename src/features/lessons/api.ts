@@ -8,6 +8,7 @@ import { PAYROLL_KEY } from '@/features/payroll/api'
 import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import { addDays } from '@/features/groups/model'
+import type { PresetInfo } from '@/features/presets/model'
 import type { EnrollmentSource, Mark } from './attendance'
 
 /** Safety net for a dropped realtime socket — docs/02-architecture.md §7.1. */
@@ -218,6 +219,7 @@ const sheetSchema = z.object({
     enrollments: z.array(enrollmentSchema),
   }),
   attendance: z.array(z.object({ student_id: z.uuid(), status: markSchema })),
+  attendance_presets: z.array(z.object({ student_id: z.uuid(), comment: z.string().nullable() })),
 })
 
 export interface LessonSheet {
@@ -237,6 +239,8 @@ export interface LessonSheet {
   enrollments: EnrollmentSource[]
   /** Marks saved on this lesson. */
   marks: Map<string, Mark>
+  /** The admin's «Заморозка» set before the lesson, by student (#84, 0023). */
+  presets: Map<string, PresetInfo>
 }
 
 export const lessonKey = (lessonId: string) => ['lesson', lessonId] as const
@@ -249,13 +253,15 @@ export const lessonSheetQuery = (lessonId: string) =>
       const lesson = await supabase
         .from('lessons')
         .select(
-          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, is_locked, teacher:teachers!lessons_teacher_id_fkey(rates:teacher_rates(percent, valid_from)), group:groups!inner(id, name, subject:subjects(name), group_type, room, enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status)`,
+          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, is_locked, teacher:teachers!lessons_teacher_id_fkey(rates:teacher_rates(percent, valid_from)), group:groups!inner(id, name, subject:subjects(name), group_type, room, enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status), attendance_presets(student_id, comment)`,
         )
         .eq('id', lessonId)
         .maybeSingle()
       if (lesson.error) throw lesson.error
       if (!lesson.data) return null
-      const { group, teacher, attendance, ...rest } = sheetSchema.parse(lesson.data)
+      const { group, teacher, attendance, attendance_presets, ...rest } = sheetSchema.parse(
+        lesson.data,
+      )
       const { enrollments, ...g } = group
       return {
         ...rest,
@@ -263,6 +269,7 @@ export const lessonSheetQuery = (lessonId: string) =>
         rates: teacher.rates,
         enrollments: enrollments.map(toEnrollment),
         marks: new Map(attendance.map((a) => [a.student_id, a.status])),
+        presets: new Map(attendance_presets.map((p) => [p.student_id, { comment: p.comment }])),
       }
     },
   })

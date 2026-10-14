@@ -4,6 +4,7 @@ import { AlertCircle, Check } from 'lucide-react'
 import { groupLabel } from '@/features/students/model'
 import { GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { addDays } from '@/features/groups/model'
+import { marksSummary } from '@/features/payroll/model'
 import { trialsCaption, type Trial } from '@/features/trials/model'
 import { formatDayMonth } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -35,15 +36,10 @@ export function groupCaption(l: TeacherLesson): string {
     .join(' · ')
 }
 
-/** «Был 7 · Заморозка 1 · 10:02» (held) or «8 учеников · групповая» — second line of a day row. */
+/** «Был 7 · Заморозка 1 → в ЗП 7 · 10:02» (held) or «8 учеников · групповая» — second line of a day row. */
 export function rowCaption(l: TeacherLesson, { desktop = false } = {}): string {
   if (l.status === 'held') {
-    const { present, frozen, burned } = l.marks
-    const parts = [
-      present ? `Был ${present}` : null,
-      frozen ? `Заморозка ${frozen}` : null,
-      burned ? `Не был ${burned}` : null,
-    ]
+    const parts: (string | null)[] = [marksSummary(l.marks) || null]
     if (l.confirmed_at) {
       const time = bishkekTime(l.confirmed_at)
       parts.push(desktop ? `подтверждено в ${time}` : time)

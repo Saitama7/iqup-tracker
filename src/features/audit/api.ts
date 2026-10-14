@@ -136,7 +136,8 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
         (r) =>
           r.entity === 'attendance' ||
           r.entity === 'trials' ||
-          r.entity === 'attendance_correction_requests',
+          r.entity === 'attendance_correction_requests' ||
+          r.entity === 'attendance_presets',
       )
       .map((r) => field(r, 'lesson_id')),
   )
@@ -185,7 +186,12 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
 
   const studentIds = ids([
     ...rows
-      .filter((r) => r.entity === 'attendance' || r.entity === 'enrollments')
+      .filter(
+        (r) =>
+          r.entity === 'attendance' ||
+          r.entity === 'enrollments' ||
+          r.entity === 'attendance_presets',
+      )
       .map((r) => field(r, 'student_id')),
     ...enrollments.map((e) => e.student_id),
     // a teacher's request: the students it is about (#74)

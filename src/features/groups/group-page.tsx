@@ -800,6 +800,17 @@ function LessonActions({
           Отметки
         </Link>
       )}
+      {(v.tone === 'planned' || v.tone === 'today') && (
+        // #84: the roster of a planned lesson — «Предупредил о пропуске» before it starts
+        <Link
+          to="/lessons/$lessonId"
+          params={{ lessonId: v.id }}
+          className={cn(btn, 'inline-flex items-center text-ink')}
+          aria-label={`Ученики: ${v.when}`}
+        >
+          Ученики
+        </Link>
+      )}
       {v.canCancel && (
         <>
           <button

@@ -10,6 +10,16 @@ import { PageTitle } from '@/components/page'
 import { BackButton } from '@/components/shell/back-button'
 import { rateOn } from '@/features/payroll/calc'
 import { PRELIMINARY_NOTE } from '@/features/payroll/model'
+import { usePresetsRealtime } from '@/features/presets/api'
+import {
+  applyPresets,
+  draftMarks,
+  presetCaption,
+  presetClearable,
+  presetEditable,
+  type PresetInfo,
+} from '@/features/presets/model'
+import { PresetDialog, useClearPreset } from '@/features/presets/preset-dialog'
 import { trialsQuery, useTrialsRealtime } from '@/features/trials/api'
 import { useSession } from '@/lib/auth'
 import { lessonTrials, trialsWord, type Trial } from '@/features/trials/model'
@@ -104,6 +114,15 @@ interface SheetModel {
   setMark: (studentId: string, mark: Mark) => void
   allPresent: () => void
   confirm: () => void
+  /** The admin's «Заморозка» set before the lesson, by student (#84). */
+  presets: ReadonlyMap<string, PresetInfo>
+  /** The admin may set a preset: a planned lesson not started yet (#84, И56). */
+  canSetPreset: boolean
+  /** The admin may remove a preset: until the lesson is held, a cancelled one too (И56). */
+  canClearPreset: boolean
+  presetBusy: boolean
+  openPreset: (row: RosterRow) => void
+  clearPreset: (row: RosterRow) => void
 }
 
 function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) {
@@ -121,7 +140,11 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   )
 
   const roster = useMemo(() => lessonRoster(sheet.enrollments, sheet, sheet.marks), [sheet])
-  const corrections = useCorrections(sheet, roster, roles.includes('admin'))
+  const isAdmin = roles.includes('admin')
+  const corrections = useCorrections(sheet, roster, isAdmin)
+  usePresetsRealtime(sheet.status === 'planned')
+  const clearPresetMutation = useClearPreset()
+  const [presetFor, setPresetFor] = useState<RosterRow | null>(null)
   const correcting = corrections.fix !== null
   // The draft outlives the page (И19, #29): restored from localStorage, dropped once the lesson
   // is held / cancelled — not on the optimistic «held», a failed confirm keeps it.
@@ -139,8 +162,11 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   const state = lessonState(sheet, now)
   const copy = confirmCopy(state)
   const editable = sheet.status === 'planned' && state !== 'upcoming'
+  // #84: the admin's «Заморозка» set in advance fills students not marked yet (the teacher may change it)
+  const own = editable ? (draft ?? sheet.marks) : sheet.marks
   const marks: ReadonlyMap<string, Mark> =
-    corrections.fix ?? (editable ? (draft ?? sheet.marks) : sheet.marks)
+    corrections.fix ??
+    (sheet.status === 'planned' ? applyPresets(own, sheet.presets, roster) : sheet.marks)
   const counts = tally(roster, marks)
 
   const percent = rateOn(sheet.rates, sheet.lesson_date)
@@ -162,6 +188,18 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
     accrual,
     trials,
     trialsMarkable: sheet.lesson_date <= bishkekDate(now) && sheet.status !== 'cancelled',
+    presets: sheet.presets,
+    canSetPreset: isAdmin && presetEditable(sheet, now),
+    canClearPreset: isAdmin && presetClearable(sheet),
+    presetBusy: clearPresetMutation.isPending,
+    openPreset: setPresetFor,
+    clearPreset: (row) => {
+      clearPresetMutation.mutate({
+        lessonId: sheet.id,
+        studentId: row.studentId,
+        name: row.fullName,
+      })
+    },
     setMark: (studentId, mark) => {
       const row = roster.find((r) => r.studentId === studentId)
       if (!row || (mark === 'absent_frozen' && freezeBlocked(row, marks.get(studentId)))) return
@@ -170,10 +208,11 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
         return
       }
       if (!editable || mutation.isPending) return
-      setDraft(new Map(marks).set(studentId, mark))
+      setDraft(draftMarks(new Map(marks).set(studentId, mark), own, marks))
     },
     allPresent: () => {
-      if (editable && !mutation.isPending) setDraft(markAllPresent(roster, marks))
+      if (editable && !mutation.isPending)
+        setDraft(draftMarks(markAllPresent(roster, marks), own, marks))
     },
     // Back to the list only after the database said held (#41, И27); a refusal leaves the sheet
     // and the draft as they are, the toast says why. Opened from «Мой месяц» — the same month and
@@ -196,7 +235,29 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
     },
   }
 
-  return isDesktop ? <DesktopSheet m={model} now={now} /> : <MobileSheet m={model} now={now} />
+  return (
+    <>
+      {isDesktop ? <DesktopSheet m={model} now={now} /> : <MobileSheet m={model} now={now} />}
+      {presetFor && (
+        <PresetDialog
+          open
+          onOpenChange={() => {
+            setPresetFor(null)
+          }}
+          studentId={presetFor.studentId}
+          studentName={presetFor.fullName}
+          lessons={[
+            {
+              id: sheet.id,
+              lesson_date: sheet.lesson_date,
+              planned_start: sheet.planned_start,
+              group: sheet.group,
+            },
+          ]}
+        />
+      )}
+    </>
+  )
 }
 
 /** «Сейчас · 14:00–15:00», «Проведено · 10:02», «Не подтверждено · 09:00–10:00». */
@@ -331,6 +392,39 @@ function FreezeHint({ id, row, mark }: { id: string; row: RosterRow; mark: Mark 
   )
 }
 
+/**
+ * #84: «Админ: предупредил · комментарий» under the student; for the admin on a planned lesson —
+ * «Предупредил о пропуске» / «Снять заморозку».
+ */
+function PresetNote({ m, row }: { m: SheetModel; row: RosterRow }) {
+  const preset = m.presets.get(row.studentId)
+  const action = preset ? m.canClearPreset : m.canSetPreset
+  if (!preset && !action) return null
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {preset && (
+        <span className="text-xs font-extrabold text-teal-strong">{presetCaption(preset)}</span>
+      )}
+      {action && (
+        <button
+          type="button"
+          disabled={m.presetBusy}
+          onClick={() => {
+            if (preset) m.clearPreset(row)
+            else m.openPreset(row)
+          }}
+          className={cn(
+            'min-h-11 text-xs font-extrabold min-[900px]:min-h-8',
+            preset ? 'text-burned-strong' : 'text-teal',
+          )}
+        >
+          {preset ? 'Снять заморозку' : 'Предупредил о пропуске'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── У3 · phone ─────────────────────────────────────────────────────────────
 
 function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
@@ -436,6 +530,7 @@ function MobileStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
       </div>
       <MarkButtons m={m} row={row} hintId={hintId} />
       <FreezeHint id={hintId} row={row} mark={mark} />
+      <PresetNote m={m} row={row} />
     </li>
   )
 }
@@ -568,6 +663,7 @@ function DesktopStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
       <span className="flex flex-col gap-0.5">
         <span className={cn('text-[13px] font-bold', TONE[meta.tone])}>{meta.text}</span>
         <FreezeHint id={hintId} row={row} mark={mark} />
+        <PresetNote m={m} row={row} />
       </span>
       <MarkButtons m={m} row={row} hintId={hintId} desktop />
     </li>
@@ -606,7 +702,7 @@ function Summary({ m }: { m: SheetModel }) {
             </div>
           ))}
           <div className="flex justify-between border-t border-line pt-2">
-            <dt>Ученико-уроков</dt>
+            <dt>В ЗП (был + не был)</dt>
             <dd>{counts.studentLessons}</dd>
           </div>
           {m.accrual && (
