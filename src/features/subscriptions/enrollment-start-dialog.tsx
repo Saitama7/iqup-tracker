@@ -119,10 +119,9 @@ export function EnrollmentStartDialog({
         </Field>
         {(groupStart || latest) && (
           <p id={ids.hint} className="-mt-2 text-xs font-bold text-ink-muted">
-            {groupStart
-              ? `Можно задним числом, не раньше старта группы — ${formatDateRu(groupStart)}`
-              : 'Можно задним числом'}
-            {latest && ` и не позже ${formatDateRu(latest)}`}
+            Можно задним числом:
+            {groupStart && ` с ${formatDateRu(groupStart)} (старт группы)`}
+            {latest && ` по ${formatDateRu(latest)}`}
           </p>
         )}
         {error && <ErrorText>{error}</ErrorText>}

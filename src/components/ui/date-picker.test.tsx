@@ -195,6 +195,24 @@ describe('DateInput on desktop (#64)', () => {
     expect(screen.getByLabelText('Дата')).toHaveValue('05.10.2026')
   })
 
+  it('a click on the page outside any field does not pull the focus back into the field (#68)', async () => {
+    const user = userEvent.setup()
+    render(
+      <>
+        <Field initial="05.10.2026" />
+        <p>Подпись</p>
+      </>,
+    )
+    await user.click(screen.getByRole('button', { name: 'Открыть календарь' }))
+    await screen.findByRole('dialog')
+    await user.click(screen.getByText('Подпись'))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    await new Promise((r) => setTimeout(r, 200))
+    expect(screen.getByLabelText('Дата')).not.toHaveFocus()
+  })
+
   it('a click into the field itself closes the popover; «Закрыть» returns the focus to it', async () => {
     const user = userEvent.setup()
     render(<Field initial="05.10.2026" />)
@@ -254,5 +272,9 @@ describe('yearRange (#64)', () => {
 
   it('a typo year does not go below 1900 (#66)', () => {
     expect(yearRange('2026-10-14', '0202-01-01')).toEqual({ from: 1900, to: 2028 })
+  })
+
+  it('nor above 2100 (#68)', () => {
+    expect(yearRange('2026-10-14', '9999-01-01')).toEqual({ from: 2021, to: 2100 })
   })
 })

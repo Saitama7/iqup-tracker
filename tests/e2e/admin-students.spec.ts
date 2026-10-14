@@ -55,7 +55,10 @@ test('А5: list with balances, search by name and phone, group filter in the URL
     .click()
   await expect(page).toHaveURL(/\/admin\/students$/)
   await expect(page.getByRole('heading', { name: 'Ученики', exact: true })).toBeVisible()
-  await expect(page.getByText(/^\d+ активн(ый|ых)( · \d+ без группы)?$/)).toBeVisible()
+  // «create a student» runs in parallel: its student is briefly in debt and without a group (#68)
+  await expect(
+    page.getByText(/^\d+ активн(ый|ых)( · \d+ с долгом)?( · \d+ без группы)?$/),
+  ).toBeVisible()
 
   const kamila = studentRow(page, 'Камила Орозова')
   await expect(kamila).toContainText('Математика · 8 класс А · Химия · 9 класс')

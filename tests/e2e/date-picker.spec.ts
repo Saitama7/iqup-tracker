@@ -195,9 +195,7 @@ test('старт группы и дата зачисления — выбор в
     const dialog = page.getByRole('form', { name: 'Дата зачисления' })
     // the enrollment ends on 31 October: the hint names both bounds (#66)
     await expect(
-      dialog.getByText(
-        'Можно задним числом, не раньше старта группы — 01.09.2026 и не позже 31.10.2026',
-      ),
+      dialog.getByText('Можно задним числом: с 01.09.2026 (старт группы) по 31.10.2026'),
     ).toBeVisible()
     await snap(page, testInfo, `enrollment-hint-${size(page)}`)
     await dialog.getByRole('button', { name: 'Открыть календарь' }).click()

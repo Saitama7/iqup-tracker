@@ -2,7 +2,17 @@ vi.mock('@/lib/supabase/client', () => ({ supabase: {} }))
 
 import { FunctionsFetchError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase/client'
-import { createUserForm, rateForm, resetPassword, USERS_FUNCTION_TIMEOUT_MS } from './api'
+import {
+  CREATE_TIMEOUT_MESSAGE,
+  createUser,
+  createUserForm,
+  isTimeoutError,
+  NEW_RATE_TIMEOUT_MESSAGE,
+  rateForm,
+  resetPassword,
+  updateRate,
+  USERS_FUNCTION_TIMEOUT_MS,
+} from './api'
 
 const base = {
   fullName: ' Айгуль Исакова ',
@@ -82,6 +92,38 @@ describe('create-user calls (#66)', () => {
     Object.assign(supabase, { functions: { invoke } })
     await expect(resetPassword({ phone: '996555000001', password: 'iqup-7k2m' })).rejects.toThrow(
       'Не удалось связаться с сервером. Попробуйте ещё раз.',
+    )
+  })
+
+  it('abort while reading the body (bare DOMException) is a timeout too (#68)', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      data: null,
+      error: new DOMException('aborted', 'AbortError'),
+    })
+    Object.assign(supabase, { functions: { invoke } })
+    await expect(resetPassword({ phone: '996555000001', password: 'iqup-7k2m' })).rejects.toThrow(
+      'Сервер не ответил, попробуйте ещё раз',
+    )
+  })
+
+  it('timeout on create / new rate says the action may have gone through (#68)', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      data: null,
+      error: new FunctionsFetchError(new DOMException('timed out', 'TimeoutError')),
+    })
+    Object.assign(supabase, { functions: { invoke } })
+    const created = createUser({
+      full_name: 'Айгуль Исакова',
+      phone: '996555000001',
+      roles: ['admin'],
+      password: 'iqup-7k2m',
+    })
+    await expect(created).rejects.toThrow(CREATE_TIMEOUT_MESSAGE)
+    expect(isTimeoutError(await created.catch((e: unknown) => e))).toBe(true)
+    const rate = { teacherId: crypto.randomUUID(), percent: 50, validFrom: '2026-11-01' }
+    await expect(updateRate({ mode: 'new', ...rate })).rejects.toThrow(NEW_RATE_TIMEOUT_MESSAGE)
+    await expect(updateRate({ mode: 'fix', ...rate })).rejects.toThrow(
+      'Сервер не ответил, попробуйте ещё раз',
     )
   })
 })
