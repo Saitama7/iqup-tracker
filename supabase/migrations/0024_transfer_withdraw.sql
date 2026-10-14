@@ -780,11 +780,14 @@ $$;
 
 -- p_end_date — the last day in the group (lessons after it leave the roster; its «был» / «сгорело» stay
 -- with the teacher's payroll). «Заморожен» marks after it are deleted; written-off marks after it
--- refuse. p_refund (0 … the remainder) is refunded from the newest subscriptions with money left.
+-- refuse. p_refund (0 … the remainder) is refunded from the newest subscription.
 -- What is not refunded (the remainder − p_refund) is never dropped silently: it is left to the center
 -- only with p_center_reason (the journal of the subscriptions says «остаток N сом оставлен центру:
--- <reason>»), else the call refuses. The subscriptions become exhausted — closed on their used
--- lessons; a debt (remainder < 0) stays on them and in the debtors list.
+-- <reason>»), else the call refuses. First the subscriptions are evened out by a transfer pair onto the
+-- newest one (each other subscription to remainder 0), so the refund / the rest left to the center / the
+-- net debt sits on that one only — no old debt beside a surplus refunded elsewhere. The subscriptions
+-- become exhausted — closed on their used lessons; a net debt (remainder < 0) stays on the newest one
+-- and in the debtors list.
 create or replace function public.withdraw_enrollment(
   p_enrollment_id uuid,
   p_end_date date,
@@ -804,10 +807,11 @@ declare
   v_remainder integer;
   v_refund integer := coalesce(p_refund, 0);
   v_rest integer;
-  v_left integer;
-  v_take integer;
   v_reason text := coalesce(nullif(btrim(coalesce(p_reason, '')), ''), 'ученик ушёл из группы');
   v_center_reason text := nullif(btrim(coalesce(p_center_reason, '')), '');
+  v_target uuid;
+  v_moved integer := 0;
+  v_transfer uuid := gen_random_uuid();
   r record;
 begin
   perform public.assert_admin();
@@ -867,19 +871,31 @@ begin
 
   update public.enrollments set end_date = p_end_date, status = 'finished' where id = p_enrollment_id;
 
-  v_left := v_refund;
+  -- even the subscriptions out onto the newest one: every other one to remainder 0 (a transfer pair, as
+  -- transfer_student), so a debt on an old one and a surplus on a new one cancel instead of the refund /
+  -- the rest left to the center taking the surplus and the old debt staying in the debtors list
   for r in
     select * from public.subscription_settlement(p_enrollment_id) x
     order by x.started_at desc, x.created_at desc, x.subscription_id desc
   loop
-    exit when v_left = 0;
-    v_take := least(v_left, greatest(r.remainder, 0));
-    if v_take > 0 then
-      insert into public.payments (subscription_id, amount, method, paid_at, kind, reason)
-      values (r.subscription_id, -v_take, p_method, public.payment_time(p_paid_on), 'refund', v_reason);
-      v_left := v_left - v_take;
+    if v_target is null then
+      v_target := r.subscription_id;
+    elsif r.remainder <> 0 then
+      insert into public.payments (subscription_id, amount, method, kind, reason, transfer_id)
+      values (r.subscription_id, -r.remainder, null, 'transfer', 'перенос между абонементами: ' || v_reason,
+              v_transfer);
+      v_moved := v_moved + r.remainder;
     end if;
   end loop;
+  if v_moved <> 0 then
+    insert into public.payments (subscription_id, amount, method, kind, reason, transfer_id)
+    values (v_target, v_moved, null, 'transfer', 'перенос между абонементами: ' || v_reason, v_transfer);
+  end if;
+
+  if v_refund > 0 then
+    insert into public.payments (subscription_id, amount, method, paid_at, kind, reason)
+    values (v_target, -v_refund, p_method, public.payment_time(p_paid_on), 'refund', v_reason);
+  end if;
 
   if v_rest > 0 then
     perform set_config('iqup.audit_reason',

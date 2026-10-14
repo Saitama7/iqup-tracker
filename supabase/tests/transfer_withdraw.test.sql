@@ -2,9 +2,10 @@
 -- «Записан по ошибке» with the payroll going down (0024). Hadija's case, surplus, debt, refusals,
 -- closed period, access, journal; review #86: a discount, the new teacher's payroll, several
 -- subscriptions with a carried debt (И37), a carried debt before the first lesson, «остаток центру»,
--- the void record out of the way of a new enrollment; the seed payroll stays. Fixtures in 2003 (no seed holidays), rolled back.
+-- the void record out of the way of a new enrollment; re-review: «ушёл» with a debt on an old
+-- subscription and money on a new one evens them out; the seed payroll stays. Fixtures in 2003 (no seed holidays), rolled back.
 begin;
-select plan(99);
+select plan(106);
 
 -- ─── Seed payroll before ────────────────────────────────────────────────────
 select is(
@@ -701,6 +702,100 @@ select is(
   (select kind from public.audit_log where entity = 'payments' and reason = 'delete_enrollment'
    and (after ->> 'kind') = 'refund' limit 1),
   'payment', 'journal: the refund is a payment row'
+);
+
+-- ─── «Ушёл»: debt on an old subscription, money on a new one ────────────────
+-- Own teacher / group (no other payroll moves). MINI3 3800/12: old B paid 1 900, 12 «был» (−1 900);
+-- new A from 14 Oct: 14 — paid 3 800 (+3 800, net 1 900, refunded); 15 — paid 1 000 (net debt 900).
+reset role;
+insert into public.teachers (id, user_id, full_name, phone) values
+  ('b8100000-0000-4000-8000-000000000003', null, 'Teacher 81 C', '996000008103');
+insert into public.teacher_rates (teacher_id, percent, valid_from) values
+  ('b8100000-0000-4000-8000-000000000003', 50, '1999-01-01');
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status)
+values ('d8100000-0000-4000-8000-000000000008', 'S81 MINI3', (select id from public.subjects where name = 'Математика'),
+        9, 'mini', 'b8100000-0000-4000-8000-000000000003', '2003-09-02', 'active');
+insert into public.schedule_rules (group_id, weekday, start_time, valid_from)
+select 'd8100000-0000-4000-8000-000000000008', w, '09:00', '2003-09-02' from unnest(array[2, 4]) w;
+select public.generate_lessons('d8100000-0000-4000-8000-000000000008', '2003-10-31');
+insert into public.students (id, full_name) values
+  ('e8100000-0000-4000-8000-000000000014', 'Student 81 14'),
+  ('e8100000-0000-4000-8000-000000000015', 'Student 81 15');
+insert into public.enrollments (id, student_id, group_id, start_date) values
+  ('f8100000-0000-4000-8000-000000000014', 'e8100000-0000-4000-8000-000000000014', 'd8100000-0000-4000-8000-000000000008', '2003-09-02'),
+  ('f8100000-0000-4000-8000-000000000015', 'e8100000-0000-4000-8000-000000000015', 'd8100000-0000-4000-8000-000000000008', '2003-09-02');
+insert into public.subscriptions (id, enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at)
+select x.id::uuid, x.enrollment::uuid, t.id, 12, 3800, 3800, x.started::date
+from (values
+  ('c8100000-0000-4000-8000-000000000014', 'f8100000-0000-4000-8000-000000000014', '2003-09-02'),
+  ('c8100000-0000-4000-8000-000000000114', 'f8100000-0000-4000-8000-000000000014', '2003-10-14'),
+  ('c8100000-0000-4000-8000-000000000015', 'f8100000-0000-4000-8000-000000000015', '2003-09-02'),
+  ('c8100000-0000-4000-8000-000000000115', 'f8100000-0000-4000-8000-000000000015', '2003-10-14')
+) as x(id, enrollment, started)
+join public.tariffs t on t.group_type = 'mini' and t.valid_from = '1990-01-01';
+insert into public.payments (subscription_id, amount, method, paid_at) values
+  ('c8100000-0000-4000-8000-000000000014', 1900, 'cash', '2003-09-02 10:00+06'),
+  ('c8100000-0000-4000-8000-000000000114', 3800, 'cash', '2003-10-14 10:00+06'),
+  ('c8100000-0000-4000-8000-000000000015', 1900, 'cash', '2003-09-02 10:00+06'),
+  ('c8100000-0000-4000-8000-000000000115', 1000, 'cash', '2003-10-14 10:00+06');
+update public.lessons set status = 'held'
+where group_id = 'd8100000-0000-4000-8000-000000000008' and lesson_date <= '2003-10-09';
+insert into public.attendance (lesson_id, student_id, subscription_id, status)
+select l.id, ('e81000000000400080000000000000' || s)::uuid, ('c81000000000400080000000000000' || s)::uuid, 'present'
+from public.lessons l cross join unnest(array['14', '15']) s
+where l.group_id = 'd8100000-0000-4000-8000-000000000008' and l.lesson_date <= '2003-10-09';
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"a8100000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"roles":["admin"]}}';
+select results_eq(
+  $$ select remainder, refunded, left_to_center from public.withdraw_enrollment(
+       'f8100000-0000-4000-8000-000000000014', '2003-10-13', 1900, 'cash') $$,
+  $$ values (1900, 1900, 0) $$,
+  'evened out: +3 800 and −1 900 → 1 900 refunded'
+);
+select results_eq(
+  $$ select subscription_id, paid_som, debt_lessons, debt_som from public.v_student_balance
+     where student_id = 'e8100000-0000-4000-8000-000000000014' order by started_at $$,
+  $$ values ('c8100000-0000-4000-8000-000000000014'::uuid, 3800, 0, 0),
+            ('c8100000-0000-4000-8000-000000000114'::uuid, 0, 0, 0) $$,
+  'after the refund: no debt on the old subscription, nothing held on the new one'
+);
+select results_eq(
+  $$ select subscription_id, amount, kind::text from public.payments
+     where subscription_id in ('c8100000-0000-4000-8000-000000000014', 'c8100000-0000-4000-8000-000000000114')
+     order by subscription_id, kind, amount $$,
+  $$ values ('c8100000-0000-4000-8000-000000000014'::uuid, 1900, 'payment'),
+            ('c8100000-0000-4000-8000-000000000014'::uuid, 1900, 'transfer'),
+            ('c8100000-0000-4000-8000-000000000114'::uuid, 3800, 'payment'),
+            ('c8100000-0000-4000-8000-000000000114'::uuid, -1900, 'refund'),
+            ('c8100000-0000-4000-8000-000000000114'::uuid, -1900, 'transfer') $$,
+  'a transfer pair evens them out, the refund comes from the new one'
+);
+select results_eq(
+  $$ select remainder, refunded, left_to_center from public.withdraw_enrollment(
+       'f8100000-0000-4000-8000-000000000015', '2003-10-13') $$,
+  $$ values (-900, 0, 0) $$,
+  'evened out: +1 000 and −1 900 → a net debt of 900'
+);
+select results_eq(
+  $$ select subscription_id, paid_som, debt_lessons, debt_som from public.v_student_balance
+     where student_id = 'e8100000-0000-4000-8000-000000000015' order by started_at $$,
+  $$ values ('c8100000-0000-4000-8000-000000000015'::uuid, 3800, 0, 0),
+            ('c8100000-0000-4000-8000-000000000115'::uuid, -900, 3, 900) $$,
+  'the debt is 900 on the new subscription only, not 1 900'
+);
+
+reset role; -- subscription_settlement is internal (no grant to authenticated)
+select is(
+  (select count(*)::integer from public.subscription_settlement('f8100000-0000-4000-8000-000000000014') x
+   where x.remainder <> 0),
+  0, 'every subscription of the enrollment settles at 0'
+);
+select results_eq(
+  $$ select x.subscription_id, x.remainder from public.subscription_settlement('f8100000-0000-4000-8000-000000000015') x
+     where x.remainder <> 0 $$,
+  $$ values ('c8100000-0000-4000-8000-000000000115'::uuid, -900) $$,
+  'only the newest subscription carries the net debt'
 );
 
 -- ─── Seed payroll after ─────────────────────────────────────────────────────

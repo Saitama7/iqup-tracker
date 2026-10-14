@@ -207,6 +207,42 @@ describe('subscriptionBalances', () => {
   })
 })
 
+describe('«ушёл» evens the subscriptions out (#81, withdraw_enrollment) — same numbers as pgTAP', () => {
+  // 3 800 / 12: old B paid 1 900, 12 used (−1 900); new A paid 3 800, 0 used (+3 800) → a transfer pair
+  // +1 900 on B / −1 900 on A, then the refund comes from A
+  const exited = (aPaid: number) =>
+    subscriptionBalances([
+      sub({ id: 'B', status: 'exhausted', price_final: 3800, used: 12, paid: 1900 + 1900 }),
+      sub({
+        id: 'A',
+        status: 'exhausted',
+        started_at: '2026-10-14',
+        created_at: '2026-10-14T00:00:00Z',
+        price_final: 3800,
+        paid: aPaid,
+      }),
+    ])
+
+  it('A +3 800, B −1 900, 1 900 refunded → no debt anywhere', () => {
+    const balances = exited(3800 - 1900 - 1900)
+    expect(totalDebt(balances)).toEqual({ lessons: 0, som: 0 })
+    expect(balances.map((b) => [b.subscriptionId, b.paidSom, b.debtSom])).toEqual([
+      ['B', 3800, 0],
+      ['A', 0, 0],
+    ])
+  })
+
+  it('A +1 000, B −1 900 → the net debt 900 on A only, not 1 900', () => {
+    const balances = exited(1000 - 1900)
+    expect(totalDebt(balances)).toEqual({ lessons: 3, som: 900 })
+    expect(balances.find((b) => b.subscriptionId === 'A')).toMatchObject({
+      paidSom: -900,
+      debtLessons: 3,
+      debtSom: 900,
+    })
+  })
+})
+
 describe('payState', () => {
   const state = (over: Partial<BalanceSubscription>) => {
     const [b] = subscriptionBalances([sub(over)])
