@@ -304,7 +304,7 @@ describe('the student a trial becomes (#54)', () => {
 
   it("warns when the phone is another student's and no name matches", () => {
     expect(enrollPhoneWarning({ ...lead, full_name: 'Айсулуу' }, students)).toBe(
-      'Телефон есть у: Нурай Жумабаева, Айбек Жумабаев, Друг — будет создан новый ученик. Если это он(а) — выберите «Уже учится»',
+      'Телефон есть у: Нурай Жумабаева, Айбек Жумабаев, Друг — будет создан новый ученик. Если это он(а) — впишите имя точно как в карточке ученика',
     )
     expect(enrollPhoneWarning(lead, students)).toBeNull()
     expect(enrollPhoneWarning({ ...lead, parent_phone: '996555000000' }, students)).toBeNull()

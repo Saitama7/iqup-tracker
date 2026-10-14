@@ -365,7 +365,7 @@ export function enrollPhoneWarning(
   if (trial.student_id) return null
   const taken = studentsByPhone(students, trial.parent_phone)
   if (taken.length === 0 || taken.some((s) => sameName(s.full_name, trial.full_name))) return null
-  return `Телефон есть у: ${taken.map((s) => s.full_name).join(', ')} — будет создан новый ученик. Если это он(а) — выберите «Уже учится»`
+  return `Телефон есть у: ${taken.map((s) => s.full_name).join(', ')} — будет создан новый ученик. Если это он(а) — впишите имя точно как в карточке ученика`
 }
 
 /** Discounts of the student a trial is enrolled as (В5: 15 % returning, 5 % for a friend); a new lead has none. */
