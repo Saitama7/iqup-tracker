@@ -6,7 +6,7 @@ import { DateInput } from '@/components/ui/date-picker'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { PAYMENT_METHODS, type PaymentMethod } from '@/features/payments/api'
 import { METHOD_BUTTON } from '@/features/payments/model'
-import { groupLabel, type GroupBrief } from '@/features/students/model'
+import { groupLabel, type GroupBrief, type GroupType } from '@/features/students/model'
 import { FormDialog, NativeSelect } from '@/features/students/parts'
 import { formatSom } from '@/features/tariffs/model'
 import { ErrorText, Field, inputClass, labelClass, SubmitButton } from '@/features/tariffs/parts'
@@ -23,12 +23,14 @@ import {
   type Settlement,
 } from './exit-api'
 import {
+  AFTERSCHOOL_NO_TRANSFER,
   exitTargets,
   impactCaption,
   marksCaption,
   settlementLines,
   targetLabel,
   toPayCaption,
+  transferTargets,
   withdrawDefaultDate,
   withdrawMinDate,
 } from './exit-model'
@@ -45,12 +47,17 @@ const ACTION_TITLE: Record<ExitAction, string> = {
   delete: 'Записан по ошибке — удалить',
 }
 
-/** «⋯» next to an enrollment: the three ways out of a group. */
+/**
+ * «⋯» next to an enrollment: the three ways out of a group. An after-school (hours) enrollment has no
+ * transfer — the item is off with the way to do it (#82).
+ */
 export function EnrollmentMenu({
   label,
+  groupType,
   onAction,
 }: {
   label: string
+  groupType?: GroupType
   onAction: (action: ExitAction) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -63,22 +70,29 @@ export function EnrollmentMenu({
         <MoreHorizontal className="size-5" aria-hidden />
       </PopoverTrigger>
       <PopoverContent align="end" className="flex w-64 flex-col p-1.5">
-        {(Object.keys(ACTION_TITLE) as ExitAction[]).map((a) => (
-          <button
-            key={a}
-            type="button"
-            onClick={() => {
-              setOpen(false)
-              onAction(a)
-            }}
-            className={cn(
-              'flex min-h-11 items-center rounded-xl px-3 text-left text-sm font-bold hover:bg-muted',
-              a === 'delete' && 'text-burned-strong',
-            )}
-          >
-            {ACTION_TITLE[a]}
-          </button>
-        ))}
+        {(Object.keys(ACTION_TITLE) as ExitAction[]).map((a) =>
+          a === 'transfer' && groupType === 'afterschool' ? (
+            <div key={a} className="flex flex-col gap-0.5 px-3 py-2">
+              <span className="text-sm font-bold text-ink-muted">{ACTION_TITLE[a]}</span>
+              <span className="text-xs font-bold text-ink-muted">{AFTERSCHOOL_NO_TRANSFER}</span>
+            </div>
+          ) : (
+            <button
+              key={a}
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onAction(a)
+              }}
+              className={cn(
+                'flex min-h-11 items-center rounded-xl px-3 text-left text-sm font-bold hover:bg-muted',
+                a === 'delete' && 'text-burned-strong',
+              )}
+            >
+              {ACTION_TITLE[a]}
+            </button>
+          ),
+        )}
       </PopoverContent>
     </Popover>
   )
@@ -249,7 +263,7 @@ function TransferBody({
   onDone,
 }: ExitProps & { s: Settlement }) {
   const ids = { group: useId(), date: useId(), surplus: useId() }
-  const targets = exitTargets(groups, group)
+  const targets = transferTargets(groups, group)
   const [groupId, setGroupId] = useState('')
   const [typed, setTyped] = useState<string | null>(null)
   const [refundSurplus, setRefundSurplus] = useState(false)

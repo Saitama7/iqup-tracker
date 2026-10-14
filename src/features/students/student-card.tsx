@@ -182,7 +182,13 @@ export function EnrollmentCard({
         <div className="flex items-center gap-1.5">
           {b ? <BalanceChip b={b} /> : !sub && e.refunded && <RefundedChip />}
           <span className={cn(chipClass, 'bg-present-soft text-present-strong')}>Активен</span>
-          {onAction && <EnrollmentMenu label={e.groupLabel} onAction={onAction} />}
+          {onAction && (
+            <EnrollmentMenu
+              label={e.groupLabel}
+              groupType={e.group?.group_type}
+              onAction={onAction}
+            />
+          )}
         </div>
       </div>
       {extra}
@@ -297,7 +303,13 @@ export function MobileEnrollment({
           ) : (
             !sub && e.refunded && <RefundedChip className="text-[11px]" />
           )}
-          {onAction && <EnrollmentMenu label={e.groupLabel} onAction={onAction} />}
+          {onAction && (
+            <EnrollmentMenu
+              label={e.groupLabel}
+              groupType={e.group?.group_type}
+              onAction={onAction}
+            />
+          )}
         </div>
       </div>
       <p className="text-xs font-bold text-ink-muted">

@@ -24,7 +24,7 @@ import {
   EnrollmentMenu,
   type ExitAction,
 } from '@/features/subscriptions/enrollment-exit'
-import { tariffFor } from '@/features/tariffs/current'
+import { tariffFor, type GroupType } from '@/features/tariffs/current'
 import { GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
 import { useNow } from '@/lib/now'
@@ -273,7 +273,7 @@ export function GroupPage({
       ) : roster.length === 0 && trials.length === 0 ? (
         <p className="p-5 font-bold text-ink-muted">В группе пока нет учеников</p>
       ) : isDesktop ? (
-        <MembersTable rows={roster} onAction={onAction}>
+        <MembersTable rows={roster} groupType={group.group_type} onAction={onAction}>
           <TrialTableRows
             trials={trials}
             today={today}
@@ -283,7 +283,7 @@ export function GroupPage({
         </MembersTable>
       ) : (
         <>
-          <MembersList rows={roster} onAction={onAction} />
+          <MembersList rows={roster} groupType={group.group_type} onAction={onAction} />
           <TrialCards
             trials={trials}
             today={today}
@@ -514,10 +514,12 @@ const leftText = (r: MemberRow) =>
 
 function MembersTable({
   rows,
+  groupType,
   children,
   onAction,
 }: {
   rows: MemberRow[]
+  groupType: GroupType
   children?: ReactNode
   onAction: (row: MemberRow, action: ExitAction) => void
 }) {
@@ -568,6 +570,7 @@ function MembersTable({
                 </Link>
                 <EnrollmentMenu
                   label={r.fullName}
+                  groupType={groupType}
                   onAction={(a) => {
                     onAction(r, a)
                   }}
@@ -584,9 +587,11 @@ function MembersTable({
 
 function MembersList({
   rows,
+  groupType,
   onAction,
 }: {
   rows: MemberRow[]
+  groupType: GroupType
   onAction: (row: MemberRow, action: ExitAction) => void
 }) {
   return (
@@ -618,6 +623,7 @@ function MembersList({
           </Link>
           <EnrollmentMenu
             label={r.fullName}
+            groupType={groupType}
             onAction={(a) => {
               onAction(r, a)
             }}

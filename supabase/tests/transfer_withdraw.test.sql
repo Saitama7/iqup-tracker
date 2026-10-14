@@ -175,7 +175,7 @@ set local request.jwt.claims = '{"sub":"a8100000-0000-4000-8000-000000000001","r
 select results_eq(
   $$ select present_marks, paid_som, lessons_used, used_som, remainder, lesson_price
      from public.enrollment_settlement('f8100000-0000-4000-8000-000000000001') $$,
-  $$ values (9, 7200, 9, 5400, 1800, 600::numeric) $$,
+  $$ values (9, 7200, 9::numeric, 5400, 1800, 600::numeric) $$,
   'Hadija: paid 7 200, 9 × 600 = 5 400 used, 1 800 left'
 );
 select results_eq(
@@ -223,7 +223,7 @@ select is(
 select results_eq(
   $$ select paid_som, lessons_used, debt_som, refund_suggested from public.v_student_balance
      where subscription_id = 'c8100000-0000-4000-8000-000000000001' $$,
-  $$ values (5400, 9, 0, 0) $$,
+  $$ values (5400, 9::numeric, 0, 0) $$,
   'old subscription closed on the used lessons: nothing owed, nothing to refund'
 );
 
@@ -264,7 +264,7 @@ select results_eq(
   $$ select b.paid_som, b.paid_lessons from public.v_student_balance b
      join public.subscriptions s on s.id = b.subscription_id join public.enrollments e on e.id = s.enrollment_id
      where e.student_id = 'e8100000-0000-4000-8000-000000000003' and e.group_id = 'd8100000-0000-4000-8000-000000000003' $$,
-  $$ values (6000, 18) $$,
+  $$ values (6000, 18::numeric) $$,
   'the surplus stays on the balance: 6 000 = 18 mini lessons'
 );
 
@@ -294,7 +294,7 @@ select results_eq(
   $$ select b.debt_lessons, b.debt_som, b.lessons_used from public.v_student_balance b
      join public.subscriptions s on s.id = b.subscription_id join public.enrollments e on e.id = s.enrollment_id
      where e.student_id = 'e8100000-0000-4000-8000-000000000004' and e.group_id = 'd8100000-0000-4000-8000-000000000002' $$,
-  $$ values (2, 600, 0) $$,
+  $$ values (2::numeric, 600, 0::numeric) $$,
   'the carried debt is a debt before the first lesson: 600 сом = 2 mini lessons (floor of −1.9)'
 );
 select is(
@@ -306,7 +306,7 @@ select is(
 select results_eq(
   $$ select paid_som, lessons_used, used_som, remainder, lesson_price
      from public.enrollment_settlement('f8100000-0000-4000-8000-000000000012') $$,
-  $$ values (6120, 3, 1530, 4590, 510::numeric) $$,
+  $$ values (6120, 3::numeric, 1530, 4590, 510::numeric) $$,
   'discount 15 %: 3 × 510 = 1 530 used of 6 120, 4 590 left'
 );
 select results_eq(
@@ -326,7 +326,7 @@ select results_eq(
      join public.subscriptions s on s.enrollment_id = e.id
      join public.v_student_balance b on b.subscription_id = s.id
      where e.student_id = 'e8100000-0000-4000-8000-000000000012' and e.group_id = 'd8100000-0000-4000-8000-000000000002' $$,
-  $$ values (3800, 3800, 0, 4590, 14) $$,
+  $$ values (3800, 3800, 0, 4590, 14::numeric) $$,
   'the new subscription: no discount (Г5), 4 590 = 14 mini lessons'
 );
 select is(
@@ -371,8 +371,8 @@ select is(
 select results_eq(
   $$ select subscription_id, lessons_used, paid_som from public.v_student_balance
      where student_id = 'e8100000-0000-4000-8000-000000000013' order by started_at $$,
-  $$ values ('c8100000-0000-4000-8000-000000000013'::uuid, 12, 3200),
-            ('c8100000-0000-4000-8000-000000000113'::uuid, 2, 300) $$,
+  $$ values ('c8100000-0000-4000-8000-000000000013'::uuid, 12::numeric, 3200),
+            ('c8100000-0000-4000-8000-000000000113'::uuid, 2::numeric, 300) $$,
   'chain: 14 «был» on the first, 2 carried to the second'
 );
 select results_eq(
@@ -389,14 +389,14 @@ select results_eq(
   $$ select subscription_id, status::text, lessons_used, debt_som, refund_suggested from public.v_student_balance
      where student_id = 'e8100000-0000-4000-8000-000000000013' and group_id = 'd8100000-0000-4000-8000-000000000007'
      order by started_at $$,
-  $$ values ('c8100000-0000-4000-8000-000000000013'::uuid, 'exhausted', 12, 0, 0),
-            ('c8100000-0000-4000-8000-000000000113'::uuid, 'exhausted', 2, 0, 0) $$,
+  $$ values ('c8100000-0000-4000-8000-000000000013'::uuid, 'exhausted', 12::numeric, 0, 0),
+            ('c8100000-0000-4000-8000-000000000113'::uuid, 'exhausted', 2::numeric, 0, 0) $$,
   'chain: both old subscriptions closed, the carry intact, nothing owed there'
 );
 select results_eq(
   $$ select b.paid_som, b.debt_lessons, b.debt_som from public.v_student_balance b
      where b.student_id = 'e8100000-0000-4000-8000-000000000013' and b.group_id = 'd8100000-0000-4000-8000-000000000003' $$,
-  $$ values (-234, 1, 234) $$,
+  $$ values (-234, 1::numeric, 234) $$,
   'chain: the new subscription owes 234 before the first lesson'
 );
 
@@ -604,7 +604,7 @@ select results_eq(
      join public.v_student_balance b on b.subscription_id = s.id
      join public.lessons l on l.id = a.lesson_id
      where a.student_id = 'e8100000-0000-4000-8000-000000000008' and l.lesson_date = '2003-10-07' $$,
-  $$ select e.id, 1, 0 from public.enrollments e
+  $$ select e.id, 1::numeric, 0 from public.enrollments e
      where e.student_id = 'e8100000-0000-4000-8000-000000000008' and e.group_id = 'd8100000-0000-4000-8000-000000000004'
        and e.start_date = '2003-09-30' $$,
   'the new mark goes to the new subscription — no debt on the void one'
@@ -756,8 +756,8 @@ select results_eq(
 select results_eq(
   $$ select subscription_id, paid_som, debt_lessons, debt_som from public.v_student_balance
      where student_id = 'e8100000-0000-4000-8000-000000000014' order by started_at $$,
-  $$ values ('c8100000-0000-4000-8000-000000000014'::uuid, 3800, 0, 0),
-            ('c8100000-0000-4000-8000-000000000114'::uuid, 0, 0, 0) $$,
+  $$ values ('c8100000-0000-4000-8000-000000000014'::uuid, 3800, 0::numeric, 0),
+            ('c8100000-0000-4000-8000-000000000114'::uuid, 0, 0::numeric, 0) $$,
   'after the refund: no debt on the old subscription, nothing held on the new one'
 );
 select results_eq(
@@ -780,8 +780,8 @@ select results_eq(
 select results_eq(
   $$ select subscription_id, paid_som, debt_lessons, debt_som from public.v_student_balance
      where student_id = 'e8100000-0000-4000-8000-000000000015' order by started_at $$,
-  $$ values ('c8100000-0000-4000-8000-000000000015'::uuid, 3800, 0, 0),
-            ('c8100000-0000-4000-8000-000000000115'::uuid, -900, 3, 900) $$,
+  $$ values ('c8100000-0000-4000-8000-000000000015'::uuid, 3800, 0::numeric, 0),
+            ('c8100000-0000-4000-8000-000000000115'::uuid, -900, 3::numeric, 900) $$,
   'the debt is 900 on the new subscription only, not 1 900'
 );
 

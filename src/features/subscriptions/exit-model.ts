@@ -1,5 +1,6 @@
 // #81: words and dates of the «⋯» dialogs of an enrollment (transfer / left / mistake). The numbers come
 // from the database (enrollment_settlement, transfer_preview, enrollment_payroll_impact, 0024).
+import { formatHours } from '@/features/afterschool/model'
 import { pluralRu } from '@/features/lessons/select'
 import { groupLabel, firstName, type GroupBrief } from '@/features/students/model'
 import { formatLessonPrice, formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
@@ -16,6 +17,14 @@ export function exitTargets(groups: readonly GroupBrief[], from: GroupBrief | nu
     .sort((a, b) => groupLabel(a).localeCompare(groupLabel(b), 'ru'))
 }
 
+/** Why an after-school (hours) enrollment has no transfer, and the way instead (#82). */
+export const AFTERSCHOOL_NO_TRANSFER =
+  'Перевод в продлёнку по часам и из неё — через «Ушёл» с возвратом и новое зачисление'
+
+/** Transfer targets: no after-school (hours) groups — the month bill does not move (#82). */
+export const transferTargets = (groups: readonly GroupBrief[], from: GroupBrief | null) =>
+  exitTargets(groups, from).filter((g) => g.group_type !== 'afterschool')
+
 export const targetLabel = (g: GroupBrief) => `${groupLabel(g)} · ${GROUP_TYPE_LABEL[g.group_type]}`
 
 /** «учителю Гульзат −1 050 сом за 3 урока». */
@@ -31,12 +40,13 @@ export interface MoneyLine {
 /** Оплачено / Отучено N × цена / Остаток (или Долг) — the money of an enrollment. */
 export function settlementLines(s: Settlement): MoneyLine[] {
   const price = s.lessonPrice !== null ? ` × ${formatLessonPrice(s.lessonPrice, true)}` : ''
+  const used =
+    s.unit === 'hour'
+      ? `${formatHours(s.lessonsUsed)} ч${price}/ч`
+      : `${s.lessonsUsed} ${pluralRu(s.lessonsUsed, LESSONS)}${price}`
   return [
     { label: 'Оплачено', value: som(s.paidSom) },
-    {
-      label: 'Отучено',
-      value: `${s.lessonsUsed} ${pluralRu(s.lessonsUsed, LESSONS)}${price} = ${som(s.usedSom)}`,
-    },
+    { label: s.unit === 'hour' ? 'Списано' : 'Отучено', value: `${used} = ${som(s.usedSom)}` },
     s.remainder < 0
       ? { label: 'Долг', value: som(-s.remainder), tone: 'debt' }
       : { label: 'Остаток', value: som(s.remainder), tone: 'left' },

@@ -6,6 +6,7 @@ import { z } from 'zod'
 import type { PaymentMethod } from '@/features/payments/api'
 import { supabase } from '@/lib/supabase/client'
 import { EnrollError } from './api'
+import { AFTERSCHOOL_NO_TRANSFER } from './exit-model'
 
 type DbError = { code?: string; message?: string }
 
@@ -40,6 +41,7 @@ export function transferErrorMessage(error: DbError): string {
     if (m.includes('present or burned marks'))
       return 'С этой даты у ученика уже есть отметки «был» / «не был» — выберите дату позже'
     if (m.includes('after the enrollment end')) return 'Дата позже окончания зачисления'
+    if (m.includes('after-school by hours')) return AFTERSCHOOL_NO_TRANSFER
   }
   return fallback(error, 'Перевод')
 }
@@ -79,11 +81,12 @@ const settlementRow = z.object({
   payments: z.number().int(),
   money_som: z.number().int(),
   paid_som: z.number().int(),
-  lessons_used: z.number().int(),
+  lessons_used: z.number(),
   used_som: z.number().int(),
   remainder: z.number().int(),
   lesson_price: z.number().nullable(),
   has_trial: z.boolean(),
+  unit: z.enum(['lesson', 'hour']),
 })
 
 export interface Settlement {
@@ -98,13 +101,15 @@ export interface Settlement {
   moneySom: number
   /** Σ payments of the live subscriptions. */
   paidSom: number
+  /** Lessons, or hours of an after-school month bill (unit = hour, #82). */
   lessonsUsed: number
   usedSom: number
   /** paid − used; negative — a debt. */
   remainder: number
-  /** Paid price of a lesson of the newest subscription. */
+  /** Paid price of a lesson (of an hour, unit = hour) of the newest subscription. */
   lessonPrice: number | null
   hasTrial: boolean
+  unit: 'lesson' | 'hour'
 }
 
 export const settlementQuery = (enrollmentId: string) =>
@@ -132,6 +137,7 @@ export const settlementQuery = (enrollmentId: string) =>
         remainder: r.remainder,
         lessonPrice: r.lesson_price,
         hasTrial: r.has_trial,
+        unit: r.unit,
       }
     },
   })

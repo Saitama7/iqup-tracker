@@ -8,6 +8,7 @@ import {
   settlementLines,
   targetLabel,
   toPayCaption,
+  transferTargets,
   withdrawDefaultDate,
   withdrawMinDate,
 } from './exit-model'
@@ -44,6 +45,7 @@ const settlement = (extra: Partial<Settlement> = {}): Settlement => ({
   remainder: 1800,
   lessonPrice: 600,
   hasTrial: false,
+  unit: 'lesson',
   ...extra,
 })
 
@@ -98,6 +100,34 @@ describe('money captions', () => {
     )
     expect(lines[1]?.value).toBe('6 уроков × 266,67 = 1 600 сом')
     expect(lines[2]).toEqual({ label: 'Долг', value: '600 сом', tone: 'debt' })
+  })
+
+  it('an after-school bill in hours (#82)', () => {
+    const lines = spLines(
+      settlementLines(
+        settlement({
+          paidSom: 2000,
+          lessonsUsed: 5.5,
+          usedSom: 550,
+          remainder: 1450,
+          lessonPrice: 100,
+          unit: 'hour',
+        }),
+      ),
+    )
+    expect(lines[1]).toEqual({ label: 'Списано', value: '5,5 ч × 100/ч = 550 сом' })
+    expect(lines[2]).toEqual({ label: 'Остаток', value: '1 450 сом', tone: 'left' })
+  })
+
+  it('no transfer to an after-school group (#82)', () => {
+    const from = group('g1', '8 класс А')
+    const groups = [
+      from,
+      group('g2', '8 класс Б'),
+      group('g3', 'Продлёнка', { group_type: 'afterschool' }),
+    ]
+    expect(transferTargets(groups, from).map((g) => g.id)).toEqual(['g2'])
+    expect(exitTargets(groups, from).map((g) => g.id)).toContain('g3')
   })
 
   it('to pay in the new group', () => {

@@ -1595,6 +1595,7 @@ export type Database = {
           payments: number
           present_marks: number
           remainder: number
+          unit: string
           used_som: number
         }[]
       }

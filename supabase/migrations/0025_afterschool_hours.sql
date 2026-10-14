@@ -9,8 +9,11 @@
 --   * v_payroll_preview: lesson subscriptions are priced by the very same expression as 0020/0022, so
 --     the seed sums (Гульзат 38 160, all 47 546) do not move;
 --   * every create or replace starts from the latest body (0023 confirm_lesson / audit_search_text /
---     attendance_presets_guard, 0021 assert_correction_marks, 0022 v_payroll_preview) — requires
---     0022 (#83) and 0023 (#84);
+--     attendance_presets_guard, 0021 assert_correction_marks, 0022 v_payroll_preview, 0024
+--     v_student_balance / settlement / payroll impact / transfer) — requires 0022 (#83), 0023 (#84)
+--     and 0024 (#81);
+--   * #81 × hours: «Ушёл» / «Записан по ошибке» count hours at the hour price, a transfer from or to
+--     an after-school group refuses («Ушёл» with a refund + a new enrollment);
 --   * tariffs are not updated (tariffs_guard forbids it): the hour price falls back to
 --     package_price / (lessons × duration h) — 7 400 / 60 h = 123 сом/ч — until А9 plans a version
 --     with hour_price;
@@ -1194,8 +1197,8 @@ revoke all on public.v_payroll_preview from anon;
 
 -- ─── 13. v_student_balance: units (lessons or hours) ────────────────────────
 
--- Same as 0016 in «units»: lessons of a package, hours of a monthly after-school subscription
--- (paid hours floor to 0,5 h). Debt carries only between subscriptions of the same unit
+-- Same as 0024 (#81: a carried debt floors paid_lessons below 0, exhausted suggests no refund) in
+-- «units»: lessons of a package, hours of a monthly after-school subscription (paid hours floor to 0,5 h). Debt carries only between subscriptions of the same unit
 -- (an old 20-lesson package does not carry into hours); is_current — the newest live one of the
 -- student in the group. Column types widen to numeric (hours have halves) — drop and create.
 drop view if exists public.v_student_balance;
@@ -1241,8 +1244,9 @@ paid as (
     subs.*,
     case
       when price_final = 0 then lessons_total
-      when unit = 'hour' then floor(greatest(paid_som, 0) * lessons_total * 2 / price_final) / 2
-      else (greatest(paid_som, 0)::bigint * lessons_total::bigint / price_final)::numeric
+      -- floor, not truncation: a debt carried in by a transfer (paid_som < 0) is lessons owed
+      when unit = 'hour' then floor(paid_som::numeric * lessons_total * 2 / price_final) / 2
+      else floor(paid_som::numeric * lessons_total / price_final)
     end as paid_lessons
   from subs
 ),
@@ -1316,7 +1320,7 @@ select
     ))::integer
   end as debt_som,
   case
-    when status = 'refunded' then 0
+    when status in ('refunded', 'exhausted') then 0 -- exhausted: closed by a transfer / «ушёл» (#81)
     else round(
       greatest(0, least(paid_lessons, lessons_total) - lessons_used) * price_final / lessons_total
     )::integer
@@ -1331,7 +1335,7 @@ select
 from balance;
 
 comment on view public.v_student_balance is
-  'Per subscription: paid / used / debt / refund (В7, В7.1, В8, И37) in units — lessons, or hours of an after-school month (#82). Same as src/features/payments/balance.ts.';
+  'Per subscription: paid / used / debt / refund (В7, В7.1, В8, И37, #81) in units — lessons, or hours of an after-school month (#82). Same as src/features/payments/balance.ts.';
 
 revoke all on public.v_student_balance from anon;
 revoke insert, update, delete on public.v_student_balance from authenticated;
@@ -1404,6 +1408,417 @@ begin
 end;
 $$;
 
+-- ─── 14b. #81 × hours: settlement, payroll impact, no transfer ──────────────
+
+-- Same as 0024; lessons_used is numeric — an hour subscription counts hours (v_student_balance
+-- lessons_total / lessons_used are hours there, so used_som = used hours × its hour price). The
+-- return type changes — drop and create.
+drop function if exists public.subscription_settlement(uuid);
+create function public.subscription_settlement(p_enrollment_id uuid)
+returns table (
+  subscription_id uuid,
+  started_at date,
+  created_at timestamptz,
+  paid_som integer,
+  lessons_used numeric,
+  used_som integer,
+  remainder integer
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select
+    b.subscription_id,
+    s.started_at,
+    s.created_at,
+    b.paid_som,
+    b.lessons_used,
+    ceil(b.lessons_used::numeric * b.price_final / b.lessons_total)::integer,
+    b.paid_som - ceil(b.lessons_used::numeric * b.price_final / b.lessons_total)::integer
+  from public.v_student_balance b
+  join public.subscriptions s on s.id = b.subscription_id
+  where b.enrollment_id = p_enrollment_id and b.status <> 'refunded';
+$$;
+
+-- Same as 0024 except: lessons_used is numeric (hours of an hour subscription), lesson_price of an
+-- hour subscription is its paid hour price (price_final / hours_total), unit — of the newest live
+-- subscription ('lesson' / 'hour'), appended last. The return type changes — drop and create.
+drop function if exists public.enrollment_settlement(uuid);
+create function public.enrollment_settlement(p_enrollment_id uuid)
+returns table (
+  present_marks integer,
+  burned_marks integer,
+  frozen_marks integer,
+  locked_marks integer,
+  last_mark_date date,
+  payments integer,
+  money_som integer,
+  paid_som integer,
+  lessons_used numeric,
+  used_som integer,
+  remainder integer,
+  lesson_price numeric,
+  has_trial boolean,
+  unit text
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.assert_admin();
+  if not exists (select 1 from public.enrollments e where e.id = p_enrollment_id) then
+    raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
+  end if;
+
+  return query
+  with marks as (
+    select a.status, a.consumes_credit, l.lesson_date, l.is_locked
+    from public.enrollment_attendance(p_enrollment_id) a
+    join public.lessons l on l.id = a.lesson_id
+  ),
+  money as (
+    select count(p.id)::integer as payments, coalesce(sum(p.amount), 0)::integer as money_som
+    from public.subscriptions s
+    join public.payments p on p.subscription_id = s.id
+    where s.enrollment_id = p_enrollment_id
+  ),
+  settled as (
+    select
+      coalesce(sum(x.paid_som), 0)::integer as paid_som,
+      coalesce(sum(x.lessons_used), 0)::numeric as lessons_used,
+      coalesce(sum(x.used_som), 0)::integer as used_som,
+      coalesce(sum(x.remainder), 0)::integer as remainder
+    from public.subscription_settlement(p_enrollment_id) x
+  ),
+  newest as (
+    select s.price_final, s.lessons_total, s.hours_total
+    from public.subscriptions s
+    where s.enrollment_id = p_enrollment_id and s.status <> 'refunded'
+    order by s.started_at desc, s.created_at desc, s.id desc
+    limit 1
+  )
+  select
+    (select count(*)::integer from marks where status = 'present'),
+    (select count(*)::integer from marks where status = 'absent_burned'),
+    (select count(*)::integer from marks where status = 'absent_frozen'),
+    (select count(*)::integer from marks where is_locked),
+    (select max(lesson_date) from marks where consumes_credit),
+    money.payments,
+    money.money_som,
+    settled.paid_som,
+    settled.lessons_used,
+    settled.used_som,
+    settled.remainder,
+    (select n.price_final::numeric / coalesce(n.hours_total, n.lessons_total) from newest n),
+    exists (select 1 from public.trials t where t.enrollment_id = p_enrollment_id),
+    coalesce((select case when n.hours_total is null then 'lesson' else 'hour' end from newest n), 'lesson')
+  from money, settled;
+end;
+$$;
+
+-- Same as 0024 except: a mark on an hour subscription pays price_full × hours / hours_total × percent
+-- — the very expression of v_payroll_preview (И62), so «Записан по ошибке» shows the real payroll drop.
+create or replace function public.enrollment_payroll_impact(p_enrollment_id uuid)
+returns table (teacher_id uuid, teacher_name text, lessons integer, amount integer)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.assert_admin();
+  return query
+  select
+    l.teacher_id,
+    t.full_name,
+    count(*)::integer,
+    round(coalesce(sum(
+      case
+        when s.hours_total is null then s.price_full * r.percent / (s.lessons_total * 100.0)
+        else s.price_full * r.percent * coalesce(a.hours, 0) / (s.hours_total * 100.0)
+      end
+    ), 0))::integer
+  from public.enrollment_attendance(p_enrollment_id) a
+  join public.lessons l on l.id = a.lesson_id
+  join public.teachers t on t.id = l.teacher_id
+  left join public.subscriptions s on s.id = a.subscription_id
+  left join lateral (
+    select tr.percent
+    from public.teacher_rates tr
+    where tr.teacher_id = l.teacher_id and tr.valid_from <= l.lesson_date
+    order by tr.valid_from desc
+    limit 1
+  ) r on true
+  where a.consumes_credit and l.status = 'held'
+  group by l.teacher_id, t.full_name
+  order by t.full_name;
+end;
+$$;
+
+-- Same as 0024 plus: an after-school (hours) group on either side refuses — the month bill and the
+-- plan do not move to a lesson package and back; «Ушёл» with a refund and a new enrollment instead.
+create or replace function public.transfer_preview(
+  p_enrollment_id uuid,
+  p_group_id uuid,
+  p_start_date date default null
+)
+returns table (
+  start_date date,
+  whole_move boolean,
+  lessons_total integer,
+  price integer,
+  remainder integer,
+  to_pay integer,
+  surplus integer
+)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_enrollment public.enrollments%rowtype;
+  v_to public.groups%rowtype;
+  v_from_type public.group_type;
+  v_start date;
+  v_whole boolean;
+  v_tariff public.tariffs%rowtype;
+  v_remainder integer;
+begin
+  perform public.assert_admin();
+  select * into v_enrollment from public.enrollments e where e.id = p_enrollment_id;
+  if not found then
+    raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
+  end if;
+  select * into v_to from public.groups g where g.id = p_group_id;
+  if not found then
+    raise exception 'group % not found', p_group_id using errcode = 'foreign_key_violation';
+  end if;
+  select g.group_type into v_from_type from public.groups g where g.id = v_enrollment.group_id;
+  if v_from_type = 'afterschool' or v_to.group_type = 'afterschool' then
+    -- hours are billed by month and plan (И60): «ушёл» with a refund, then a new enrollment (#82)
+    raise exception 'after-school by hours: no transfer — withdraw and enroll anew'
+      using errcode = 'check_violation';
+  end if;
+
+  v_whole := v_to.group_type = v_from_type and not exists (
+    select 1 from public.enrollment_attendance(p_enrollment_id) a where a.consumes_credit
+  );
+  v_start := coalesce(p_start_date, public.transfer_default_start(p_enrollment_id, p_group_id));
+  select * into v_tariff from public.tariffs t
+  where t.group_type = v_to.group_type and t.valid_from <= v_start
+  order by t.valid_from desc
+  limit 1;
+  select coalesce(sum(x.remainder), 0)::integer into v_remainder
+  from public.subscription_settlement(p_enrollment_id) x;
+
+  return query select
+    v_start,
+    v_whole,
+    v_tariff.lessons_in_package,
+    v_tariff.package_price,
+    v_remainder,
+    case when v_whole then 0 else greatest(0, v_tariff.package_price - v_remainder) end,
+    case when v_whole then 0 else greatest(0, v_remainder - v_tariff.package_price) end;
+end;
+$$;
+
+
+-- Same as 0024 plus the after-school refusal of transfer_preview.
+create or replace function public.transfer_student(
+  p_enrollment_id uuid,
+  p_group_id uuid,
+  p_start_date date default null,
+  p_refund_surplus boolean default false,
+  p_method public.payment_method default null,
+  p_paid_on date default null
+)
+returns table (
+  enrollment_id uuid,
+  subscription_id uuid,
+  start_date date,
+  transferred integer,
+  refunded integer,
+  whole_move boolean
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_old public.enrollments%rowtype;
+  v_from public.groups%rowtype;
+  v_to public.groups%rowtype;
+  v_start date;
+  v_tariff public.tariffs%rowtype;
+  v_enrollment_id uuid;
+  v_subscription_id uuid;
+  v_remainder integer;
+  v_refund integer := 0;
+  v_left integer;
+  v_take integer;
+  v_out integer;
+  v_moved integer := 0;
+  v_transfer uuid := gen_random_uuid();
+  r record;
+begin
+  perform public.assert_admin();
+
+  select * into v_old from public.enrollments e where e.id = p_enrollment_id for update;
+  if not found then
+    raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
+  end if;
+  -- the subscriptions too, as record_payment does: no payment / refund lands between the settlement
+  -- read below and the rows written from it
+  perform 1 from public.subscriptions s where s.enrollment_id = p_enrollment_id for update;
+  if v_old.status <> 'active' then
+    raise exception 'enrollment is finished' using errcode = 'check_violation';
+  end if;
+  select * into v_to from public.groups g where g.id = p_group_id;
+  if not found then
+    raise exception 'group % not found', p_group_id using errcode = 'foreign_key_violation';
+  end if;
+  if v_to.id = v_old.group_id then
+    raise exception 'the enrollment is already in this group' using errcode = 'check_violation';
+  end if;
+  if v_to.status = 'archived' then
+    raise exception 'group % is archived', p_group_id using errcode = 'check_violation';
+  end if;
+  select * into v_from from public.groups g where g.id = v_old.group_id;
+  if v_from.group_type = 'afterschool' or v_to.group_type = 'afterschool' then
+    -- hours are billed by month and plan (И60): «ушёл» with a refund, then a new enrollment (#82)
+    raise exception 'after-school by hours: no transfer — withdraw and enroll anew'
+      using errcode = 'check_violation';
+  end if;
+
+  v_start := coalesce(p_start_date, public.transfer_default_start(p_enrollment_id, p_group_id));
+
+  if v_to.group_type = v_from.group_type and not exists (
+    select 1 from public.enrollment_attendance(p_enrollment_id) a where a.consumes_credit
+  ) then
+    v_start := public.transfer_enrollment(p_enrollment_id, p_group_id, v_start);
+    return query
+    select p_enrollment_id,
+           (select s.id from public.subscriptions s where s.enrollment_id = p_enrollment_id
+            order by s.started_at desc, s.created_at desc, s.id desc limit 1),
+           v_start, 0, 0, true;
+    return;
+  end if;
+
+  if v_start < v_to.start_date or (v_to.end_date is not null and v_start > v_to.end_date) then
+    raise exception 'start date is outside the group dates' using errcode = 'check_violation';
+  end if;
+  if v_start <= v_old.start_date then
+    raise exception 'transfer date must be after the enrollment start' using errcode = 'check_violation';
+  end if;
+  if v_old.end_date is not null and v_start > v_old.end_date + 1 then
+    raise exception 'start date is after the enrollment end' using errcode = 'check_violation';
+  end if;
+  if exists (
+    select 1 from public.enrollment_attendance(p_enrollment_id) a
+    join public.lessons l on l.id = a.lesson_id
+    where a.consumes_credit and l.lesson_date >= v_start
+  ) then
+    raise exception 'the enrollment has present or burned marks on or after %', v_start
+      using errcode = 'check_violation';
+  end if;
+  if exists (
+    select 1 from public.enrollment_attendance(p_enrollment_id) a
+    join public.lessons l on l.id = a.lesson_id
+    where l.is_locked and l.lesson_date >= v_start
+  ) then
+    raise exception 'the enrollment has marks in a closed period' using errcode = 'check_violation';
+  end if;
+  if exists (
+    select 1 from public.enrollments e
+    where e.student_id = v_old.student_id and e.group_id = p_group_id
+      and (e.status = 'active' or e.end_date >= v_start)
+  ) then
+    raise exception 'the student is already enrolled in the target group' using errcode = 'unique_violation';
+  end if;
+
+  select * into v_tariff from public.tariffs t
+  where t.group_type = v_to.group_type and t.valid_from <= v_start
+  order by t.valid_from desc
+  limit 1;
+  if not found then
+    raise exception 'no tariff for % on %', v_to.group_type, v_start using errcode = 'check_violation';
+  end if;
+
+  select coalesce(sum(x.remainder), 0)::integer into v_remainder
+  from public.subscription_settlement(p_enrollment_id) x;
+  if p_refund_surplus and v_remainder > v_tariff.package_price then
+    v_refund := v_remainder - v_tariff.package_price;
+    if p_method is null then
+      raise exception 'payment method is required for a refund' using errcode = 'check_violation';
+    end if;
+  end if;
+
+  perform set_config('iqup.audit_reason', 'transfer_student', true);
+
+  delete from public.attendance a
+  where a.id in (
+    select m.id from public.enrollment_attendance(p_enrollment_id) m
+    join public.lessons l on l.id = m.lesson_id
+    where l.lesson_date >= v_start
+  )
+    and a.status = 'absent_frozen';
+
+  update public.enrollments set end_date = v_start - 1, status = 'finished' where id = p_enrollment_id;
+
+  insert into public.enrollments (student_id, group_id, start_date)
+  values (v_old.student_id, p_group_id, v_start)
+  returning id into v_enrollment_id;
+  insert into public.subscriptions (
+    enrollment_id, tariff_id, lessons_total, price_full, discount_percent, discount_reason, price_final, started_at
+  )
+  values (
+    v_enrollment_id, v_tariff.id, v_tariff.lessons_in_package, v_tariff.package_price, 0, 'none',
+    v_tariff.package_price, v_start
+  )
+  returning id into v_subscription_id;
+
+  -- the refund comes from the newest subscriptions with money left; the rest moves
+  v_left := v_refund;
+  for r in
+    select * from public.subscription_settlement(p_enrollment_id) x
+    order by x.started_at desc, x.created_at desc, x.subscription_id desc
+  loop
+    v_take := least(v_left, greatest(r.remainder, 0));
+    if v_take > 0 then
+      insert into public.payments (subscription_id, amount, method, paid_at, kind, reason)
+      values (r.subscription_id, -v_take, p_method, public.payment_time(p_paid_on), 'refund',
+              'излишек при переводе в ' || public.group_title(p_group_id));
+      v_left := v_left - v_take;
+    end if;
+    v_out := r.remainder - v_take;
+    if v_out <> 0 then
+      insert into public.payments (subscription_id, amount, method, kind, reason, transfer_id)
+      values (r.subscription_id, -v_out, null, 'transfer',
+              'перенос в ' || public.group_title(p_group_id), v_transfer);
+      v_moved := v_moved + v_out;
+    end if;
+  end loop;
+  if v_moved <> 0 then
+    insert into public.payments (subscription_id, amount, method, kind, reason, transfer_id)
+    values (v_subscription_id, v_moved, null, 'transfer',
+            'перенос из ' || public.group_title(v_old.group_id), v_transfer);
+  end if;
+  -- the old subscriptions are closed on their used lessons: the money left them, and a later
+  -- enrollment in the old group must not charge its marks to them (attendance_subscription)
+  update public.subscriptions s set status = 'exhausted'
+  where s.enrollment_id = p_enrollment_id and s.status = 'active';
+
+  perform set_config('iqup.audit_reason', '', true);
+  return query select v_enrollment_id, v_subscription_id, v_start, v_moved, v_refund, false;
+end;
+$$;
+
+
 -- ─── 15. Grants ─────────────────────────────────────────────────────────────
 
 revoke execute on function public.afterschool_backfill_plans() from public, anon, authenticated;
@@ -1437,6 +1852,10 @@ revoke execute on function public.enroll_student(uuid, uuid, date, integer, publ
 from public, anon;
 grant execute on function public.enroll_student(uuid, uuid, date, integer, public.discount_reason, numeric[])
 to authenticated;
+
+revoke execute on function public.subscription_settlement(uuid) from public, anon, authenticated;
+revoke execute on function public.enrollment_settlement(uuid) from public, anon;
+grant execute on function public.enrollment_settlement(uuid) to authenticated;
 
 -- ─── 16. Prod: default plans for current after-school students ──────────────
 
