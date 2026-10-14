@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { availableLessons, debtOverLimit, payState } from '@/features/payments/balance'
 import { formatSom } from '@/features/tariffs/model'
 import { cardClass, chipClass } from '@/features/tariffs/parts'
+import { EnrollmentMenu, type ExitAction } from '@/features/subscriptions/enrollment-exit'
 import { cn } from '@/lib/utils'
 import {
   discountCaption,
@@ -141,30 +142,17 @@ function EditStartButton({ e, onClick }: { e: EnrollmentView; onClick: () => voi
   )
 }
 
-/** «Убрать из группы» (#73) — a mistaken enrollment; the dialog says what it deletes or why not. */
-function RemoveButton({ e, onClick }: { e: EnrollmentView; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={`Убрать из группы: ${e.groupLabel}`}
-      className="flex min-h-11 items-center self-start text-xs font-extrabold whitespace-nowrap text-burned-strong"
-    >
-      Убрать из группы
-    </button>
-  )
-}
-
 export function EnrollmentCard({
   e,
   today,
   onEditStart,
-  onRemove,
+  onAction,
 }: {
   e: EnrollmentView
   today: string
   onEditStart?: () => void
-  onRemove?: () => void
+  /** «⋯»: перевести / ушёл / по ошибке (#81). */
+  onAction?: (action: ExitAction) => void
 }) {
   const sub = e.subscription
   const b = e.balance
@@ -178,14 +166,12 @@ export function EnrollmentCard({
         <div className="flex flex-col gap-0.5">
           <h2 className="text-base font-extrabold">{e.groupLabel}</h2>
           <p className="text-xs font-bold text-ink-muted">{enrollmentCaption(e, today)}</p>
-          <div className="flex flex-wrap gap-x-4">
-            {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
-            {onRemove && <RemoveButton e={e} onClick={onRemove} />}
-          </div>
+          {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
         </div>
         <div className="flex items-center gap-1.5">
           {b ? <BalanceChip b={b} /> : !sub && e.refunded && <RefundedChip />}
           <span className={cn(chipClass, 'bg-present-soft text-present-strong')}>Активен</span>
+          {onAction && <EnrollmentMenu label={e.groupLabel} onAction={onAction} />}
         </div>
       </div>
       {sub && b ? (
@@ -237,12 +223,13 @@ export function MobileEnrollment({
   e,
   today,
   onEditStart,
-  onRemove,
+  onAction,
 }: {
   e: EnrollmentView
   today: string
   onEditStart?: () => void
-  onRemove?: () => void
+  /** «⋯»: перевести / ушёл / по ошибке (#81). */
+  onAction?: (action: ExitAction) => void
 }) {
   const sub = e.subscription
   const b = e.balance
@@ -253,21 +240,21 @@ export function MobileEnrollment({
     >
       <div className="flex items-start justify-between gap-2">
         <h2 className="text-sm font-extrabold">Абонемент · {e.groupLabel}</h2>
-        {b ? (
-          <BalanceChip b={b} className="text-[11px]" />
-        ) : (
-          !sub && e.refunded && <RefundedChip className="text-[11px]" />
-        )}
+        <div className="-my-2 -mr-2 flex items-center gap-0.5">
+          {b ? (
+            <BalanceChip b={b} className="text-[11px]" />
+          ) : (
+            !sub && e.refunded && <RefundedChip className="text-[11px]" />
+          )}
+          {onAction && <EnrollmentMenu label={e.groupLabel} onAction={onAction} />}
+        </div>
       </div>
       <p className="text-xs font-bold text-ink-muted">
         {sub
           ? `${sub.lessons_total} уроков · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
           : enrollmentCaption(e, today)}
       </p>
-      <div className="flex flex-wrap gap-x-4">
-        {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
-        {onRemove && <RemoveButton e={e} onClick={onRemove} />}
-      </div>
+      {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
       {sub && b ? (
         <>
           <UsageBar b={b} thin />

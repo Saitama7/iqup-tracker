@@ -119,6 +119,8 @@ export interface JournalRow {
   /** «Алишка · частично», «Каныкей · возврат». */
   author: string
   refund: boolean
+  /** «перенос в / из <группа>» (#81) — money moved between subscriptions, not paid. */
+  transfer: boolean
 }
 
 /** Lessons a refund paid back: amount / (price_final / lessons_total). */
@@ -129,9 +131,10 @@ export function journalRow(p: PaymentRow, lookups: Lookups): JournalRow {
   const s = p.subscription
   const group = lookups.groups.get(s.enrollment.group_id)
   const refund = p.kind === 'refund'
+  const transfer = p.kind === 'transfer'
   const tags = [
     p.createdByName ?? 'система',
-    refund ? 'возврат' : p.amount < s.price_final ? 'частично' : null,
+    transfer ? p.reason : refund ? 'возврат' : p.amount < s.price_final ? 'частично' : null,
   ].filter(Boolean)
   return {
     id: p.id,
@@ -149,10 +152,11 @@ export function journalRow(p: PaymentRow, lookups: Lookups): JournalRow {
     package: refund
       ? `остаток ${refundLessons(p.amount, s.lessons_total, s.price_final)} ур`
       : `${s.lessons_total} ур · ${formatSom(s.price_final)}`,
-    method: METHOD_LABEL[p.method],
+    method: p.method ? METHOD_LABEL[p.method] : 'перенос',
     amount: p.amount,
     author: tags.join(' · '),
     refund,
+    transfer,
   }
 }
 
@@ -197,6 +201,8 @@ export function totals(rows: readonly PaymentRow[]): Totals {
   }
   const subs = new Set<string>()
   for (const p of rows) {
+    // a transfer pair (#81) moves money already counted when it was paid
+    if (p.kind === 'transfer' || !p.method) continue
     if (p.kind === 'refund') {
       t.refunds += p.amount
       continue

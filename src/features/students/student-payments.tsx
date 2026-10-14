@@ -19,7 +19,7 @@ export function signedSom(amount: number): string {
 export function paymentCaption(p: PaymentRow, groupName: string | null): string {
   return [
     formatShortDate(bishkekDate(Date.parse(p.paid_at))),
-    METHOD_LABEL[p.method],
+    p.method ? METHOD_LABEL[p.method] : null,
     p.createdByName,
     groupName,
     p.reason,
