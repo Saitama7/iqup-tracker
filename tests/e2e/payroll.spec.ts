@@ -45,7 +45,7 @@ test('Гульзат: «Мой месяц» — октябрь не подтве
       page.getByRole('table', { name: 'Занятия в октябре' }).getByRole('link', {
         name: 'Подтвердить →',
       }),
-    ).toHaveCount(7)
+    ).toHaveCount(14) // #76: unconfirmed lessons are never hidden behind «ещё N»
   } else {
     const missed = page.getByRole('region', { name: 'Не подтверждено — не в ЗП' })
     await expect(missed.getByRole('link', { name: 'Подтвердить →' })).toHaveCount(14)
