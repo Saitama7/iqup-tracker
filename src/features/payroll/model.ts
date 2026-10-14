@@ -131,7 +131,7 @@ export interface MyMonthGroup {
   lessons: MyMonthLesson[]
 }
 
-/** A payroll_adjustments row (0099): an advance for now (#83). */
+/** A payroll_adjustments row (0022): an advance for now (#83). */
 export interface Adjustment {
   id: string
   teacherId: string

@@ -319,7 +319,7 @@ export class AdvanceError extends Error {
   }
 }
 
-/** Postgres error → staff-facing text (0099 raises one code per rule). */
+/** Postgres error → staff-facing text (0022 raises one code per rule). */
 export function advanceErrorMessage(error: { code?: string; message?: string }): string {
   const m = error.message ?? ''
   if (error.code === '42501') return 'Авансы выдают только администратор и бухгалтер'

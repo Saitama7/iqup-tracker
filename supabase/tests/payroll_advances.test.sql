@@ -1,4 +1,4 @@
--- #83 · advances (0099): payroll_adjustments RLS (teacher reads own, staff read all, nobody writes
+-- #83 · advances (0022): payroll_adjustments RLS (teacher reads own, staff read all, nobody writes
 -- directly), issue_advance / delete_payroll_adjustment (admin and accountant; teacher / anon 42501),
 -- amount > 0, no future date, delete only with a reason, closed month, audit_log, v_payroll_preview
 -- advances / to_pay — the accrual of the seed does not move. Fixtures in 2003 + the seed, rolled back.

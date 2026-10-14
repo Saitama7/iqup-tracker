@@ -190,7 +190,7 @@ export function byGroup(paid: readonly LessonPay[]): Map<string, LessonPay[]> {
   return groups
 }
 
-/** payroll_adjustments.kind (0099). Only advances are issued now; bonus / correction — later (И52). */
+/** payroll_adjustments.kind (0022). Only advances are issued now; bonus / correction — later (И53). */
 export type PayAdjustmentKind = 'advance' | 'bonus' | 'correction'
 
 export interface PayAdjustment {

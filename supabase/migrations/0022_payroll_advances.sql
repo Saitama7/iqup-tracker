@@ -1,9 +1,9 @@
 -- #83 · Авансы учителям (А8): payroll_adjustments, issue_advance / delete_payroll_adjustment,
--- v_payroll_preview += advances, to_pay. Docs: 05-decisions А8, И52; 01-domain-model.md §6 and
+-- v_payroll_preview += advances, to_pay. Docs: 05-decisions А8, И53; 01-domain-model.md §6 and
 -- PAYROLL_ADJUSTMENT.
 --
 -- payroll_adjustments — a payout correction of a teacher for a payroll month (`month`, the 1st): kind
--- advance (UI and RPC now), bonus / correction (enum only, their sign is not decided yet — И52).
+-- advance (UI and RPC now), bonus / correction (enum only, their sign is not decided yet — И53).
 -- Amount is whole som, always > 0; an advance is subtracted from the payout: to_pay = base − advances.
 -- An advance never changes the accrual (base_amount stays what the lessons earned).
 -- Written only by the security definer RPCs below (admin or accountant); a teacher reads own rows.
