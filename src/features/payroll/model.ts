@@ -184,6 +184,7 @@ export function confirmedCaption(
 
 export interface MonthLessonLine {
   id: string
+  groupId: string
   when: string
   group: string
   /** Held lessons and the ones over but not confirmed (Б2 — not in the sum). */
@@ -245,6 +246,7 @@ export function myMonthView(source: MyMonthSource, month: string, now: number): 
     const held = pay.lessons.find((p) => p.lesson.id === l.id)
     lessons.push({
       id: l.id,
+      groupId: l.group_id,
       when: lessonWhen(l),
       group: groupLabel(l.group),
       state: state === 'held' ? 'held' : 'unconfirmed',
@@ -304,6 +306,28 @@ export function myMonthView(source: MyMonthSource, month: string, now: number): 
       sum(groups.map((g) => g.amount)) !== pay.amount
         ? ROUNDING_NOTE
         : null,
+  }
+}
+
+export interface MonthLessonsFilter {
+  /** The group shown; null — all (no filter, or the group has nothing this month). */
+  group: string | null
+  lessons: MonthLessonLine[]
+  unconfirmed: MonthLessonLine[]
+}
+
+/** «Мой месяц» lesson lists narrowed to one group of the month (#72); sums stay for the month. */
+export function filterMonthLessons(
+  view: MyMonthView,
+  group: string | undefined,
+): MonthLessonsFilter {
+  const active = group && view.groups.some((g) => g.id === group) ? group : null
+  if (!active) return { group: null, lessons: view.lessons, unconfirmed: view.unconfirmed }
+  const mine = (l: MonthLessonLine) => l.groupId === active
+  return {
+    group: active,
+    lessons: view.lessons.filter(mine),
+    unconfirmed: view.unconfirmed.filter(mine),
   }
 }
 

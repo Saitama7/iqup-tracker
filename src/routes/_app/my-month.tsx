@@ -6,9 +6,11 @@ import { requireRole } from '@/lib/guards'
 import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 
-// The month lives in the URL (?month=2026-09), so «← Сентябрь» survives reload; no month — current.
+// The month and the group filter live in the URL (?month=2026-09&group=…), so «← Сентябрь» and the
+// filter survive reload and the return from a lesson (#72); no month — current, no group — all.
 const searchSchema = z.object({
   month: z.string().regex(MONTH_RE).optional().catch(undefined),
+  group: z.uuid().optional().catch(undefined),
 })
 
 // У6 / УД4 «Мой месяц». Admin+teacher (Каныкей) gets here via «Как учитель».
@@ -21,6 +23,6 @@ export const Route = createFileRoute('/_app/my-month')({
 })
 
 function MyMonthRoute() {
-  const { month } = Route.useSearch()
-  return <MyMonthPage month={pickMonth(month, bishkekDate(useNow()))} />
+  const { month, group } = Route.useSearch()
+  return <MyMonthPage month={pickMonth(month, bishkekDate(useNow()))} group={group} />
 }

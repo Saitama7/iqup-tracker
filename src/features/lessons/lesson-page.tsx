@@ -38,6 +38,7 @@ import {
 } from './attendance'
 import { clearDraft, loadDraft, saveDraft } from './draft'
 import { DesktopTrials, MobileTrials } from './lesson-trials'
+import { myMonthReturn, NEXT_UNCONFIRMED_ID, type LessonSearch } from './return-to'
 import { studentsWord } from './parts'
 import {
   bishkekTime,
@@ -52,7 +53,7 @@ import {
 import { trialsSuffix } from './trials-view'
 import { useConfirmLesson } from './use-confirm-lesson'
 
-export function LessonPage({ lessonId }: { lessonId: string }) {
+export function LessonPage({ lessonId, search }: { lessonId: string; search: LessonSearch }) {
   const { data, isError, isPending } = useQuery(lessonSheetQuery(lessonId))
 
   if (!data) {
@@ -70,7 +71,7 @@ export function LessonPage({ lessonId }: { lessonId: string }) {
       </section>
     )
   }
-  return <Sheet sheet={data} />
+  return <Sheet sheet={data} search={search} />
 }
 
 // ─── State shared by both layouts ───────────────────────────────────────────
@@ -100,7 +101,7 @@ interface SheetModel {
   confirm: () => void
 }
 
-function Sheet({ sheet }: { sheet: LessonSheet }) {
+function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) {
   const now = useNow()
   const isDesktop = useIsDesktop()
   const navigate = useNavigate()
@@ -158,14 +159,18 @@ function Sheet({ sheet }: { sheet: LessonSheet }) {
     allPresent: () => {
       if (editable && !mutation.isPending) setDraft(markAllPresent(roster, marks))
     },
-    // «Сегодня» only after the database said held (#41, И27); a refusal leaves the sheet and the
-    // draft as they are, the toast says why.
+    // Back to the list only after the database said held (#41, И27); a refusal leaves the sheet
+    // and the draft as they are, the toast says why. Opened from «Мой месяц» — the same month and
+    // group filter, scrolled to the next unconfirmed lesson (#72); else «Сегодня».
     confirm: () => {
       mutation.mutate(
         { marks: marksPayload(roster, marks), copy },
         {
           onSuccess: () => {
-            void navigate({ to: '/today' })
+            const back = myMonthReturn(search)
+            void (back
+              ? navigate({ to: '/my-month', search: back, hash: NEXT_UNCONFIRMED_ID })
+              : navigate({ to: '/today' }))
           },
         },
       )

@@ -8,6 +8,7 @@ import {
   lessonWhen,
   marksCaption,
   monthEnd,
+  filterMonthLessons,
   myMonthView,
   payday,
   payrollCaption,
@@ -199,6 +200,21 @@ describe('myMonthView', () => {
     expect(groupCaption(second)).toBe(
       '0 занятий · 0 ученико-уроков · 1 не подтверждено — не в сумме',
     )
+  })
+
+  it('group filter narrows the lists, an unknown group shows all (#72)', () => {
+    const onlyB = filterMonthLessons(view, 'b')
+    expect(onlyB.group).toBe('b')
+    expect(onlyB.lessons.map((l) => l.when)).toEqual(['7 окт, ср · 15:00'])
+    expect(onlyB.unconfirmed.map((l) => l.id)).toEqual([b.lessons[0]?.id])
+    const onlyA = filterMonthLessons(view, 'a')
+    expect(onlyA.lessons).toHaveLength(2)
+    expect(onlyA.unconfirmed).toEqual([])
+    for (const group of [undefined, 'gone']) {
+      const all = filterMonthLessons(view, group)
+      expect(all.group).toBeNull()
+      expect(all.lessons).toBe(view.lessons)
+    }
   })
 
   it('no rounding note when the lines add up (120 сом per student-lesson)', () => {
