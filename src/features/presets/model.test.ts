@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { Balance, Mark } from '@/features/lessons/attendance'
-import { applyPresets, dayWord, draftMarks, presetCaption, presetClearable, presetEditable, presetErrorReason } from './model'
+import {
+  applyPresets,
+  dayWord,
+  draftMarks,
+  presetCaption,
+  presetClearable,
+  presetEditable,
+  presetErrorReason,
+} from './model'
 import { presetLine } from './dashboard-presets'
 
 const balance = (freezes: number): Balance => ({
@@ -114,7 +122,7 @@ describe('presets copy', () => {
 })
 
 describe('draftMarks', () => {
-  it('keeps only the teacher\'s marks, not the prefilled «Заморозка» (И27)', () => {
+  it("keeps only the teacher's marks, not the prefilled «Заморозка» (И27)", () => {
     const own = new Map<string, Mark>([['b', 'present']])
     const shown = new Map<string, Mark>([
       ['b', 'present'],
@@ -127,7 +135,7 @@ describe('draftMarks', () => {
     ])
   })
 
-  it('a changed preset student is the teacher\'s mark', () => {
+  it("a changed preset student is the teacher's mark", () => {
     const shown = new Map<string, Mark>([['a', 'absent_frozen']])
     const next = new Map(shown).set('a', 'present')
     expect([...draftMarks(next, new Map(), shown)]).toEqual([['a', 'present']])

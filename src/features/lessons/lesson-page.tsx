@@ -211,7 +211,8 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
       setDraft(draftMarks(new Map(marks).set(studentId, mark), own, marks))
     },
     allPresent: () => {
-      if (editable && !mutation.isPending) setDraft(draftMarks(markAllPresent(roster, marks), own, marks))
+      if (editable && !mutation.isPending)
+        setDraft(draftMarks(markAllPresent(roster, marks), own, marks))
     },
     // Back to the list only after the database said held (#41, И27); a refusal leaves the sheet
     // and the draft as they are, the toast says why. Opened from «Мой месяц» — the same month and
