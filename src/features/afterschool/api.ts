@@ -5,7 +5,13 @@ import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { supabase } from '@/lib/supabase/client'
 import { discountByPct, type DiscountPct } from '@/features/subscriptions/model'
-import { nextMonth, type PlanHours, type PlanVersion, type QuoteRow } from './model'
+import {
+  monthAccusative,
+  nextMonth,
+  type PlanHours,
+  type PlanVersion,
+  type QuoteRow,
+} from './model'
 
 export const AFTERSCHOOL_KEY = 'afterschool'
 
@@ -169,6 +175,8 @@ export function afterschoolErrorMessage(error: { code?: string; message?: string
   if (error.code === '23505') return 'Счёт за этот месяц уже выставлен'
   if (error.code === '23514') {
     if (m.includes('later month')) return 'Уже выставлен счёт за более поздний месяц'
+    const gap = /month (\d{4}-\d{2}) is not invoiced/.exec(m)
+    if (gap) return `Сначала выставьте счёт за ${monthAccusative(`${gap[1]}-01`)}`
     if (m.includes('no planned hours')) return 'В этом месяце по графику нет часов'
     if (m.includes('only for the first invoice'))
       return '«Считать с» — только для первого счёта, следующие считаются с 1-го числа'

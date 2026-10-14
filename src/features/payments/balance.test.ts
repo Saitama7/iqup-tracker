@@ -313,6 +313,42 @@ describe('after-school hours (#82)', () => {
     const [debt] = subscriptionBalances([nov({ paid: 1000, used: 18 })])
     expect(debt).toMatchObject({ paidLessons: 16, debtLessons: 2, debtSom: 200 })
   })
+
+  it('credit hours gone on are spent on the old invoice, paid on the new one — counted once (И72)', () => {
+    // October 12 h × 123 = 1 476 paid, 6 h used, 6 h went into November's credit
+    const oct = hours({
+      id: 'oct',
+      lessons_total: 12,
+      price_final: 1476,
+      paid: 1476,
+      used: 6,
+      creditOut: 6,
+    })
+    // November 15 h − 6 h credit = 9 h billed, unpaid, 9 h used
+    const nov = hours({
+      id: 'nov',
+      lessons_total: 9,
+      credit: 6,
+      price_final: 1107,
+      paid: 0,
+      used: 9,
+      started_at: '2026-11-01',
+      created_at: '2026-10-25',
+    })
+    const [o, n] = subscriptionBalances([oct, nov])
+    expect(o).toMatchObject({ debtSom: 0, refundSuggested: 0, lessonsLeft: 0 })
+    expect(n).toMatchObject({ debtLessons: 3, debtSom: 369, refundSuggested: 0 })
+    // nothing used on November yet: its 6 paid credit hours are the refund, not October's
+    const [, idle] = subscriptionBalances([oct, { ...nov, used: 0 }])
+    expect(idle).toMatchObject({ debtSom: 0, refundSuggested: 738 })
+  })
+
+  it('an hour refund is the money beyond the spent hours: 1 000 − 8 h × 123 = 16 (И72)', () => {
+    const [o] = subscriptionBalances([
+      hours({ lessons_total: 12, price_final: 1476, paid: 1000, used: 6, creditOut: 2 }),
+    ])
+    expect(o).toMatchObject({ paidLessons: 8, debtLessons: 0, refundSuggested: 16 })
+  })
 })
 
 describe('unbilledDebt (И69)', () => {

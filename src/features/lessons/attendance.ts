@@ -51,6 +51,8 @@ export interface SubscriptionSource {
   /** Its month (first day) and the credit hours it holds on top of hours_total (И61). */
   period_month?: string | null
   credit_hours?: number | null
+  /** Hours of it that went into the credit of later invoices (credit_out_hours, И72). */
+  credit_out_hours?: number | null
 }
 
 /** An after-school monthly subscription counts hours, a package — lessons (#82). */
@@ -147,6 +149,7 @@ export function studentPay(
       created_at: s.created_at,
       lessons_total: unitsTotal(s),
       credit: creditOf(s),
+      creditOut: isHourSource(s) ? (s.credit_out_hours ?? 0) : 0,
       price_final: s.price_final,
       paid: s.paid,
       used: unitsUsed(

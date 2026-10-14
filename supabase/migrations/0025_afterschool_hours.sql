@@ -421,17 +421,23 @@ as $$
   order by 1, 2;
 $$;
 
--- Hours paid on the hour invoices of an enrollment that will not be used (И61, #82 review): per
--- invoice its paid hours (credit_hours + payments in hours, floor 0,5 h as v_student_balance; at most
+-- Hours paid on the hour invoices of an enrollment that will not be used (И61, #82 review), per
+-- invoice: its paid hours (credit_hours + payments in hours, floor 0,5 h as v_student_balance; at most
 -- the capacity hours_total + credit_hours) − hours of its charged marks − planned hours still ahead in
--- its month (lessons not held yet, from its start). Unpaid hours are never credit (И70): an unpaid
--- invoice with freezes gives none, paying it later gives it to the next invoice. Freezes, lessons
--- cancelled after the invoice, a plan cut in the middle of the month, the end of the enrollment — all
--- land here once the day is past. An invoice used beyond what is paid owes it (v_student_balance), it
--- does not eat the credit. The credit = Σ unused − the credit already taken off later invoices.
+-- its month (lessons not held yet, from its start), at least 0. Unpaid hours are never credit (И70): an
+-- unpaid invoice with freezes gives none, paying it later gives it to the next invoice. Freezes,
+-- lessons cancelled after the invoice, a plan cut in the middle of the month, the end of the
+-- enrollment — all land here once the day is past. An invoice used beyond what is paid owes it
+-- (v_student_balance), it does not eat the credit.
+-- credit_out (И72): the hours of it that went into the credit_hours of later invoices — first in,
+-- first out by month, only into an invoice after it. For the old invoice they are spent (no surplus,
+-- no refund), the new one holds them as paid: one rule for v_student_balance and
+-- subscription_settlement, so «Ушёл» / a transfer moves no money for them. Credit given beyond what
+-- the earlier invoices still have unused (a mark corrected, a plan changed back-dated after the next
+-- invoice) — spent on the last invoice before the last one that took credit: a debt there, not lost.
 -- Security invoker.
-create or replace function public.afterschool_credit_hours(p_enrollment_id uuid)
-returns numeric
+create or replace function public.afterschool_credit_flow(p_enrollment_id uuid)
+returns table (subscription_id uuid, credit_in numeric, unused numeric, credit_out numeric)
 language sql
 stable
 set search_path = ''
@@ -457,34 +463,85 @@ as $$
       and s.hours_total is not null
       and s.status <> 'refunded'
   ),
-  unused as (
+  u as (
     select
-      inv.paid_hours
-      - coalesce((
-          select sum(a.hours) from public.attendance a
-          where a.subscription_id = inv.id and a.consumes_credit
-        ), 0)
-      - coalesce((
-          select sum(public.afterschool_lesson_hours(l.id, e.student_id))
-          from e, public.lessons l
-          where l.group_id = e.group_id
-            and l.status = 'planned'
-            and l.lesson_date >= inv.started_at
-            and l.lesson_date < (inv.period_month + interval '1 month')::date
-            and l.lesson_date >= e.start_date
-            and (e.end_date is null or l.lesson_date <= e.end_date)
-            and not (e.end_date is null and e.status = 'finished')
-            and not exists (
-              select 1 from public.attendance a
-              where a.lesson_id = l.id and a.student_id = e.student_id
-            )
-        ), 0) as hours
+      inv.id, inv.period_month, inv.credit_hours,
+      greatest(0, inv.paid_hours
+        - coalesce((
+            select sum(a.hours) from public.attendance a
+            where a.subscription_id = inv.id and a.consumes_credit
+          ), 0)
+        - coalesce((
+            select sum(public.afterschool_lesson_hours(l.id, e.student_id))
+            from e, public.lessons l
+            where l.group_id = e.group_id
+              and l.status = 'planned'
+              and l.lesson_date >= inv.started_at
+              and l.lesson_date < (inv.period_month + interval '1 month')::date
+              and l.lesson_date >= e.start_date
+              and (e.end_date is null or l.lesson_date <= e.end_date)
+              and not (e.end_date is null and e.status = 'finished')
+              and not exists (
+                select 1 from public.attendance a
+                where a.lesson_id = l.id and a.student_id = e.student_id
+              )
+          ), 0)) as unused
     from inv
+  ),
+  t as (
+    select
+      coalesce(sum(u.credit_hours), 0) as given,
+      max(u.period_month) filter (where u.credit_hours > 0) as last_in
+    from u
+  ),
+  fifo as (
+    select
+      u.*,
+      t.given,
+      case
+        when u.period_month < t.last_in then least(u.unused, greatest(0, t.given - coalesce(sum(u.unused) over (
+          order by u.period_month rows between unbounded preceding and 1 preceding
+        ), 0)))
+        else 0
+      end as out_fifo,
+      u.period_month = (select max(x.period_month) from u x where x.period_month < t.last_in) as is_tail
+    from u, t
   )
-  select greatest(0,
-    coalesce((select sum(greatest(0, u.hours)) from unused u), 0)
-    - coalesce((select sum(inv.credit_hours) from inv), 0)
-  );
+  select
+    f.id,
+    f.credit_hours,
+    f.unused,
+    f.out_fifo
+      + case when f.is_tail then greatest(0, f.given - (select sum(x.out_fifo) from fifo x)) else 0 end
+  from fifo f;
+$$;
+
+-- The credit of the next invoice = Σ unused − the credit already taken off later invoices.
+create or replace function public.afterschool_credit_hours(p_enrollment_id uuid)
+returns numeric
+language sql
+stable
+set search_path = ''
+as $$
+  select greatest(0, coalesce(sum(f.unused - f.credit_in), 0))
+  from public.afterschool_credit_flow(p_enrollment_id) f;
+$$;
+
+-- PostgREST computed field (И72): hours of an hour invoice that went into the credit of later ones
+-- (0 — a package, a refunded invoice, nothing taken). balance.ts takes it as creditOut. Security invoker.
+create or replace function public.credit_out_hours(p_sub public.subscriptions)
+returns numeric
+language sql
+stable
+set search_path = ''
+as $$
+  select case
+    when p_sub.hours_total is null or p_sub.status = 'refunded' then 0::numeric
+    else coalesce((
+      select f.credit_out from public.afterschool_credit_flow(p_sub.enrollment_id) f
+      where f.subscription_id = p_sub.id
+    ), 0)
+  end;
 $$;
 
 -- The first billed day of the first hour invoice of an enrollment with an old lesson package (#82
@@ -653,6 +710,7 @@ declare
   v_hours numeric;
   v_price integer;
   v_id uuid;
+  v_gap date;
 begin
   if p_month is null then
     raise exception 'month is required' using errcode = 'check_violation';
@@ -692,6 +750,17 @@ begin
   ) then
     raise exception 'a later month is already invoiced' using errcode = 'check_violation';
   end if;
+  -- invoices go month by month (И73): a month before it with hours charged and no invoice first —
+  -- once a later month is invoiced, it could not be invoiced any more
+  select min(date_trunc('month', l.lesson_date))::date into v_gap
+  from public.attendance a
+  join public.lessons l on l.id = a.lesson_id
+  where l.group_id = v_enrollment.group_id and a.student_id = v_enrollment.student_id
+    and a.subscription_id is null and a.hours is not null and a.consumes_credit
+    and l.lesson_date >= v_enrollment.start_date and l.lesson_date < v_month;
+  if v_gap is not null then
+    raise exception 'month % is not invoiced yet', to_char(v_gap, 'YYYY-MM') using errcode = 'check_violation';
+  end if;
   -- «Считать с» only for the first invoice after an old package (И66): a later month is billed from
   -- its first day, else its marks before p_from would stay without an invoice for good
   if p_from is not null and exists (
@@ -705,6 +774,34 @@ begin
 
   -- the month's lessons must exist to be counted (the generator is idempotent)
   perform public.generate_lessons(v_group.id, (v_next - 1)::date);
+
+  -- … and a month before it with planned hours and no invoice, after the last hour invoice (or from
+  -- the enrollment start, billed as afterschool_bill_from would): its marks would have no invoice
+  select min(m.month) into v_gap
+  from (
+    select g::date as month
+    from generate_series(
+      coalesce(
+        (select max(s.period_month) from public.subscriptions s
+         where s.enrollment_id = p_enrollment_id and s.status <> 'refunded' and s.hours_total is not null)
+          + interval '1 month',
+        date_trunc('month', v_enrollment.start_date)
+      ),
+      v_month - interval '1 month',
+      interval '1 month'
+    ) g
+  ) m
+  where not exists (
+    select 1 from public.subscriptions s
+    where s.enrollment_id = p_enrollment_id and s.status <> 'refunded' and s.period_month = m.month
+  )
+    and exists (
+      select 1 from public.afterschool_month_quote(
+        p_enrollment_id, m.month, public.afterschool_bill_from(p_enrollment_id, m.month)) q
+    );
+  if v_gap is not null then
+    raise exception 'month % is not invoiced yet', to_char(v_gap, 'YYYY-MM') using errcode = 'check_violation';
+  end if;
 
   v_start := greatest(
     v_month,
@@ -1826,7 +1923,9 @@ grant select on public.v_afterschool_unbilled to authenticated;
 -- Same as 0024 (#81: a carried debt floors paid_lessons below 0, exhausted suggests no refund) in
 -- «units»: lessons of a package, hours of a monthly after-school subscription (paid hours floor to
 -- 0,5 h). An hour invoice holds hours_total + credit_hours (lessons_total), the credit hours count as
--- paid, money is priced per billed hour (price_final / hours_total). Debt carries only between subscriptions of the same unit
+-- paid, money is priced per billed hour (price_final / hours_total); its hours that went into the
+-- credit of later invoices (credit_out, И72) count as spent — no refund, not left. Its debt / refund
+-- is money: paid_som − (used − credit + credit_out) × the billed hour price. Debt carries only between subscriptions of the same unit
 -- (an old 20-lesson package does not carry into hours); is_current — the newest live one of the
 -- student in the group. Column types widen to numeric (hours have halves) — drop and create.
 drop view if exists public.v_student_balance;
@@ -1866,7 +1965,9 @@ with subs as (
       as paid_som,
     s.hours_total,
     s.period_month,
-    s.credit_hours
+    s.credit_hours,
+    -- hours of it that went into the credit of later invoices (И72): spent here, paid there
+    public.credit_out_hours(s) as credit_out
   from public.subscriptions s
   join public.enrollments e on e.id = s.enrollment_id
   join public.tariffs t on t.id = s.tariff_id
@@ -1942,17 +2043,21 @@ select
   used_own,
   carried_in,
   lessons_used,
-  lessons_total - lessons_used as lessons_left,
-  case when status = 'refunded' then 0 else greatest(0, lessons_used - paid_lessons) end
+  lessons_total - lessons_used - credit_out as lessons_left,
+  case when status = 'refunded' then 0 else greatest(0, lessons_used + credit_out - paid_lessons) end
     as debt_lessons,
   case
-    when status = 'refunded' or lessons_used <= paid_lessons then 0
+    when status = 'refunded' or lessons_used + credit_out <= paid_lessons then 0
     else greatest(0, ceil(
-      ((lessons_used - credit) * price_final - paid_som::numeric * priced_total) / priced_total
+      ((lessons_used - credit + credit_out) * price_final - paid_som::numeric * priced_total) / priced_total
     ))::integer
   end as debt_som,
   case
     when status in ('refunded', 'exhausted') then 0 -- exhausted: closed by a transfer / «ушёл» (#81)
+    -- an hour invoice: the money paid beyond its billed hours spent (И72) — exactly the
+    -- subscription_settlement remainder, so debt − refund sums to −remainder
+    when unit = 'hour' then greatest(0,
+      paid_som - ceil((lessons_used - credit + credit_out) * price_final / priced_total)::integer)
     else round(
       greatest(0, least(paid_lessons, lessons_total) - lessons_used) * price_final / priced_total
     )::integer
@@ -1964,7 +2069,8 @@ select
   hours_total,
   period_month,
   credit_hours,
-  false as unbilled
+  false as unbilled,
+  credit_out
 from balance
 union all
 -- a month not invoiced (И69): no subscription, its hours owed at the hour price on the date — like an
@@ -2001,7 +2107,8 @@ select
   u.hours,
   u.month,
   0::numeric,
-  true
+  true,
+  0::numeric
 from public.v_afterschool_unbilled u;
 
 comment on view public.v_student_balance is
@@ -2081,8 +2188,9 @@ $$;
 -- ─── 14b. #81 × hours: settlement, payroll impact, no transfer ──────────────
 
 -- Same as 0024; lessons_used is numeric — an hour subscription counts hours, priced at its billed
--- hour price (price_final / hours_total): an invoice that used its credit hours goes below 0 by them,
--- the earlier invoice they were paid on stays above 0 by them — the enrollment's sum is right. A month
+-- hour price (price_final / hours_total). Credit hours (И72): the earlier invoice they were paid on
+-- spends them (credit_out), the invoice holding them does not charge them (− credit_hours) — the
+-- surplus stays where the money is, nothing to move on «Ушёл» / a transfer; = v_student_balance. A month
 -- not invoiced (И69) — a row with subscription_id null: its hours at the hour price on the date, below
 -- 0 by them (no payment can land on it — callers moving money skip it). unit — 'lesson' / 'hour',
 -- appended last. The return type changes — drop and create.
@@ -2109,11 +2217,19 @@ as $$
     s.created_at,
     b.paid_som,
     b.lessons_used,
-    ceil(b.lessons_used::numeric * b.price_final / coalesce(b.hours_total, s.lessons_total))::integer,
+    ceil(b.billed * b.price_final / coalesce(b.hours_total, s.lessons_total))::integer,
     b.paid_som
-      - ceil(b.lessons_used::numeric * b.price_final / coalesce(b.hours_total, s.lessons_total))::integer,
+      - ceil(b.billed * b.price_final / coalesce(b.hours_total, s.lessons_total))::integer,
     b.unit
-  from public.v_student_balance b
+  from (
+    select
+      v.*,
+      case
+        when v.unit = 'hour' then v.lessons_used - coalesce(v.credit_hours, 0) + v.credit_out
+        else v.lessons_used
+      end::numeric as billed
+    from public.v_student_balance v
+  ) b
   left join public.subscriptions s on s.id = b.subscription_id
   where b.enrollment_id = p_enrollment_id and b.status <> 'refunded';
 $$;
@@ -3159,6 +3275,10 @@ revoke execute on function public.afterschool_month_quote(uuid, date, date) from
 grant execute on function public.afterschool_month_quote(uuid, date, date) to authenticated;
 revoke execute on function public.afterschool_credit_hours(uuid) from public, anon;
 grant execute on function public.afterschool_credit_hours(uuid) to authenticated;
+revoke execute on function public.afterschool_credit_flow(uuid) from public, anon;
+grant execute on function public.afterschool_credit_flow(uuid) to authenticated;
+revoke execute on function public.credit_out_hours(public.subscriptions) from public, anon;
+grant execute on function public.credit_out_hours(public.subscriptions) to authenticated;
 
 revoke execute on function public.issue_afterschool_invoice(uuid, date, integer, public.discount_reason, date)
 from public, anon;

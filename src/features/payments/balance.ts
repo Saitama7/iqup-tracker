@@ -24,6 +24,11 @@ export interface BalanceSubscription {
    * lessons_total + credit, and the credit counts as paid. Default 0.
    */
   credit?: number
+  /**
+   * An hour invoice: its hours that went into the credit of later invoices (credit_out_hours, И72) —
+   * spent here, no refund. Default 0.
+   */
+  creditOut?: number
   price_final: number
   /**
    * present + absent_burned marks written off this subscription (attendance.subscription_id);
@@ -58,7 +63,8 @@ export interface SubscriptionBalance {
   /** What the debt lessons cost beyond the money paid, rounded up to whole som (И37) — paying it closes the debt. */
   debtSom: number
   /**
-   * Remaining paid lessons × price_final / lessons_total (В8); the admin may correct it. 0 on an
+   * Remaining paid lessons × price_final / lessons_total (В8); an hour invoice — the money paid beyond
+   * its spent billed hours (И72). The admin may correct it. 0 on an
    * exhausted subscription — closed by a transfer / «ушёл», its rest moved, refunded or left to the center.
    */
   refundSuggested: number
@@ -111,13 +117,18 @@ function finish(
   const refunded = s.status === 'refunded'
   const closed = refunded || s.status === 'exhausted'
   const total = capacityOf(s)
-  const debtLessons = refunded ? 0 : units(Math.max(0, used - paid))
+  const out = s.creditOut ?? 0
+  const debtLessons = refunded ? 0 : units(Math.max(0, used + out - paid))
   // Ceil, not round: paying debtSom must open every debt lesson (paidLessons floors). Money is per
-  // billed unit — the credit hours were paid on an earlier invoice.
-  const owed = Math.ceil(
-    ((used - creditOf(s)) * s.price_final - s.paid * s.lessons_total) / s.lessons_total,
-  )
+  // billed unit — the credit hours were paid on an earlier invoice, the hours gone on into a later
+  // credit are spent here (И72).
+  const spent = Math.ceil(units(((used - creditOf(s) + out) * s.price_final) / s.lessons_total))
   const remaining = Math.max(0, Math.min(paid, total) - used)
+  // an hour invoice: the money beyond its spent billed hours — the subscription_settlement remainder
+  const refund =
+    (s.unit ?? 'lesson') === 'hour'
+      ? Math.max(0, s.paid - spent)
+      : roundSom((remaining * s.price_final) / s.lessons_total)
   return {
     subscriptionId: s.id,
     refunded,
@@ -127,10 +138,10 @@ function finish(
     paidLessons: paid,
     carriedIn: units(carriedIn),
     lessonsUsed: units(used),
-    lessonsLeft: units(total - used),
+    lessonsLeft: units(total - used - out),
     debtLessons,
-    debtSom: debtLessons > 0 ? Math.max(0, owed) : 0,
-    refundSuggested: closed ? 0 : roundSom((remaining * s.price_final) / s.lessons_total),
+    debtSom: debtLessons > 0 ? Math.max(0, spent - s.paid) : 0,
+    refundSuggested: closed ? 0 : refund,
     isCurrent,
   }
 }

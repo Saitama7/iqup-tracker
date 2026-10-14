@@ -818,8 +818,9 @@ export type Database = {
           started_at: string
           status: Database['public']['Enums']['subscription_status']
           tariff_id: string
+          credit_out_hours: number | null
         }
-        ComputedFields: never
+        ComputedFields: 'credit_out_hours'
         Insert: {
           created_at?: string
           credit_hours?: number
@@ -1315,6 +1316,7 @@ export type Database = {
         Row: {
           carried_in: number | null
           credit_hours: number | null
+          credit_out: number | null
           debt_lessons: number | null
           debt_som: number | null
           enrollment_id: string | null
@@ -1393,6 +1395,15 @@ export type Database = {
       afterschool_backfill_plans: { Args: Record<PropertyKey, never>; Returns: number }
       afterschool_bill_from: { Args: { p_enrollment_id: string; p_month: string }; Returns: string }
       afterschool_bill_unbilled: { Args: { p_enrollment_id: string }; Returns: number }
+      afterschool_credit_flow: {
+        Args: { p_enrollment_id: string }
+        Returns: {
+          credit_in: number
+          credit_out: number
+          subscription_id: string
+          unused: number
+        }[]
+      }
       afterschool_credit_hours: { Args: { p_enrollment_id: string }; Returns: number }
       afterschool_day_hours: {
         Args: { p_date: string; p_group_id: string; p_student_id: string }
@@ -1579,6 +1590,15 @@ export type Database = {
           group_id: string
           lessons_created: number
         }[]
+      }
+      credit_out_hours: {
+        Args: {
+          p_sub: Omit<
+            Database['public']['Tables']['subscriptions']['Row'],
+            Database['public']['Tables']['subscriptions']['ComputedFields']
+          >
+        }
+        Returns: number
       }
       current_roles: {
         Args: Record<PropertyKey, never>

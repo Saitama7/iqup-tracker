@@ -13,6 +13,7 @@ const rowSchema = z.object({
   student_id: z.uuid(),
   month: z.string(),
   hours: z.number(),
+  active: z.boolean(),
   student: z.object({ full_name: z.string() }),
 })
 
@@ -22,17 +23,24 @@ export interface UnbilledItem {
   studentName: string
   month: string
   hours: number
+  /** The enrollment is finished — «Ушёл» could not bill the month: its marks are in a closed period. */
+  closed: boolean
 }
 
-/** Active enrollments only: a finished one is billed by «Ушёл», or its month is closed. */
+/**
+ * Every month not invoiced while its debt is there: an active enrollment — «Выставить счёт»; a finished
+ * one is left only by a closed period («Ушёл» bills the rest, И69) — open the period or write the debt off.
+ */
 const dashboardUnbilledQuery = () =>
   queryOptions({
     queryKey: [BALANCES_KEY, UNBILLED_KEY, 'dashboard'],
     queryFn: async (): Promise<UnbilledItem[]> => {
       const { data, error } = await supabase
         .from('v_afterschool_unbilled')
-        .select('enrollment_id, student_id, month, hours, student:students!inner(full_name)')
-        .eq('active', true)
+        .select(
+          'enrollment_id, student_id, month, hours, active, student:students!inner(full_name)',
+        )
+        .gt('amount', 0)
         .order('month')
       if (error) throw error
       return z
@@ -44,15 +52,22 @@ const dashboardUnbilledQuery = () =>
           studentName: r.student.full_name,
           month: r.month,
           hours: r.hours,
+          closed: !r.active,
         }))
     },
   })
 
 export const useUnbilled = () => useQuery(dashboardUnbilledQuery())
 
-/** «Продлёнка: не выставлен счёт за ноябрь — Айжан Б., 21 ч». */
-export const unbilledLine = (u: Pick<UnbilledItem, 'month' | 'studentName' | 'hours'>) =>
-  `Продлёнка: не выставлен счёт за ${monthAccusative(u.month)} — ${shortName(u.studentName)}, ${formatHours(u.hours)} ч`
+/**
+ * «Продлёнка: не выставлен счёт за ноябрь — Айжан Б., 21 ч»; a finished enrollment — «… · закрытый
+ * период — откройте период или спишите долг».
+ */
+export const unbilledLine = (
+  u: Pick<UnbilledItem, 'month' | 'studentName' | 'hours'> & { closed?: boolean },
+) =>
+  `Продлёнка: не выставлен счёт за ${monthAccusative(u.month)} — ${shortName(u.studentName)}, ${formatHours(u.hours)} ч` +
+  (u.closed ? ' · закрытый период — откройте период или спишите долг' : '')
 
 /** Items of the «Требует внимания» list — each opens the student (А6, «Выставить счёт»). */
 export function UnbilledItems({ items }: { items: readonly UnbilledItem[] }) {

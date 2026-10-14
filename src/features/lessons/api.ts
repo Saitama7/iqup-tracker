@@ -169,6 +169,7 @@ const subscriptionSchema = z.object({
   hours_total: z.number().nullable(),
   period_month: z.string().nullable(),
   credit_hours: z.number(),
+  credit_out_hours: z.number(),
   price_full: z.number(),
   price_final: z.number(),
   tariff: z.object({ freeze_limit: z.number().int() }),
@@ -189,7 +190,7 @@ export const enrollmentSchema = z.object({
 
 /** subscriptions(…) of an enrollment, with every mark charged to them and their payments (teacher RLS: own students, Д3). */
 export const ENROLLMENT_FIELDS =
-  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, hours_total, period_month, credit_hours, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status, hours), payments(amount)), afterschool_plans(valid_from, hours)'
+  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, hours_total, period_month, credit_hours, credit_out_hours, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status, hours), payments(amount)), afterschool_plans(valid_from, hours)'
 
 export function toEnrollment({
   afterschool_plans,

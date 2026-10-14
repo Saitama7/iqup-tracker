@@ -282,8 +282,12 @@ export interface StudentListRow {
   payState: PayState | null
   /** «Оплачено» / «Частично · 6 ур» / «Пора оплачивать» / «Долг». */
   payLabel: string | null
-  /** Lessons «в долг» and what they cost over all subscriptions of the student. */
+  /**
+   * Package lessons «в долг», after-school hours owed (hour invoices and months not invoiced, #82) —
+   * apart, never summed; debtSom — what both cost over all subscriptions of the student.
+   */
   debtLessons: number
+  debtHours: number
   debtSom: number
 }
 
@@ -308,15 +312,23 @@ export function studentListRow(
       return remainingLabel(e.balance)
     })
     .join(' · ')
-  const billed = totalDebt(
-    s.enrollments.flatMap((e) => e.subscriptions.flatMap((x) => balances.get(x.id) ?? [])),
-  )
-  const debt = unbilled
+  const all = s.enrollments.flatMap((e) => e.subscriptions.flatMap((x) => balances.get(x.id) ?? []))
+  const lessonDebt = totalDebt(all.filter((b) => b.unit !== 'hour'))
+  const hourDebt = unbilled
     .filter((u) => u.studentId === s.id)
-    .reduce((t, u) => ({ lessons: t.lessons + u.hours, som: t.som + u.som }), billed)
+    .reduce(
+      (t, u) => ({ lessons: t.lessons + u.hours, som: t.som + u.som }),
+      totalDebt(all.filter((b) => b.unit === 'hour')),
+    )
+  const debt = {
+    lessons: lessonDebt.lessons,
+    hours: Math.round(hourDebt.lessons * 10) / 10,
+    som: lessonDebt.som + hourDebt.som,
+  }
   const current = active.flatMap((e) => (e.balance ? [e.balance] : []))
   const states = current.map((b) => ({ b, state: payState(b) }))
-  const state: PayState | null = debt.lessons > 0 ? 'debt' : worstState(states.map((x) => x.state))
+  const state: PayState | null =
+    debt.lessons > 0 || debt.hours > 0 ? 'debt' : worstState(states.map((x) => x.state))
   const detail = states.find((x) => x.state === state)?.b
   return {
     id: s.id,
@@ -330,6 +342,7 @@ export function studentListRow(
     payState: state,
     payLabel: state ? payChipLabel(state, detail?.paidLessons ?? 0, detail?.unit) : null,
     debtLessons: debt.lessons,
+    debtHours: debt.hours,
     debtSom: debt.som,
   }
 }

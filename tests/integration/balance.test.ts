@@ -47,7 +47,7 @@ async function tsBalances(supabase: Client) {
   const { data, error } = await supabase
     .from('subscriptions')
     .select(
-      'id, status, started_at, created_at, lessons_total, hours_total, credit_hours, price_final, enrollment:enrollments!inner(student_id, group_id), attendance(consumes_credit, hours), payments(amount)',
+      'id, status, started_at, created_at, lessons_total, hours_total, credit_hours, credit_out_hours, price_final, enrollment:enrollments!inner(student_id, group_id), attendance(consumes_credit, hours), payments(amount)',
     )
   if (error) throw error
   const byStudentGroup = new Map<string, BalanceSubscription[]>()
@@ -62,6 +62,7 @@ async function tsBalances(supabase: Client) {
       // after-school months count hours (#82)
       lessons_total: s.hours_total ?? s.lessons_total,
       credit: s.credit_hours,
+      creditOut: s.credit_out_hours ?? 0,
       price_final: s.price_final,
       used: s.attendance
         .filter((a) => a.consumes_credit)

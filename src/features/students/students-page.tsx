@@ -24,7 +24,7 @@ import {
   type StudentListRow,
 } from './model'
 import { NativeSelect, PayChip } from './parts'
-import { debtCaption, debtTone } from './pay-view'
+import { debtTone, listDebtCaption } from './pay-view'
 import { StudentFormDialog } from './student-form-dialog'
 
 const chipBase =
@@ -244,7 +244,7 @@ function PayChips({
 }
 
 function DebtCell({ row }: { row: StudentListRow }) {
-  if (row.debtLessons === 0) return <span className="text-ink-muted">—</span>
+  if (row.debtLessons === 0 && row.debtHours === 0) return <span className="text-ink-muted">—</span>
   return (
     <span
       className={cn(
@@ -392,14 +392,14 @@ function StudentCards({ rows }: { rows: StudentListRow[] }) {
                 <span className="whitespace-nowrap tabular-nums">осталось {r.remaining}</span>
               )}
             </div>
-            {r.debtLessons > 0 && (
+            {(r.debtLessons > 0 || r.debtHours > 0) && (
               <div
                 className={cn(
                   'text-[13px] font-extrabold',
                   debtTone(r.debtLessons) === 'burned' ? 'text-burned' : 'text-warn',
                 )}
               >
-                {debtCaption(r.debtLessons, r.debtSom)}
+                {listDebtCaption(r.debtLessons, r.debtHours, r.debtSom)}
               </div>
             )}
           </Link>
