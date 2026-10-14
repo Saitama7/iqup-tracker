@@ -36,8 +36,12 @@ describe('paidLessons (В7.1)', () => {
   })
   it('nothing paid → 0; a free package → all lessons', () => {
     expect(paidLessons(0, 12, 3200)).toBe(0)
-    expect(paidLessons(-100, 12, 3200)).toBe(0)
     expect(paidLessons(0, 12, 0)).toBe(12)
+  })
+  it('a carried debt (paid < 0, #81) floors to lessons owed', () => {
+    expect(paidLessons(-600, 12, 3800)).toBe(-2)
+    expect(paidLessons(-234, 12, 3800)).toBe(-1)
+    expect(paidLessons(-100, 12, 3200)).toBe(-1)
   })
 })
 
@@ -97,6 +101,21 @@ describe('subscriptionBalances', () => {
     expect(
       subscriptionBalances([sub({ price_final: 2720, paid: 2720, used: 7 })])[0]?.refundSuggested,
     ).toBe(1133)
+  })
+
+  it('a debt carried by a transfer is a debt before the first lesson (#81)', () => {
+    const [b] = subscriptionBalances([sub({ price_final: 3800, paid: -600, used: 0 })])
+    expect(b).toMatchObject({ paidLessons: -2, lessonsUsed: 0, debtLessons: 2, debtSom: 600 })
+    expect(b && payState(b)).toBe('debt')
+    expect(totalDebt(b ? [b] : [])).toEqual({ lessons: 2, som: 600 })
+    // paying it closes the debt, the rest opens lessons as usual
+    const [paid] = subscriptionBalances([sub({ price_final: 3800, paid: 3200, used: 0 })])
+    expect(paid).toMatchObject({ paidLessons: 10, debtLessons: 0, debtSom: 0 })
+  })
+
+  it('an exhausted subscription (closed by a transfer / «ушёл») suggests no refund', () => {
+    const [b] = subscriptionBalances([sub({ status: 'exhausted', paid: 2200, used: 3 })])
+    expect(b).toMatchObject({ paidLessons: 8, debtLessons: 0, debtSom: 0, refundSuggested: 0 })
   })
 
   it('a refunded subscription owes nothing and suggests nothing', () => {
@@ -185,6 +204,42 @@ describe('subscriptionBalances', () => {
       sub({ id: 'a', created_at: '2026-09-01T09:00:00Z', used: 13 }),
     ])
     expect(balances[0]).toMatchObject({ subscriptionId: 'b', carriedIn: 1, isCurrent: true })
+  })
+})
+
+describe('«ушёл» evens the subscriptions out (#81, withdraw_enrollment) — same numbers as pgTAP', () => {
+  // 3 800 / 12: old B paid 1 900, 12 used (−1 900); new A paid 3 800, 0 used (+3 800) → a transfer pair
+  // +1 900 on B / −1 900 on A, then the refund comes from A
+  const exited = (aPaid: number) =>
+    subscriptionBalances([
+      sub({ id: 'B', status: 'exhausted', price_final: 3800, used: 12, paid: 1900 + 1900 }),
+      sub({
+        id: 'A',
+        status: 'exhausted',
+        started_at: '2026-10-14',
+        created_at: '2026-10-14T00:00:00Z',
+        price_final: 3800,
+        paid: aPaid,
+      }),
+    ])
+
+  it('A +3 800, B −1 900, 1 900 refunded → no debt anywhere', () => {
+    const balances = exited(3800 - 1900 - 1900)
+    expect(totalDebt(balances)).toEqual({ lessons: 0, som: 0 })
+    expect(balances.map((b) => [b.subscriptionId, b.paidSom, b.debtSom])).toEqual([
+      ['B', 3800, 0],
+      ['A', 0, 0],
+    ])
+  })
+
+  it('A +1 000, B −1 900 → the net debt 900 on A only, not 1 900', () => {
+    const balances = exited(1000 - 1900)
+    expect(totalDebt(balances)).toEqual({ lessons: 3, som: 900 })
+    expect(balances.find((b) => b.subscriptionId === 'A')).toMatchObject({
+      paidSom: -900,
+      debtLessons: 3,
+      debtSom: 900,
+    })
   })
 })
 

@@ -18,7 +18,11 @@ import {
 } from '@/features/students/model'
 import { fillCaption } from '@/features/trials/model'
 import { EnrollDialog, type EnrollStudent } from '@/features/subscriptions/enroll-dialog'
-import { RemoveEnrollmentDialog } from '@/features/subscriptions/remove-enrollment-dialog'
+import {
+  EnrollmentExitDialog,
+  EnrollmentMenu,
+  type ExitAction,
+} from '@/features/subscriptions/enrollment-exit'
 import { tariffFor } from '@/features/tariffs/current'
 import { GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
@@ -115,7 +119,7 @@ type Dialog =
   | { kind: 'archive' }
   | { kind: 'delete' }
   | { kind: 'enroll' }
-  | { kind: 'remove'; row: MemberRow }
+  | { kind: 'exit'; row: MemberRow; action: ExitAction }
   | { kind: 'extra'; makesUpFor?: string }
   | { kind: 'cancel'; lesson: LessonRow }
   | { kind: 'substitute'; lesson: LessonRow }
@@ -179,8 +183,8 @@ export function GroupPage({ groupId }: { groupId: string }) {
   const close = () => {
     setDialog(null)
   }
-  const onRemove = (row: MemberRow) => {
-    setDialog({ kind: 'remove', row })
+  const onAction = (row: MemberRow, action: ExitAction) => {
+    setDialog({ kind: 'exit', row, action })
   }
   const onLessonAction = (action: 'cancel' | 'substitute' | 'extra', id: string) => {
     if (action === 'extra') {
@@ -260,7 +264,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
       ) : roster.length === 0 && trials.length === 0 ? (
         <p className="p-5 font-bold text-ink-muted">В группе пока нет учеников</p>
       ) : isDesktop ? (
-        <MembersTable rows={roster} onRemove={onRemove}>
+        <MembersTable rows={roster} onAction={onAction}>
           <TrialTableRows
             trials={trials}
             today={today}
@@ -270,7 +274,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
         </MembersTable>
       ) : (
         <>
-          <MembersList rows={roster} onRemove={onRemove} />
+          <MembersList rows={roster} onAction={onAction} />
           <TrialCards
             trials={trials}
             today={today}
@@ -393,15 +397,16 @@ export function GroupPage({ groupId }: { groupId: string }) {
           teachers={data.teachers}
         />
       )}
-      {dialog?.kind === 'remove' && students.data && (
-        <RemoveEnrollmentDialog
-          open
+      {dialog?.kind === 'exit' && students.data && (
+        <EnrollmentExitDialog
+          action={dialog.action}
           onOpenChange={close}
           enrollmentId={dialog.row.enrollmentId}
           studentName={dialog.row.fullName}
           group={students.data.groups.find((g) => g.id === groupId) ?? null}
           startDate={dialog.row.startDate}
           groups={students.data.groups}
+          today={today}
         />
       )}
       {dialog?.kind === 'enroll' && students.data && (
@@ -491,29 +496,14 @@ const leftClass = (r: MemberRow) =>
 const leftText = (r: MemberRow) =>
   r.left === null ? '—' : r.left < 0 ? `−${-r.left}` : `${r.left} / ${r.total ?? ''}`
 
-function RemoveButton({ row, onRemove }: { row: MemberRow; onRemove: (row: MemberRow) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => {
-        onRemove(row)
-      }}
-      aria-label={`Убрать из группы: ${row.fullName}`}
-      className="flex min-h-11 items-center text-xs font-extrabold whitespace-nowrap text-burned-strong"
-    >
-      Убрать из группы
-    </button>
-  )
-}
-
 function MembersTable({
   rows,
   children,
-  onRemove,
+  onAction,
 }: {
   rows: MemberRow[]
   children?: ReactNode
-  onRemove: (row: MemberRow) => void
+  onAction: (row: MemberRow, action: ExitAction) => void
 }) {
   return (
     <table className="w-full min-w-[560px] border-collapse" aria-label="Ученики группы">
@@ -551,15 +541,22 @@ function MembersTable({
             <td className={cn(tdClass, numClass, leftClass(r))}>{leftText(r)}</td>
             <td className={cn(tdClass, numClass)}>{r.freezes}</td>
             <td className={tdClass}>
-              <Link
-                to="/admin/students/$studentId"
-                params={{ studentId: r.studentId }}
-                className="text-xs font-extrabold whitespace-nowrap text-teal"
-                aria-label={`Открыть: ${r.fullName}`}
-              >
-                Открыть
-              </Link>
-              <RemoveButton row={r} onRemove={onRemove} />
+              <div className="flex items-center justify-end gap-2">
+                <Link
+                  to="/admin/students/$studentId"
+                  params={{ studentId: r.studentId }}
+                  className="text-xs font-extrabold whitespace-nowrap text-teal"
+                  aria-label={`Открыть: ${r.fullName}`}
+                >
+                  Открыть
+                </Link>
+                <EnrollmentMenu
+                  label={r.fullName}
+                  onAction={(a) => {
+                    onAction(r, a)
+                  }}
+                />
+              </div>
             </td>
           </tr>
         ))}
@@ -571,22 +568,25 @@ function MembersTable({
 
 function MembersList({
   rows,
-  onRemove,
+  onAction,
 }: {
   rows: MemberRow[]
-  onRemove: (row: MemberRow) => void
+  onAction: (row: MemberRow, action: ExitAction) => void
 }) {
   return (
     <ul aria-label="Ученики группы">
       {rows.map((r) => (
-        <li key={r.studentId} className="border-b border-line last:border-0">
+        <li
+          key={r.studentId}
+          className={cn(
+            'flex items-center border-b border-line pr-1 last:border-0',
+            r.left !== null && r.left <= 2 && 'bg-accent',
+          )}
+        >
           <Link
             to="/admin/students/$studentId"
             params={{ studentId: r.studentId }}
-            className={cn(
-              'flex items-center justify-between gap-3 px-4 py-3',
-              r.left !== null && r.left <= 2 && 'bg-accent',
-            )}
+            className="flex min-w-0 flex-1 items-center justify-between gap-3 py-3 pl-4"
           >
             <span className="flex min-w-0 flex-col">
               <span className="font-extrabold text-ink">{r.fullName}</span>
@@ -600,9 +600,12 @@ function MembersList({
               {leftText(r)}
             </span>
           </Link>
-          <div className="px-4 pb-1">
-            <RemoveButton row={r} onRemove={onRemove} />
-          </div>
+          <EnrollmentMenu
+            label={r.fullName}
+            onAction={(a) => {
+              onAction(r, a)
+            }}
+          />
         </li>
       ))}
     </ul>

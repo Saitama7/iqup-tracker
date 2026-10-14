@@ -82,9 +82,10 @@ export const balancesQuery = () =>
 const paymentSchema = z.object({
   id: z.uuid(),
   amount: z.number().int(),
-  method: z.enum(['cash', 'mbank']),
+  /** null — a transfer between subscriptions (#81): no money changed hands. */
+  method: z.enum(['cash', 'mbank']).nullable(),
   paid_at: z.string(),
-  kind: z.enum(['payment', 'refund']),
+  kind: z.enum(['payment', 'refund', 'transfer']),
   reason: z.string().nullable(),
   created_by: z.uuid().nullable(),
   subscription: z.object({

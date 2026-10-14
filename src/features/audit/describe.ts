@@ -634,6 +634,7 @@ function describePayment(row: AuditRow, l: AuditLookups): Described {
   const amount = num(s, 'amount') ?? 0
   const method = METHOD[str(s, 'method') ?? ''] ?? ''
   const refund = str(s, 'kind') === 'refund'
+  const transfer = str(s, 'kind') === 'transfer'
   const package_ = sub
     ? `, абонемент ${sub.lessons} ${pluralRu(sub.lessons, ['урок', 'урока', 'уроков'])}`
     : ''
@@ -652,6 +653,20 @@ function describePayment(row: AuditRow, l: AuditLookups): Described {
       badge: { label: 'Платёж', tone: 'stone' },
       link,
       parts: [...who, refund ? 'возврат ' : 'платёж ', money, ` (${method}) изменён`],
+    }
+  }
+  if (transfer) {
+    // #81: one row of a transfer pair — «перенос в / из <группа>», the sign says which way
+    return {
+      badge: { label: 'Перенос', tone: 'teal' },
+      link,
+      parts: [
+        ...who,
+        comment ?? 'перенос',
+        ': ',
+        strong(`${amount < 0 ? '−' : '+'} ${formatSom(Math.abs(amount))} сом`),
+        package_,
+      ],
     }
   }
   return refund
@@ -698,7 +713,9 @@ function describeEnrollment(row: AuditRow, l: AuditLookups): Described {
       parts: [
         ...who,
         `зачисление в ${group} удалено`,
-        row.reason === 'remove_enrollment' ? ' (ошибочное)' : '',
+        row.reason === 'remove_enrollment' || row.reason === 'delete_enrollment'
+          ? ' (ошибочное)'
+          : '',
       ],
     }
   }
@@ -724,6 +741,14 @@ function describeEnrollment(row: AuditRow, l: AuditLookups): Described {
   }
   if (changed(row, 'status') && str(row.after, 'status') === 'finished') {
     const until = str(row.after, 'end_date')
+    if (row.reason === 'delete_enrollment' && !until) {
+      // #81: an enrollment with payments is kept as a void record — on no roster
+      return {
+        badge: { label: 'Зачисление', tone: 'stone' },
+        link,
+        parts: [...who, `зачисление в ${group} аннулировано (ошибочное)`],
+      }
+    }
     return {
       badge: { label: 'Выбыл', tone: 'stone' },
       link,
@@ -1009,6 +1034,10 @@ export const authorShort = (author: string) =>
 /** audit_log.reason written by an RPC (iqup.audit_reason) as words, not codes. */
 const REASON_LABEL: Record<string, string> = {
   archive_group: 'группа переведена в архив',
+  // #81 (0024)
+  transfer_student: 'перевод в другую группу',
+  withdraw_enrollment: 'ученик ушёл из группы',
+  delete_enrollment: 'записан(а) по ошибке',
 }
 
 /**

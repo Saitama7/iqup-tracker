@@ -685,6 +685,30 @@ describe('payments (#47)', () => {
     expect(e.badge).toEqual({ label: 'Возврат', tone: 'burned' })
     expect(e.note).toBe('Причина: «Переезд»')
   })
+  it('a transfer row (#81): direction from the reason, signed sum, no method', () => {
+    const e = describeAuditRow(
+      row({
+        entity: 'payments',
+        action: 'insert',
+        after: {
+          ...payment,
+          amount: -1800,
+          method: null,
+          kind: 'transfer',
+          reason: 'перенос в Математика · мини',
+          transfer_id: '40000000-0000-4000-8000-000000000001',
+        },
+        reason: 'transfer_student',
+        kind: 'payment',
+      }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Алина Исакова · Математика · 8 класс Б — перенос в Математика · мини: − 1 800 сом, абонемент 12 уроков',
+    )
+    expect(e.badge).toEqual({ label: 'Перенос', tone: 'teal' })
+    expect(e.note).toBe('Причина: перевод в другую группу')
+  })
   it('without lookups: «Ученик», still readable', () => {
     expect(
       text(
@@ -792,6 +816,59 @@ describe('admin undo (#73)', () => {
         undo,
       ),
     ).toBe('Алина Исакова — переведён(а) из Математика · 8 класс Б в Физика · 9 класс А')
+  })
+
+  it('«Записан по ошибке» (#81): deleted enrollment, void record, deleted «был» with the reason', () => {
+    expect(
+      text(
+        row({
+          entity: 'enrollments',
+          entityId: ENROLLMENT,
+          action: 'delete',
+          before: e,
+          reason: 'delete_enrollment',
+        }),
+        undo,
+      ),
+    ).toBe('Алина Исакова — зачисление в Математика · 8 класс Б удалено (ошибочное)')
+    const voided = row({
+      entity: 'enrollments',
+      entityId: ENROLLMENT,
+      before: { ...e, status: 'active', end_date: null },
+      after: { ...e, status: 'finished', end_date: null },
+      reason: 'delete_enrollment',
+    })
+    expect(text(voided, undo)).toBe(
+      'Алина Исакова — зачисление в Математика · 8 класс Б аннулировано (ошибочное)',
+    )
+    const mark = describeAuditRow(
+      row({
+        entity: 'attendance',
+        action: 'delete',
+        before: { id: 'm1', lesson_id: LESSON, student_id: ALINA, status: 'present' },
+        reason: 'delete_enrollment',
+        kind: 'retro',
+      }),
+      undo,
+    )
+    expect(plain(mark.parts)).toBe(
+      'Отметка Алина Исакова удалена (была Был) · Математика · 8 класс Б, 10.10 в 09:00',
+    )
+    expect(mark.note).toBe('Причина: записан(а) по ошибке')
+  })
+
+  it('«Ушёл» (#81): the enrollment closed from a date, the reason in words', () => {
+    const r = row({
+      entity: 'enrollments',
+      entityId: ENROLLMENT,
+      before: { ...e, status: 'active', end_date: null },
+      after: { ...e, status: 'finished', end_date: '2026-09-30' },
+      reason: 'withdraw_enrollment',
+    })
+    expect(text(r, undo)).toBe(
+      'Алина Исакова — зачисление в Математика · 8 класс Б закрыто с 30.09.2026',
+    )
+    expect(describeAuditRow(r, undo).note).toBe('Причина: ученик ушёл из группы')
   })
 
   it('group teacher change carries the date from the reason', () => {

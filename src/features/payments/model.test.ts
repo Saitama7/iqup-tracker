@@ -136,6 +136,18 @@ describe('journal', () => {
       refund: true,
     })
   })
+  it('a transfer (#81): «перенос», the direction in the author line, not a refund', () => {
+    const r = journalRow(
+      pay({ amount: -1800, kind: 'transfer', method: null, reason: 'перенос в Химия · 9 класс' }),
+      lookups,
+    )
+    expect(r).toMatchObject({
+      method: 'перенос',
+      author: 'Алишка · перенос в Химия · 9 класс',
+      refund: false,
+      transfer: true,
+    })
+  })
   it('a discount is shown under the group', () => {
     const p = pay({ price: 2720 })
     p.subscription.discount_percent = 15
@@ -170,6 +182,21 @@ describe('totals (Г2, Г4)', () => {
     expect(journalCaption('2026-10', '2026-10-13', totals(rows))).toBe(
       'Октябрь · 10 200 сом · 4 платежа',
     )
+  })
+  it('a transfer pair (#81) is not money in or out', () => {
+    const moved = [
+      ...rows,
+      pay({ id: 'f', amount: -1800, kind: 'transfer', method: null, reason: 'перенос в' }),
+      pay({
+        id: 'g',
+        amount: 1800,
+        kind: 'transfer',
+        method: null,
+        group: CHEM,
+        reason: 'перенос из',
+      }),
+    ]
+    expect(totals(moved)).toEqual(totals(rows))
   })
   it('by group and by teacher', () => {
     expect(totalsByGroup(rows, lookups).map((r) => [r.label, r.sub, r.net])).toEqual([
