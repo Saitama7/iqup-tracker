@@ -154,7 +154,7 @@ function AdvanceForm({
           className={cn(inputClass, 'font-display text-lg')}
         />
       </Field>
-      <div className="grid grid-cols-2 gap-2.5">
+      <div className="grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2">
         <Field id={`${id}-date`} label="Дата выдачи">
           <DateInput
             id={`${id}-date`}
