@@ -331,6 +331,7 @@ select results_eq(
 
 -- ─── A deleted lesson takes its presets along (FK cascade) ──────────────────
 reset role;
+reset request.jwt.claims;
 delete from public.attendance where lesson_id = (select id from l84 where grp = 'S84 G1' and n = 1);
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a8400000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"roles":["admin"]}}';
