@@ -11,7 +11,7 @@ import { useView } from './use-view'
 export function useBackTarget(): BackTarget | null {
   const { view } = useView()
   const pathname = useLocation({ select: (l) => l.pathname })
-  // Same schema as the lesson route: a hand-edited ?from= / ?group= never builds a bad link (#76).
+  // Same schema as the lesson route: a hand-edited ?from= / ?group= never builds a bad link (#76, #89).
   const search: BackSearch = parseLessonSearch(useLocation({ select: (l) => l.search }))
   return backTarget(pathname, view, search)
 }
@@ -56,8 +56,8 @@ export function BackButton({
 
   return (
     <Link
-      {...(target.to === '/groups/$groupId'
-        ? { to: target.to, params: target.params }
+      {...('params' in target
+        ? { to: target.to, params: target.params, search: target.search }
         : { to: target.to, search: target.search })}
       onClick={onClick}
       aria-label={`Назад: ${target.label}`}

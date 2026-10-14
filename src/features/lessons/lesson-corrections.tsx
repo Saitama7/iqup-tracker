@@ -52,6 +52,8 @@ export function useCorrections(
   sheet: LessonSheet,
   roster: readonly RosterRow[],
   isAdmin: boolean,
+  /** The admin's fix is saved — back to the screen the sheet came from (#89). */
+  onFixed?: () => void,
 ): Corrections {
   const queryClient = useQueryClient()
   const held = sheet.status === 'held'
@@ -84,6 +86,7 @@ export function useCorrections(
     },
     onSuccess: () => {
       done(isAdmin ? 'Отметки исправлены' : 'Запрос отправлен администратору')
+      if (isAdmin) onFixed?.()
     },
     onError: failed(isAdmin ? 'Не удалось исправить отметки' : 'Не удалось отправить запрос'),
   })

@@ -37,6 +37,7 @@ import {
   type Unconfirmed,
 } from './select'
 import { ownTrialsByLesson, tomorrowTrialCaption } from './trials-view'
+import { FROM_TODAY } from './return-to'
 
 export function TodayPage() {
   const now = useNow()
@@ -243,7 +244,12 @@ function DayRow({
   )
   if (cancelled) return <div className={className}>{inner}</div>
   return (
-    <Link to="/lessons/$lessonId" params={{ lessonId: lesson.id }} className={className}>
+    <Link
+      to="/lessons/$lessonId"
+      params={{ lessonId: lesson.id }}
+      search={FROM_TODAY}
+      className={className}
+    >
       {inner}
     </Link>
   )
@@ -306,6 +312,7 @@ function DesktopToday({ days, unconfirmed, today, now, trials }: DayProps) {
                 <Link
                   to="/lessons/$lessonId"
                   params={{ lessonId: l.id }}
+                  search={FROM_TODAY}
                   className="flex h-full flex-col gap-1.5 rounded-2xl bg-burned-soft p-4 text-burned-deep"
                 >
                   <span className="text-xs font-extrabold tracking-[0.04em] uppercase">
@@ -470,6 +477,7 @@ function DesktopRow({
           <Link
             to="/lessons/$lessonId"
             params={{ lessonId: lesson.id }}
+            search={FROM_TODAY}
             className="inline-flex min-h-9 items-center rounded-full bg-ink px-3.5 text-xs font-extrabold whitespace-nowrap text-brand"
           >
             Отметить →

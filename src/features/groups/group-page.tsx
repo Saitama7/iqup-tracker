@@ -4,6 +4,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
 import { BackButton } from '@/components/shell/back-button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { fromAdminGroup, type GroupTab } from '@/features/lessons/return-to'
 import { balancesQuery } from '@/features/payments/api'
 import { studentsQuery } from '@/features/students/api'
 import {
@@ -126,7 +127,16 @@ type Dialog =
 
 // А4 Группа (docs/design/AdminGroup.dc.html): header, «Ученики» (R1-4 enrollments) and «Занятия»
 // (cancel / extra lesson / substitute). payments and debts live on А5 / А6 / А7.
-export function GroupPage({ groupId }: { groupId: string }) {
+export function GroupPage({
+  groupId,
+  tab = 'students',
+  onTabChange,
+}: {
+  groupId: string
+  /** «Ученики» / «Занятия» — in the URL, the return from a lesson opens the same tab (#89). */
+  tab?: GroupTab
+  onTabChange: (tab: GroupTab) => void
+}) {
   const isDesktop = useIsDesktop()
   const now = useNow()
   const today = bishkekDate(now)
@@ -136,7 +146,6 @@ export function GroupPage({ groupId }: { groupId: string }) {
   const balances = useQuery(balancesQuery())
   const lessons = useQuery(lessonsQuery(groupId))
   const trials = useGroupTrials(groupId)
-  const [tab, setTab] = useState('students')
   const [dialog, setDialog] = useState<Dialog | null>(null)
 
   const group = groups.data?.groups.find((g) => g.id === groupId) ?? null
@@ -288,6 +297,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
 
   const lessonsTab = (
     <LessonsSection
+      groupId={groupId}
       views={views}
       today={today}
       pending={lessons.isPending}
@@ -313,7 +323,13 @@ export function GroupPage({ groupId }: { groupId: string }) {
 
       {stats}
 
-      <Tabs value={tab} onValueChange={setTab} className="gap-4">
+      <Tabs
+        value={tab}
+        onValueChange={(v) => {
+          onTabChange(v === 'lessons' ? 'lessons' : 'students')
+        }}
+        className="gap-4"
+      >
         <TabsList className="h-auto w-full rounded-xl border-[1.5px] border-line-strong bg-card p-[3px] min-[900px]:w-fit">
           {(
             [
@@ -338,7 +354,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
                 views={views}
                 today={today}
                 onAll={() => {
-                  setTab('lessons')
+                  onTabChange('lessons')
                 }}
               />
             </div>
@@ -719,6 +735,7 @@ function ExtraBadge() {
 }
 
 function LessonsSection({
+  groupId,
   views,
   today,
   pending,
@@ -726,6 +743,7 @@ function LessonsSection({
   isDesktop,
   onAction,
 }: {
+  groupId: string
   views: LessonView[]
   today: string
   pending: boolean
@@ -770,7 +788,7 @@ function LessonsSection({
                     )}
                   >
                     <LessonStatus v={v} />
-                    {!archived && <LessonActions v={v} onAction={onAction} />}
+                    {!archived && <LessonActions groupId={groupId} v={v} onAction={onAction} />}
                   </div>
                 </li>
               ))}
@@ -783,9 +801,11 @@ function LessonsSection({
 }
 
 function LessonActions({
+  groupId,
   v,
   onAction,
 }: {
+  groupId: string
   v: LessonView
   onAction: (action: 'cancel' | 'substitute' | 'extra', lessonId: string) => void
 }) {
@@ -797,6 +817,7 @@ function LessonActions({
         <Link
           to="/lessons/$lessonId"
           params={{ lessonId: v.id }}
+          search={fromAdminGroup(groupId, 'lessons')}
           className={cn(btn, 'inline-flex items-center text-ink')}
           aria-label={`Отметки: ${v.when}`}
         >
@@ -808,6 +829,7 @@ function LessonActions({
         <Link
           to="/lessons/$lessonId"
           params={{ lessonId: v.id }}
+          search={fromAdminGroup(groupId, 'lessons')}
           className={cn(btn, 'inline-flex items-center text-ink')}
           aria-label={`Ученики: ${v.when}`}
         >

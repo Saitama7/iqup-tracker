@@ -1,4 +1,11 @@
 import { Calendar, CreditCard, Menu, User, Users, type LucideIcon } from 'lucide-react'
+import {
+  lessonSource,
+  SOURCE_LABEL,
+  type GroupTab,
+  type LessonSearch,
+  type LessonSource,
+} from '@/features/lessons/return-to'
 import type { Role } from '@/lib/roles'
 
 // One user may hold several roles (Каныкей = admin + teacher, 05-decisions З1).
@@ -134,27 +141,25 @@ export function isPushedScreen(pathname: string): boolean {
   )
 }
 
-export type BackTarget =
+/** Where «назад» leads: a list, a group page with its tab, a lesson's source (#57, #72, #76, #89). */
+export type BackTarget = { label: string } & (
   | {
       to: AppPath
-      /** Parent screen name under the back chevron: «‹ Ученики». */
-      label: string
-      /** Search of the parent: «Мой месяц» with its month and group filter (#72). */
-      search?: { month?: string; group?: string }
+      /** Search of the parent: «Мой месяц» with its month and group, А2 with its week (#72, #89). */
+      search?: Record<string, string | undefined>
     }
   | {
-      /** The teacher's group a lesson was opened from (#76). */
-      to: '/groups/$groupId'
-      label: string
+      to: '/groups/$groupId' | '/admin/groups/$groupId'
       params: { groupId: string }
+      search?: { tab?: GroupTab }
     }
+)
 
-/** Validated search params of the current screen that point back to a list (lessons, #72). */
-export interface BackSearch {
-  from?: 'my-month' | 'group'
-  month?: string
-  group?: string
-}
+/** Validated search params of the current screen that point back to its source (lessons). */
+export type BackSearch = LessonSearch
+
+// Sources of the teacher's own screens: an admin-only view has no «Мой месяц» / «Сегодня» of a teacher.
+const TEACHER_SOURCES: ReadonlySet<LessonSource> = new Set(['my-month', 'group', 'today'])
 
 /** Home of the view with its tab / menu label («Сегодня», «Расчёт ЗП»). */
 function homeTarget(view: View): BackTarget {
@@ -164,10 +169,28 @@ function homeTarget(view: View): BackTarget {
   return { to, label: label ?? 'Назад' }
 }
 
+/** The screen a lesson was opened from (#89), null — no source or not of this view. */
+function lessonBack(view: View | null, search: BackSearch): BackTarget | null {
+  const source = lessonSource(search)
+  if (!source || !search.from) return null
+  if (TEACHER_SOURCES.has(search.from) && view && view !== 'teacher') return null
+  const label = SOURCE_LABEL[search.from]
+  switch (source.to) {
+    case '/my-month':
+    case '/admin/schedule':
+      return { to: source.to, label, search: source.search }
+    case '/groups/$groupId':
+    case '/admin/groups/$groupId':
+      return { to: source.to, label, params: source.params, search: source.search }
+    default:
+      return { to: source.to, label }
+  }
+}
+
 /**
- * Parent of a screen for the phone back button (#57); null — a root (a tab or the view's home),
- * no back button. Used when the history has no page of the app to return to (direct link,
- * PWA icon).
+ * Parent of a screen for the back button (#57); null — a root (a tab or the view's home), no back
+ * button. Used when the history has no page of the app to return to (reload, direct link, PWA
+ * icon). A lesson goes to the screen it was opened from (#89), else «Сегодня» / the dashboard.
  */
 export function backTarget(
   pathname: string,
@@ -180,18 +203,10 @@ export function backTarget(
   if (/^\/admin\/groups\/[^/]+$/.test(path)) return { to: '/admin/groups', label: 'Группы' }
   if (/^\/groups\/[^/]+$/.test(path)) return { to: '/groups', label: 'Группы' }
   if (/^\/lessons\/[^/]+$/.test(path)) {
-    if (search.from === 'my-month' && (view === 'teacher' || !view)) {
-      const { month, group } = search
-      return {
-        to: '/my-month',
-        label: 'Мой месяц',
-        search: { ...(month && { month }), ...(group && { group }) },
-      }
-    }
-    if (search.from === 'group' && search.group && (view === 'teacher' || !view)) {
-      return { to: '/groups/$groupId', label: 'Группа', params: { groupId: search.group } }
-    }
-    return view === 'teacher' || !view ? { to: '/today', label: 'Сегодня' } : homeTarget(view)
+    return (
+      lessonBack(view, search) ??
+      (view === 'teacher' || !view ? { to: '/today', label: 'Сегодня' } : homeTarget(view))
+    )
   }
   return view ? homeTarget(view) : null
 }
