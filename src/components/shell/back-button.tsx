@@ -3,6 +3,7 @@ import { ChevronLeft } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
+import { parseLessonSearch } from '@/features/lessons/return-to'
 import { backTarget, type BackSearch, type BackTarget } from './nav'
 import { useView } from './use-view'
 
@@ -10,7 +11,8 @@ import { useView } from './use-view'
 export function useBackTarget(): BackTarget | null {
   const { view } = useView()
   const pathname = useLocation({ select: (l) => l.pathname })
-  const search = useLocation({ select: (l) => l.search as BackSearch })
+  // Same schema as the lesson route: a hand-edited ?from= / ?group= never builds a bad link (#76).
+  const search: BackSearch = parseLessonSearch(useLocation({ select: (l) => l.search }))
   return backTarget(pathname, view, search)
 }
 
@@ -54,8 +56,9 @@ export function BackButton({
 
   return (
     <Link
-      to={target.to}
-      search={target.search}
+      {...(target.to === '/groups/$groupId'
+        ? { to: target.to, params: target.params }
+        : { to: target.to, search: target.search })}
       onClick={onClick}
       aria-label={`Назад: ${target.label}`}
       className={cn(

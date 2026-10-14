@@ -317,7 +317,8 @@ test('мои группы и группа (У4 / У5 / УД3)', async ({ page },
     await page.getByRole('tab', { name: 'Занятия' }).click()
     await expect(page.getByRole('list', { name: 'Занятия группы' })).toContainText('8 окт')
     await page.getByRole('link', { name: 'Отметить сегодня' }).click()
-    await expect(page).toHaveURL(/\/lessons\/[0-9a-f-]{36}$/)
+    // #76: opened from the group page — confirming returns there
+    await expect(page).toHaveURL(/\/lessons\/[0-9a-f-]{36}\?from=group&group=[0-9a-f-]{36}$/)
   }
 })
 

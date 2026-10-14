@@ -163,7 +163,19 @@ describe('backTarget (#57)', () => {
       label: 'Мой месяц',
       search: {},
     })
-    expect(backTarget('/lessons/1f0c', 'teacher', { from: 'elsewhere' })).toEqual({
+    expect(backTarget('/lessons/1f0c', 'teacher', {})).toEqual({
+      to: '/today',
+      label: 'Сегодня',
+    })
+  })
+
+  it("a lesson opened from the teacher's group leads back to that group (#76)", () => {
+    expect(backTarget('/lessons/1f0c', 'teacher', { from: 'group', group: 'g1' })).toEqual({
+      to: '/groups/$groupId',
+      label: 'Группа',
+      params: { groupId: 'g1' },
+    })
+    expect(backTarget('/lessons/1f0c', 'teacher', { from: 'group' })).toEqual({
       to: '/today',
       label: 'Сегодня',
     })

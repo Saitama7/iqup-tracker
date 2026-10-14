@@ -160,3 +160,75 @@ test('«Назад» с занятия, открытого из «Мой мес�
   ).toHaveCount(1)
   await fresh.close()
 })
+
+test('>7 проведённых новее + старые неподтверждённые: видны, после подтверждения — фокус на следующем по дате (#76)', async ({
+  page,
+}, testInfo) => {
+  const desktop = testInfo.project.name === 'webkit-desktop'
+  // a group and days of its own per project; the whole month (no filter) has far more than 7
+  // held lessons newer than these two
+  const group = desktop ? GROUP_8A : GROUP_8B
+  const [older, newer] = desktop ? ['2026-09-02', '2026-09-03'] : ['2026-09-08', '2026-09-09']
+  const db = service()
+  const olderId = await extraLesson(db, group, older)
+  const newerId = await extraLesson(db, group, newer)
+  const confirmOf = (id: string) => page.locator(`main a[href^="/lessons/${id}"]`)
+
+  try {
+    await pinClock(page, '2026-10-08T14:24:00+06:00')
+    await login(page, GULZAT)
+    await page.goto('/my-month?month=2026-09')
+    // not behind «ещё N занятий»
+    await expect(confirmOf(olderId)).toBeVisible()
+    await expect(confirmOf(newerId)).toBeVisible()
+    if (desktop) await expect(page.getByTestId('kpi-unconfirmed')).toHaveText('2')
+
+    await confirmOf(olderId).click()
+    await expect(page).toHaveURL(new RegExp(`/lessons/${olderId}\\?from=my-month`))
+    await page.getByRole('button', { name: 'Все были' }).click()
+    await page.getByRole('button', { name: 'Подтвердить занятие' }).click()
+
+    await expect(page).toHaveURL(/\/my-month\?month=2026-09#unconfirmed$/)
+    await expect(confirmOf(olderId)).toHaveCount(0)
+    await expect(confirmOf(newerId)).toBeInViewport()
+    await expect(confirmOf(newerId)).toBeFocused()
+    await page.waitForTimeout(600)
+    await page.screenshot({
+      path: shot(testInfo, desktop ? 'r2-76-my-month-next-1280' : 'r2-76-my-month-next-390'),
+    })
+
+    // replace: system «назад» does not reopen the confirmed lesson
+    await page.goBack()
+    await expect(page).not.toHaveURL(new RegExp(`/lessons/${olderId}`))
+  } finally {
+    await removeLesson(db, group, older)
+    await removeLesson(db, group, newer)
+  }
+})
+
+test('Занятие, открытое со страницы группы, после подтверждения возвращает в группу (#76)', async ({
+  page,
+}, testInfo) => {
+  // «Занятия» tab of the group — the phone (У5); the desktop detail has no lesson list
+  test.skip(testInfo.project.name === 'webkit-desktop', 'вкладка «Занятия» — телефон')
+  const db = service()
+  const lessonId = await extraLesson(db, GROUP_8A, '2026-10-07')
+  try {
+    await pinClock(page, '2026-10-08T14:24:00+06:00')
+    await login(page, GULZAT)
+    await page.goto(`/groups/${GROUP_8A}`)
+    await page.getByRole('tab', { name: 'Занятия' }).click()
+    await page.locator(`main a[href^="/lessons/${lessonId}"]`).click()
+    await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}\\?from=group&group=${GROUP_8A}`))
+    await expect(page.getByRole('link', { name: 'Назад: Группа' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Все были' }).click()
+    await page.getByRole('button', { name: 'Подтвердить занятие' }).click()
+    await expect(page).toHaveURL(new RegExp(`/groups/${GROUP_8A}$`))
+
+    await page.goBack()
+    await expect(page).not.toHaveURL(new RegExp(`/lessons/${lessonId}`))
+  } finally {
+    await removeLesson(db, GROUP_8A, '2026-10-07')
+  }
+})

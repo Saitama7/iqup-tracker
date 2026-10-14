@@ -38,7 +38,7 @@ import {
 } from './attendance'
 import { clearDraft, loadDraft, saveDraft } from './draft'
 import { DesktopTrials, MobileTrials } from './lesson-trials'
-import { myMonthReturn, NEXT_UNCONFIRMED_ID, type LessonSearch } from './return-to'
+import { lessonReturn, type LessonSearch } from './return-to'
 import { studentsWord } from './parts'
 import {
   bishkekTime,
@@ -161,16 +161,14 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
     },
     // Back to the list only after the database said held (#41, И27); a refusal leaves the sheet
     // and the draft as they are, the toast says why. Opened from «Мой месяц» — the same month and
-    // group filter, scrolled to the next unconfirmed lesson (#72); else «Сегодня».
+    // group filter, scrolled to the next unconfirmed lesson (#72); from the group page — that
+    // group (#76); else «Сегодня». Replace: system «назад» never reopens the confirmed sheet.
     confirm: () => {
       mutation.mutate(
         { marks: marksPayload(roster, marks), copy },
         {
           onSuccess: () => {
-            const back = myMonthReturn(search)
-            void (back
-              ? navigate({ to: '/my-month', search: back, hash: NEXT_UNCONFIRMED_ID })
-              : navigate({ to: '/today' }))
+            void navigate({ ...lessonReturn(search), replace: true })
           },
         },
       )

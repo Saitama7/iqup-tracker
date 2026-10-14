@@ -10,6 +10,7 @@ import {
   monthEnd,
   filterMonthLessons,
   myMonthView,
+  nextUnconfirmed,
   payday,
   payrollCaption,
   payrollView,
@@ -17,6 +18,8 @@ import {
   pickMonth,
   ROUNDING_NOTE,
   shiftMonth,
+  visibleLessons,
+  type MonthLessonLine,
   type MyMonthGroup,
   type MyMonthLesson,
 } from './model'
@@ -315,6 +318,44 @@ describe('myMonthView', () => {
     )
     expect(v.lessons[0]).toMatchObject({ studentLessons: 2, noSubscription: 1, amount: 120 })
     expect(v.pay.noSubscription).toBe(1)
+  })
+})
+
+describe('УД4 lesson table (#76)', () => {
+  // newest first, as in myMonthView: 9 held lessons, then 2 old unconfirmed ones
+  const line = (id: string, state: MonthLessonLine['state']): MonthLessonLine => ({
+    id,
+    groupId: 'g',
+    when: id,
+    group: '8 класс А',
+    state,
+    marks: '',
+    studentLessons: 0,
+    amount: 0,
+    noSubscription: 0,
+    confirmed: null,
+  })
+  const held = Array.from({ length: 9 }, (_, i) => line(`h${String(i)}`, 'held'))
+  const lessons = [...held, line('u2', 'unconfirmed'), line('u1', 'unconfirmed')]
+
+  it('unconfirmed lessons are never behind «ещё N»', () => {
+    expect(visibleLessons(lessons, 7).map((l) => l.id)).toEqual([
+      'h0',
+      'h1',
+      'h2',
+      'h3',
+      'h4',
+      'h5',
+      'h6',
+      'u2',
+      'u1',
+    ])
+    expect(visibleLessons(lessons.slice(0, 5), 7)).toHaveLength(5)
+  })
+
+  it('the return scrolls to the oldest unconfirmed lesson left', () => {
+    expect(nextUnconfirmed(lessons.filter((l) => l.state === 'unconfirmed'))).toBe('u1')
+    expect(nextUnconfirmed([])).toBeNull()
   })
 })
 

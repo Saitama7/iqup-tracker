@@ -331,6 +331,22 @@ export function filterMonthLessons(
   }
 }
 
+/**
+ * Lessons of the УД4 table: the newest `limit`, plus every unconfirmed one wherever it falls —
+ * an unconfirmed lesson is never hidden behind «ещё N занятий» (#76). Order kept, newest first.
+ */
+export function visibleLessons(lessons: MonthLessonLine[], limit: number): MonthLessonLine[] {
+  return lessons.filter((l, i) => i < limit || l.state === 'unconfirmed')
+}
+
+/**
+ * The unconfirmed lesson the return from a lesson scrolls to: the oldest one left — the month is
+ * entered in order (#76). `unconfirmed` is newest first.
+ */
+export function nextUnconfirmed(unconfirmed: MonthLessonLine[]): string | null {
+  return unconfirmed.at(-1)?.id ?? null
+}
+
 /** The one full lesson price of the month, null when there are several (or none). */
 function singlePrice(source: MyMonthSource, pay: MonthPay, asOf: string): number | null {
   const paid = pay.lessons.flatMap((p) =>
