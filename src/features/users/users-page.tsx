@@ -23,6 +23,7 @@ import {
   createUser,
   createUserForm,
   fixRateForm,
+  isTimeoutError,
   rateForm,
   resetPassword,
   setActive,
@@ -532,6 +533,7 @@ function NewUserForm({ onCreated }: { onCreated: (p: IssuedPassword) => void }) 
       setError(null)
     },
     onError: (e) => {
+      if (isTimeoutError(e)) void queryClient.invalidateQueries({ queryKey: usersQuery().queryKey })
       setError(e.message)
     },
   })
@@ -866,6 +868,7 @@ function useRateMutation(success: string) {
       toast.success(success)
     },
     onError: (e) => {
+      if (isTimeoutError(e)) void invalidate()
       setError(e.message)
     },
   })

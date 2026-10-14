@@ -141,10 +141,14 @@ const errorBodySchema = z.object({ error: z.string(), message: z.string().option
 /** A cold or stuck function must not spin the form forever (#66). */
 export const USERS_FUNCTION_TIMEOUT_MS = 20_000
 
+const isAbortName = (name: unknown) => name === 'AbortError' || name === 'TimeoutError'
+
+/** Abort during fetch → FunctionsFetchError; abort while reading the body → bare DOMException (#68). */
 function isTimeout(e: unknown): boolean {
-  if (!(e instanceof FunctionsFetchError)) return false
-  const name = (e.context as { name?: unknown } | null)?.name
-  return name === 'AbortError' || name === 'TimeoutError'
+  if (e instanceof FunctionsFetchError) {
+    return isAbortName((e.context as { name?: unknown } | null)?.name)
+  }
+  return e instanceof DOMException && isAbortName(e.name)
 }
 
 async function callUsersFunction<T>(body: Record<string, unknown>): Promise<T> {
@@ -168,11 +172,35 @@ async function callUsersFunction<T>(body: Record<string, unknown>): Promise<T> {
   return res.data as T
 }
 
+export const CREATE_TIMEOUT_MESSAGE =
+  'Сервер не ответил. Проверьте список — пользователь мог быть создан; если он есть, выдайте пароль через «Выдать новый временный пароль»'
+export const NEW_RATE_TIMEOUT_MESSAGE =
+  'Сервер не ответил. Проверьте историю процента — ставка могла сохраниться; если её нет, повторите'
+
+/**
+ * The timeout aborts only the client: the function may still finish, and a blind retry
+ * then fails with 409 (#68). Callers refetch the list on `code === 'timeout'`.
+ */
+async function withTimeoutHint<T>(call: Promise<T>, message: string): Promise<T> {
+  try {
+    return await call
+  } catch (e) {
+    if (e instanceof UsersApiError && e.code === 'timeout')
+      throw new UsersApiError(message, 'timeout')
+    throw e
+  }
+}
+
+export const isTimeoutError = (e: unknown) => e instanceof UsersApiError && e.code === 'timeout'
+
 export const createUser = (input: CreateUserInput) =>
-  callUsersFunction<{ user_id: string; teacher_id: string | null; phone: string }>({
-    action: 'create',
-    ...input,
-  })
+  withTimeoutHint(
+    callUsersFunction<{ user_id: string; teacher_id: string | null; phone: string }>({
+      action: 'create',
+      ...input,
+    }),
+    CREATE_TIMEOUT_MESSAGE,
+  )
 
 /** fix — correct the rate starting at validFrom in place; new — add a rate from validFrom. */
 export const updateRate = (input: {
@@ -180,14 +208,16 @@ export const updateRate = (input: {
   teacherId: string
   percent: number
   validFrom: string
-}) =>
-  callUsersFunction<{ teacher_id: string }>({
+}) => {
+  const call = callUsersFunction<{ teacher_id: string }>({
     action: 'update_rate',
     mode: input.mode,
     teacher_id: input.teacherId,
     percent: input.percent,
     valid_from: input.validFrom,
   })
+  return input.mode === 'new' ? withTimeoutHint(call, NEW_RATE_TIMEOUT_MESSAGE) : call
+}
 
 export const updateRoles = (input: { userId: string; roles: z.infer<typeof roleSchema>[] }) =>
   callUsersFunction<{ user_id: string }>({
