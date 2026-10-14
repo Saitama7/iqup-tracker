@@ -1,4 +1,4 @@
--- #82 · продлёнка по часам (0023): hours of a month by the student's plan (holidays, cancelled days),
+-- #82 · продлёнка по часам (0025): hours of a month by the student's plan (holidays, cancelled days),
 -- the monthly invoice (hours × hour price, В5 discount), charging hours present / burned, freeze →
 -- credit of the next invoice, teacher's pay by hours, plan change from a date (re-prices marks, not in
 -- a closed period), roster without 0 h days, rights (RLS / RPC), default plan + prod backfill, seed

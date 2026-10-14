@@ -365,6 +365,11 @@ function Presets({ view, today }: { view: StudentView; today: string }) {
       studentId={view.student.id}
       studentName={view.student.full_name}
       groupIds={groupIds}
+      afterschool={view.active.flatMap((e) =>
+        e.group?.group_type === 'afterschool'
+          ? [{ enrollmentId: e.enrollmentId, groupId: e.group.id }]
+          : [],
+      )}
       today={today}
     />
   )

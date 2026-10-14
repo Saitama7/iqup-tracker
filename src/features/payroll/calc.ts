@@ -67,7 +67,7 @@ export const subscriptionLessonPrice = (s: PaySubscription) => s.price_full / s.
  * Exact pay for one consumed mark: the price of the subscription it was written off — not the
  * tariff of the lesson date, so a tariff changed after the purchase never reprices it (К6) —
  * × the teacher's percent on the lesson date. No subscription or no percent → 0.
- * An hour subscription (#82): price_full × hours / hours_total × percent (И58).
+ * An hour subscription (#82): price_full × hours / hours_total × percent (И62).
  */
 export function markPay(
   subscription: PaySubscription | null,

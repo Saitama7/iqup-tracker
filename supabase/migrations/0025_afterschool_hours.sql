@@ -1,6 +1,6 @@
--- 0023 — Продлёнка по часам (issue #82): гибкий график ученика по дням недели, помесячный абонемент
+-- 0025 — Продлёнка по часам (issue #82): гибкий график ученика по дням недели, помесячный абонемент
 -- в часах (счёт = часы месяца × цена часа, скидки В5), списание часов по графику, ЗП учителя по часам.
--- Docs: 05-decisions И54–И58, 01-domain-model §3, §5.2, §6.
+-- Docs: 05-decisions И58–И63, 01-domain-model §3, §5.2, §6.
 --
 -- Production-safe and idempotent (prod has real data, 14.10):
 --   * only additive DDL (new nullable columns, new table, new functions); nothing is deleted;
@@ -8,8 +8,9 @@
 --     hour math applies only to subscriptions with hours_total (created by this migration's RPCs);
 --   * v_payroll_preview: lesson subscriptions are priced by the very same expression as 0020/0022, so
 --     the seed sums (Гульзат 38 160, all 47 546) do not move;
---   * every create or replace starts from the latest body (0020 confirm_lesson, 0021
---     assert_correction_marks, 0022 v_payroll_preview / audit_search_text …) — requires 0022 (#83);
+--   * every create or replace starts from the latest body (0023 confirm_lesson / audit_search_text /
+--     attendance_presets_guard, 0021 assert_correction_marks, 0022 v_payroll_preview) — requires
+--     0022 (#83) and 0023 (#84);
 --   * tariffs are not updated (tariffs_guard forbids it): the hour price falls back to
 --     package_price / (lessons × duration h) — 7 400 / 60 h = 123 сом/ч — until А9 plans a version
 --     with hour_price;
@@ -22,9 +23,9 @@
 alter table public.tariffs add column if not exists hour_price integer check (hour_price > 0);
 
 comment on column public.tariffs.hour_price is
-  'After-school price per hour (сом), И54. Null — package_price / (lessons_in_package × duration h).';
+  'After-school price per hour (сом), И58. Null — package_price / (lessons_in_package × duration h).';
 
--- Price of one after-school hour of a tariff version (И54).
+-- Price of one after-school hour of a tariff version (И58).
 create or replace function public.tariff_hour_price(p_tariff_id uuid)
 returns integer
 language sql
@@ -70,7 +71,7 @@ create table if not exists public.afterschool_plans (
 );
 
 comment on table public.afterschool_plans is
-  'After-school plan of an enrollment (И55): hours[ISO weekday], in effect from valid_from until the next version.';
+  'After-school plan of an enrollment (И59): hours[ISO weekday], in effect from valid_from until the next version.';
 
 alter table public.afterschool_plans enable row level security;
 
@@ -122,7 +123,7 @@ as $$
   limit 1;
 $$;
 
--- Default plan (И55, prod backfill): the group's weekdays on the date × the tariff duration (3 h);
+-- Default plan (И59, prod backfill): the group's weekdays on the date × the tariff duration (3 h);
 -- no schedule — Mon–Fri.
 create or replace function public.afterschool_default_plan(p_group_id uuid, p_date date)
 returns numeric[]
@@ -200,16 +201,16 @@ create unique index if not exists subscriptions_enrollment_month_key
   where period_month is not null and status <> 'refunded';
 
 comment on column public.subscriptions.hours_total is
-  'After-school monthly subscription (И56): hours billed for period_month (planned − credit_hours). Null — a lesson package.';
+  'After-school monthly subscription (И60): hours billed for period_month (planned − credit_hours). Null — a lesson package.';
 comment on column public.subscriptions.credit_hours is
-  'Frozen hours of earlier months taken off this invoice (И57).';
+  'Frozen hours of earlier months taken off this invoice (И61).';
 
 -- ─── 4. Attendance: hours charged by the plan ───────────────────────────────
 
 alter table public.attendance add column if not exists hours numeric(3, 1);
 
 comment on column public.attendance.hours is
-  'After-school: planned hours of the student that day (И56), set by attendance_hours from the plan; null — not after-school / no plan.';
+  'After-school: planned hours of the student that day (И60), set by attendance_hours from the plan; null — not after-school / no plan.';
 
 -- Always from the plan (insert and any update): neither a teacher nor a client can set it.
 create or replace function public.attendance_hours()
@@ -235,7 +236,7 @@ revoke execute on function public.attendance_hours() from public, anon, authenti
 
 -- ─── 5. Month quote, credit ─────────────────────────────────────────────────
 
--- Hours of an enrollment in a month (И56): every non-cancelled lesson day of the group in the month
+-- Hours of an enrollment in a month (И60): every non-cancelled lesson day of the group in the month
 -- within the enrollment (holidays have no lessons), × the plan hours of that weekday on that day.
 -- One row per (weekday, hours): «ПН 2 ч × 4». Security invoker — the caller's RLS.
 create or replace function public.afterschool_month_quote(p_enrollment_id uuid, p_month date)
@@ -274,7 +275,7 @@ as $$
 $$;
 
 -- Frozen hours (absent_frozen on hour subscriptions of the enrollment) not yet taken off an invoice
--- (И57). Security invoker.
+-- (И61). Security invoker.
 create or replace function public.afterschool_credit_hours(p_enrollment_id uuid)
 returns numeric
 language sql
@@ -484,7 +485,7 @@ $$;
 
 -- «Изменить с даты» (А6): a plan version from p_valid_from (same date — replaced). Marks from that
 -- date are re-priced by the new plan (attendance_hours); not in a closed period (invariant 2).
--- Invoices already issued stay as they are (И58).
+-- Invoices already issued stay as they are (И60).
 create or replace function public.set_afterschool_plan(
   p_enrollment_id uuid,
   p_valid_from date,
@@ -813,8 +814,8 @@ $$;
 
 -- ─── 11. confirm_lesson: a student with 0 h that day is not on the roster ───
 
--- Same as 0020; after-school students whose plan has no hours on the lesson's weekday are not
--- expected (И55) — no mark, nothing charged.
+-- Same as 0023 (#84: the admin's presets fill unmarked students); after-school students whose plan
+-- has no hours on the lesson's weekday are not expected (И59) — no mark, no preset, nothing charged.
 create or replace function public.confirm_lesson(p_lesson_id uuid, p_marks jsonb)
 returns timestamptz
 language plpgsql
@@ -823,6 +824,7 @@ set search_path = ''
 as $$
 declare
   v_lesson public.lessons%rowtype;
+  v_marks jsonb;
   v_mark jsonb;
   v_student uuid;
   v_status public.attendance_status;
@@ -886,6 +888,19 @@ begin
     v_seen := v_seen || v_student;
   end loop;
 
+  -- #84: the admin's «Заморозка» set in advance for whoever is left unmarked.
+  v_marks := p_marks || coalesce((
+    select jsonb_agg(jsonb_build_object('student_id', p.student_id, 'status', p.status))
+    from public.attendance_presets p
+    where p.lesson_id = p_lesson_id
+      and p.student_id = any (v_roster)
+      and p.student_id <> all (v_seen)
+  ), '[]'::jsonb);
+  v_seen := v_seen || array(
+    select p.student_id from public.attendance_presets p
+    where p.lesson_id = p_lesson_id and p.student_id = any (v_roster) and p.student_id <> all (v_seen)
+  );
+
   select r into v_missing from unnest(v_roster) r where r <> all (v_seen) limit 1;
   if v_missing is not null then
     raise exception 'student % is not marked', v_missing using errcode = 'check_violation';
@@ -896,7 +911,7 @@ begin
   delete from public.attendance a
   where a.lesson_id = p_lesson_id and a.student_id <> all (v_seen);
 
-  for v_mark in select * from jsonb_array_elements(p_marks) loop
+  for v_mark in select * from jsonb_array_elements(v_marks) loop
     v_student := (v_mark ->> 'student_id')::uuid;
     v_status := (v_mark ->> 'status')::public.attendance_status;
     insert into public.attendance (lesson_id, student_id, subscription_id, status)
@@ -910,6 +925,127 @@ begin
 
   perform set_config('iqup.audit_reason', '', true);
   return v_confirmed_at;
+end;
+$$;
+
+-- ─── 11b. Freeze in advance (#84, 0023): the same roster rule ──────────────
+
+-- Same as 0023; a preset for an after-school student also needs hours that day by the plan
+-- (confirm_lesson would ignore it, and the day is not charged anyway). A plan changed later to 0 h
+-- leaves the preset in place — confirm_lesson skips the student, nothing is written.
+create or replace function public.attendance_presets_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_lesson public.lessons%rowtype;
+  v_sub uuid;
+  v_limit integer;
+  v_used integer;
+begin
+  -- a deleted lesson / student takes its presets along: the FK cascade runs after the parent row
+  -- is gone, so a missing parent means a cascade — before the role check (the admin deletes a
+  -- student, the service role a lesson)
+  if tg_op = 'DELETE' and (
+    not exists (select 1 from public.lessons l where l.id = old.lesson_id)
+    or not exists (select 1 from public.students s where s.id = old.student_id)
+  ) then
+    return old;
+  end if;
+
+  if auth.uid() is not null and not public.is_admin() then
+    raise exception 'only an admin may set a freeze in advance' using errcode = 'insufficient_privilege';
+  end if;
+
+  -- «Снять»: until the lesson is held (a held lesson keeps its history), a cancelled one too;
+  -- never in a closed period (invariant 2)
+  if tg_op = 'DELETE' then
+    select * into v_lesson from public.lessons l where l.id = old.lesson_id;
+    if v_lesson.is_locked then
+      raise exception 'lesson % is in a closed period', old.lesson_id using errcode = 'check_violation';
+    end if;
+    if v_lesson.status = 'held' then
+      raise exception 'lesson % is held — the preset stays', old.lesson_id
+        using errcode = 'check_violation';
+    end if;
+    return old;
+  end if;
+
+  select * into v_lesson from public.lessons l where l.id = new.lesson_id;
+  if not found then
+    raise exception 'lesson % not found', new.lesson_id using errcode = 'foreign_key_violation';
+  end if;
+  if v_lesson.is_locked then
+    raise exception 'lesson % is in a closed period', new.lesson_id using errcode = 'check_violation';
+  end if;
+  if v_lesson.status <> 'planned' then
+    raise exception 'lesson % is not planned', new.lesson_id using errcode = 'check_violation';
+  end if;
+  if v_lesson.lesson_date < public.bishkek_today() then
+    raise exception 'lesson % is in the past', new.lesson_id using errcode = 'check_violation';
+  end if;
+  -- after the planned start it is not «in advance» anymore — the teacher marks (И56)
+  if now() >= (v_lesson.lesson_date + v_lesson.planned_start) at time zone 'Asia/Bishkek' then
+    raise exception 'lesson % has already started', new.lesson_id using errcode = 'check_violation';
+  end if;
+  if tg_op = 'UPDATE' and (new.lesson_id <> old.lesson_id or new.student_id <> old.student_id) then
+    raise exception 'a preset cannot move to another lesson or student' using errcode = 'check_violation';
+  end if;
+  if not exists (
+    select 1 from public.enrollments e
+    where e.group_id = v_lesson.group_id and e.student_id = new.student_id
+      and e.start_date <= v_lesson.lesson_date
+      and (e.end_date >= v_lesson.lesson_date or (e.end_date is null and e.status = 'active'))
+  ) then
+    raise exception 'student % is not enrolled in the group on %', new.student_id, v_lesson.lesson_date
+      using errcode = 'check_violation';
+  end if;
+  -- #82: an after-school student with 0 h by the plan that day is not on the roster (confirm_lesson)
+  -- — nothing to freeze (И63)
+  if coalesce(public.afterschool_day_hours(v_lesson.group_id, new.student_id, v_lesson.lesson_date), 1) = 0 then
+    raise exception 'student % has no after-school hours on %', new.student_id, v_lesson.lesson_date
+      using errcode = 'check_violation';
+  end if;
+
+  -- В2: frozen marks of the subscription this lesson goes to + presets of other planned lessons that
+  -- go to the same one. Same message as enforce_freeze_limit (0001) — the client maps it.
+  v_sub := public.attendance_subscription(new.lesson_id, new.student_id);
+  if v_sub is not null then
+    select t.freeze_limit into v_limit
+    from public.subscriptions s
+    join public.tariffs t on t.id = s.tariff_id
+    where s.id = v_sub
+    for update of s;
+
+    select
+      (select count(*) from public.attendance a
+       where a.subscription_id = v_sub and a.status = 'absent_frozen' and a.lesson_id <> new.lesson_id)
+      + (select count(*) from public.attendance_presets p
+         join public.lessons l on l.id = p.lesson_id
+         where p.student_id = new.student_id
+           and p.lesson_id <> new.lesson_id
+           and l.status = 'planned'
+           and public.attendance_subscription(p.lesson_id, p.student_id) = v_sub)
+    into v_used;
+
+    if v_used >= v_limit then
+      raise exception 'freeze limit (%) exceeded for subscription %', v_limit, v_sub
+        using errcode = 'check_violation', hint = 'mark as absent_burned';
+    end if;
+  end if;
+
+  new.status := 'absent_frozen';
+  new.comment := nullif(btrim(new.comment), '');
+  if tg_op = 'INSERT' then
+    new.created_by := auth.uid();
+    new.created_at := now();
+  else
+    new.created_by := old.created_by;
+    new.created_at := old.created_at;
+  end if;
+  return new;
 end;
 $$;
 
@@ -974,7 +1110,7 @@ $$;
 -- ─── 12. v_payroll_preview: hour subscriptions priced by hours ──────────────
 
 -- Same as 0022 (#83: advances, to_pay; a teacher with advances only — a row with zeros). A mark on an
--- hour subscription pays price_full × hours / hours_total × percent (И58: the hour price of the
+-- hour subscription pays price_full × hours / hours_total × percent (И62: the hour price of the
 -- subscription, not of the tariff on the lesson date — К6); lesson subscriptions — the very same
 -- expression as before. student_hours — Σ hours of those marks, appended last (create or replace
 -- keeps the column order). Same rules as calcMonth() + toPay() in src/features/payroll/calc.ts —
@@ -1203,7 +1339,7 @@ grant select on public.v_student_balance to authenticated;
 
 -- ─── 14. Journal search: plans ──────────────────────────────────────────────
 
--- Same as 0022 (0021 + payroll_adjustments) plus afterschool_plans (found by the student and the group).
+-- Same as 0023 (0022 + attendance_presets) plus afterschool_plans (found by the student and the group).
 create or replace function public.audit_search_text(p_entity text, p_entity_id uuid, p_row jsonb)
 returns text
 language plpgsql
@@ -1219,7 +1355,7 @@ declare
   v_lead text;
 begin
   case p_entity
-    when 'attendance' then
+    when 'attendance', 'attendance_presets' then
       v_student := (p_row ->> 'student_id')::uuid;
       select l.group_id into v_group from public.lessons l where l.id = (p_row ->> 'lesson_id')::uuid;
     when 'attendance_correction_requests' then

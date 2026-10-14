@@ -1,5 +1,5 @@
 // Продлёнка по часам (#82) — data for А6 (plan, invoices) and the enrollment form. Writes go through
-// the RPCs of 0023 (admin only, one transaction each): set_afterschool_plan,
+// the RPCs of 0025 (admin only, one transaction each): set_afterschool_plan,
 // issue_afterschool_invoice; enroll_student takes the plan (p_plan).
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
@@ -43,7 +43,7 @@ export interface EnrollmentAfterschool {
   months: [MonthBill, MonthBill]
   /** Live invoices of earlier months (oldest first). */
   earlier: Invoice[]
-  /** Frozen hours not yet taken off an invoice (И57). */
+  /** Frozen hours not yet taken off an invoice (И61). */
   credit: number
 }
 
@@ -95,6 +95,27 @@ export const enrollmentAfterschoolQuery = (enrollmentId: string, month: string) 
     },
   })
 
+/** Plan versions of the after-school enrollments, by enrollment id — «Заморозка заранее» skips 0 h days. */
+export const enrollmentPlansQuery = (enrollmentIds: readonly string[]) =>
+  queryOptions({
+    queryKey: [AFTERSCHOOL_KEY, 'plans', [...enrollmentIds].sort().join(',')],
+    queryFn: async (): Promise<Map<string, PlanVersion[]>> => {
+      const byEnrollment = new Map<string, PlanVersion[]>()
+      if (enrollmentIds.length === 0) return byEnrollment
+      const { data, error } = await supabase
+        .from('afterschool_plans')
+        .select('enrollment_id, valid_from, hours')
+        .in('enrollment_id', [...enrollmentIds])
+      if (error) throw error
+      for (const r of z.array(planSchema.extend({ enrollment_id: z.uuid() })).parse(data)) {
+        const list = byEnrollment.get(r.enrollment_id) ?? []
+        list.push({ valid_from: r.valid_from, hours: r.hours })
+        byEnrollment.set(r.enrollment_id, list)
+      }
+      return byEnrollment
+    },
+  })
+
 /** Non-cancelled lesson dates of a group in [from, before) — the enrollment form's «≈ 21 ч в октябре». */
 export const groupLessonDatesQuery = (groupId: string, from: string, before: string) =>
   queryOptions({
@@ -124,7 +145,7 @@ export class AfterschoolError extends Error {
   }
 }
 
-/** Postgres error of the 0023 RPCs → admin-facing text. */
+/** Postgres error of the 0025 RPCs → admin-facing text. */
 export function afterschoolErrorMessage(error: { code?: string; message?: string }): string {
   const m = error.message ?? ''
   if (error.code === '42501') return 'Это делает администратор'

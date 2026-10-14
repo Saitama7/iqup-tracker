@@ -1,5 +1,5 @@
 -- #82 × #74 · исправление отметок продлёнки в часах (0021 correct_attendance / apply_correction_request
--- on 0023): a fixed mark keeps the plan hours of the day, «Был → Заморозка» gives the hours back to the
+-- on 0025): a fixed mark keeps the plan hours of the day, «Был → Заморозка» gives the hours back to the
 -- invoice and to the credit, the teacher's pay by hours follows, the freeze limit holds per invoice, a
 -- teacher's request applies the same way, a student with 0 h that day cannot be added, a credit already
 -- taken off an invoice is not billed twice. Self-contained fixtures in 2003, rolled back.

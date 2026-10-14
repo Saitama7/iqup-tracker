@@ -18,6 +18,7 @@ const balance = (freezes: number): Balance => ({
   freezes,
   freezeLimit: 2,
   lessonPrice: 300,
+  unit: 'lesson',
 })
 
 describe('applyPresets', () => {
@@ -89,6 +90,12 @@ describe('presets copy', () => {
     expect(presetErrorReason({ code: '23514', message: 'lesson x is in the past' })).toBe(
       'занятие уже прошло',
     )
+    expect(
+      presetErrorReason({
+        code: '23514',
+        message: 'student x has no after-school hours on 2026-10-15',
+      }),
+    ).toBe('по графику продлёнки у ученика в этот день 0 ч')
     expect(presetErrorReason({ code: '23514', message: 'lesson x has already started' })).toBe(
       'занятие уже началось — это не «заранее»',
     )

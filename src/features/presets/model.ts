@@ -83,6 +83,7 @@ export function presetErrorReason(error: { code?: string; message?: string }): s
   if (m.includes('is held')) return 'занятие уже проведено'
   if (m.includes('not planned')) return 'занятие уже проведено или отменено'
   if (m.includes('not enrolled')) return 'ученик не в группе на дату занятия'
+  if (m.includes('no after-school hours')) return 'по графику продлёнки у ученика в этот день 0 ч'
   if (m.includes('500')) return 'комментарий длиннее 500 символов'
   return 'ошибка сервера — попробуйте ещё раз'
 }

@@ -486,6 +486,7 @@ describe('payrollView (Б1)', () => {
           hours: 1,
           studentLessons: 1,
           noSubscription: 0,
+          studentHours: 0,
           amount,
           advances,
           toPay: amount - advances,
