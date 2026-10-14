@@ -34,7 +34,7 @@ create index if not exists attendance_presets_student_idx on public.attendance_p
 
 -- Insert / update: an admin (or the service role), a planned lesson not started yet outside a closed
 -- period, the student enrolled on its date, the freeze limit of the subscription (a soft check — the
--- hard one is enforce_freeze_limit when confirm_lesson writes the marks, И62). Author and time — from
+-- hard one is enforce_freeze_limit when confirm_lesson writes the marks, И56). Author and time — from
 -- the database. Delete: until the lesson is held (a cancelled one too), outside a closed period;
 -- a deleted lesson or student takes its presets along.
 create or replace function public.attendance_presets_guard()
@@ -90,7 +90,7 @@ begin
   if v_lesson.lesson_date < public.bishkek_today() then
     raise exception 'lesson % is in the past', new.lesson_id using errcode = 'check_violation';
   end if;
-  -- after the planned start it is not «in advance» anymore — the teacher marks (И62)
+  -- after the planned start it is not «in advance» anymore — the teacher marks (И56)
   if now() >= (v_lesson.lesson_date + v_lesson.planned_start) at time zone 'Asia/Bishkek' then
     raise exception 'lesson % has already started', new.lesson_id using errcode = 'check_violation';
   end if;
@@ -339,7 +339,7 @@ grant execute on function public.confirm_lesson(uuid, jsonb) to authenticated;
 
 -- ─── 3. journal search: presets by student and group ────────────────────────
 
--- Same as 0021 plus attendance_presets.
+-- Same as 0022 plus attendance_presets.
 create or replace function public.audit_search_text(p_entity text, p_entity_id uuid, p_row jsonb)
 returns text
 language plpgsql
@@ -372,7 +372,7 @@ begin
     when 'payments' then
       select s.enrollment_id into v_enrollment
       from public.subscriptions s where s.id = (p_row ->> 'subscription_id')::uuid;
-    when 'teacher_rates' then
+    when 'teacher_rates', 'payroll_adjustments' then
       v_teacher := (p_row ->> 'teacher_id')::uuid;
     when 'trials' then
       v_student := (p_row ->> 'student_id')::uuid;

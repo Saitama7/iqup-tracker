@@ -1,6 +1,6 @@
 -- Issue #84: the admin sets «Заморозка» before the lesson (attendance_presets), the lesson's teacher
 -- sees it, confirm_lesson takes it as the default mark, the freeze limit counts it; «Не был» goes into
--- the payroll, «Заморозка» does not (0099).
+-- the payroll, «Заморозка» does not (0023).
 -- Self-contained fixtures in September 2099 (lessons must be today or later), rolled back.
 begin;
 select plan(45);

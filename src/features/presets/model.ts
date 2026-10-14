@@ -1,5 +1,5 @@
 // #84 · «Предупредил о пропуске»: the admin's «Заморозка» set before the lesson (attendance_presets,
-// 0099). Not a mark — the teacher sees it prefilled and may change it; confirm_lesson takes it as the
+// 0023). Not a mark — the teacher sees it prefilled and may change it; confirm_lesson takes it as the
 // default. Pure: callers pass rows they already have.
 import { addDays, dayShort } from '@/features/groups/model'
 import { freezeBlocked, type Mark, type RosterRow } from '@/features/lessons/attendance'
@@ -49,7 +49,7 @@ export const presetCaption = (p: PresetInfo) =>
 
 /**
  * A preset can be set: a planned lesson outside a closed period that has not started yet — after
- * the start it is not «in advance» anymore, the teacher marks (И62).
+ * the start it is not «in advance» anymore, the teacher marks (И56).
  */
 export function presetEditable(
   lesson: { status: 'planned' | 'held' | 'cancelled'; is_locked: boolean } & Pick<
@@ -61,7 +61,7 @@ export function presetEditable(
   return lesson.status === 'planned' && !lesson.is_locked && now < lessonStartMs(lesson)
 }
 
-/** A preset can be removed until the lesson is held — a cancelled lesson's too (И62). */
+/** A preset can be removed until the lesson is held — a cancelled lesson's too (И56). */
 export function presetClearable(lesson: {
   status: 'planned' | 'held' | 'cancelled'
   is_locked: boolean
@@ -69,7 +69,7 @@ export function presetClearable(lesson: {
   return lesson.status !== 'held' && !lesson.is_locked
 }
 
-/** set_ / clear_attendance_preset error → why (0099). Lower case — it follows a colon. */
+/** set_ / clear_attendance_preset error → why (0023). Lower case — it follows a colon. */
 export function presetErrorReason(error: { code?: string; message?: string }): string {
   const m = error.message ?? ''
   if (!error.code) return 'нет связи с сервером — проверьте интернет'

@@ -116,9 +116,9 @@ interface SheetModel {
   confirm: () => void
   /** The admin's «Заморозка» set before the lesson, by student (#84). */
   presets: ReadonlyMap<string, PresetInfo>
-  /** The admin may set a preset: a planned lesson not started yet (#84, И62). */
+  /** The admin may set a preset: a planned lesson not started yet (#84, И56). */
   canSetPreset: boolean
-  /** The admin may remove a preset: until the lesson is held, a cancelled one too (И62). */
+  /** The admin may remove a preset: until the lesson is held, a cancelled one too (И56). */
   canClearPreset: boolean
   presetBusy: boolean
   openPreset: (row: RosterRow) => void

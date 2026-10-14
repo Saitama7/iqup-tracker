@@ -58,7 +58,7 @@ describe('presets copy', () => {
     expect(presetCaption({ comment: null })).toBe('Админ: предупредил')
   })
 
-  it('editable: planned, open, not started yet (И62)', () => {
+  it('editable: planned, open, not started yet (И56)', () => {
     const l = {
       status: 'planned' as const,
       lesson_date: '2026-10-15',

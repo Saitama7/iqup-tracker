@@ -28,7 +28,7 @@ export function StudentPresets({
   const [open, setOpen] = useState(false)
   const rows = presets.data ?? []
   const taken = new Set(rows.map((r) => r.lesson.id))
-  // a lesson that has started is not «in advance» anymore (И62)
+  // a lesson that has started is not «in advance» anymore (И56)
   const free = (lessons.data ?? []).filter((l) => !taken.has(l.id) && lessonStartMs(l) > now)
 
   return (

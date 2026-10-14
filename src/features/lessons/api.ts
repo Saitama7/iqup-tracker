@@ -239,7 +239,7 @@ export interface LessonSheet {
   enrollments: EnrollmentSource[]
   /** Marks saved on this lesson. */
   marks: Map<string, Mark>
-  /** The admin's «Заморозка» set before the lesson, by student (#84, 0099). */
+  /** The admin's «Заморозка» set before the lesson, by student (#84, 0023). */
   presets: Map<string, PresetInfo>
 }
 

@@ -1,4 +1,4 @@
-// #84 · attendance_presets (0099): staff read all, the lesson's teacher reads own; writes — admin RPCs.
+// #84 · attendance_presets (0023): staff read all, the lesson's teacher reads own; writes — admin RPCs.
 import { queryOptions, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { z } from 'zod'
