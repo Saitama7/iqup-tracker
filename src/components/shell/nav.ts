@@ -136,6 +136,15 @@ export interface BackTarget {
   to: AppPath
   /** Parent screen name under the back chevron: «‹ Ученики». */
   label: string
+  /** Search of the parent: «Мой месяц» with its month and group filter (#72). */
+  search?: { month?: string; group?: string }
+}
+
+/** Search params of the current screen that point back to a list (lessons, #72). */
+export interface BackSearch {
+  from?: string
+  month?: string
+  group?: string
 }
 
 /** Home of the view with its tab / menu label («Сегодня», «Расчёт ЗП»). */
@@ -151,13 +160,25 @@ function homeTarget(view: View): BackTarget {
  * no back button. Used when the history has no page of the app to return to (direct link,
  * PWA icon).
  */
-export function backTarget(pathname: string, view: View | null): BackTarget | null {
+export function backTarget(
+  pathname: string,
+  view: View | null,
+  search: BackSearch = {},
+): BackTarget | null {
   const path = pathname.length > 1 ? pathname.replace(/\/$/, '') : pathname
   if (view && (path === VIEW_HOME[view] || TABS[view].some((t) => t.to === path))) return null
   if (/^\/admin\/students\/[^/]+$/.test(path)) return { to: '/admin/students', label: 'Ученики' }
   if (/^\/admin\/groups\/[^/]+$/.test(path)) return { to: '/admin/groups', label: 'Группы' }
   if (/^\/groups\/[^/]+$/.test(path)) return { to: '/groups', label: 'Группы' }
   if (/^\/lessons\/[^/]+$/.test(path)) {
+    if (search.from === 'my-month' && (view === 'teacher' || !view)) {
+      const { month, group } = search
+      return {
+        to: '/my-month',
+        label: 'Мой месяц',
+        search: { ...(month && { month }), ...(group && { group }) },
+      }
+    }
     return view === 'teacher' || !view ? { to: '/today', label: 'Сегодня' } : homeTarget(view)
   }
   return view ? homeTarget(view) : null

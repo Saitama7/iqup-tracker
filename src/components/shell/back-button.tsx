@@ -3,14 +3,15 @@ import { ChevronLeft } from 'lucide-react'
 import type { MouseEvent } from 'react'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
-import { backTarget, type BackTarget } from './nav'
+import { backTarget, type BackSearch, type BackTarget } from './nav'
 import { useView } from './use-view'
 
 /** Where «назад» leads from the current screen; null on roots (tabs, the view's home). */
 export function useBackTarget(): BackTarget | null {
   const { view } = useView()
   const pathname = useLocation({ select: (l) => l.pathname })
-  return backTarget(pathname, view)
+  const search = useLocation({ select: (l) => l.search as BackSearch })
+  return backTarget(pathname, view, search)
 }
 
 type Tone = 'paper' | 'brand' | 'ink'
@@ -54,6 +55,7 @@ export function BackButton({
   return (
     <Link
       to={target.to}
+      search={target.search}
       onClick={onClick}
       aria-label={`Назад: ${target.label}`}
       className={cn(

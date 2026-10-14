@@ -154,6 +154,21 @@ describe('backTarget (#57)', () => {
     expect(backTarget('/lessons/1f0c', 'teacher')).toEqual({ to: '/today', label: 'Сегодня' })
   })
 
+  it('a lesson opened from «Мой месяц» leads back to the same month and group (#72)', () => {
+    expect(
+      backTarget('/lessons/1f0c', 'teacher', { from: 'my-month', month: '2026-09', group: 'g1' }),
+    ).toEqual({ to: '/my-month', label: 'Мой месяц', search: { month: '2026-09', group: 'g1' } })
+    expect(backTarget('/lessons/1f0c', 'teacher', { from: 'my-month' })).toEqual({
+      to: '/my-month',
+      label: 'Мой месяц',
+      search: {},
+    })
+    expect(backTarget('/lessons/1f0c', 'teacher', { from: 'elsewhere' })).toEqual({
+      to: '/today',
+      label: 'Сегодня',
+    })
+  })
+
   it('a lesson opened by an admin-only user leads to the dashboard', () => {
     expect(backTarget('/lessons/1f0c', 'admin')).toEqual({ to: '/admin', label: 'Сегодня' })
   })
