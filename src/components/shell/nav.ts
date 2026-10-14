@@ -132,17 +132,24 @@ export function isPushedScreen(pathname: string): boolean {
   )
 }
 
-export interface BackTarget {
-  to: AppPath
-  /** Parent screen name under the back chevron: «‹ Ученики». */
-  label: string
-  /** Search of the parent: «Мой месяц» with its month and group filter (#72). */
-  search?: { month?: string; group?: string }
-}
+export type BackTarget =
+  | {
+      to: AppPath
+      /** Parent screen name under the back chevron: «‹ Ученики». */
+      label: string
+      /** Search of the parent: «Мой месяц» with its month and group filter (#72). */
+      search?: { month?: string; group?: string }
+    }
+  | {
+      /** The teacher's group a lesson was opened from (#76). */
+      to: '/groups/$groupId'
+      label: string
+      params: { groupId: string }
+    }
 
-/** Search params of the current screen that point back to a list (lessons, #72). */
+/** Validated search params of the current screen that point back to a list (lessons, #72). */
 export interface BackSearch {
-  from?: string
+  from?: 'my-month' | 'group'
   month?: string
   group?: string
 }
@@ -178,6 +185,9 @@ export function backTarget(
         label: 'Мой месяц',
         search: { ...(month && { month }), ...(group && { group }) },
       }
+    }
+    if (search.from === 'group' && search.group && (view === 'teacher' || !view)) {
+      return { to: '/groups/$groupId', label: 'Группа', params: { groupId: search.group } }
     }
     return view === 'teacher' || !view ? { to: '/today', label: 'Сегодня' } : homeTarget(view)
   }

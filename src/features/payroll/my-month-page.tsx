@@ -2,10 +2,10 @@
 // Sums — payroll/calc.ts over the month's lessons; everything time-dependent is a pure function of
 // (rows, now), now = useNow() (§7.1). Advances come with R3: «—» until then, «К выплате» = начислено.
 import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link, useLocation, useNavigate } from '@tanstack/react-router'
 import { MonthPickerButton } from '@/components/ui/date-picker'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useSession } from '@/lib/auth'
 import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
@@ -25,19 +25,24 @@ import {
   monthOf,
   monthTitle,
   myMonthView,
+  nextUnconfirmed,
   noSubscriptionCaption,
   payday,
   periodCaption,
   PRELIMINARY_NOTE,
   shiftMonth,
   som,
+  visibleLessons,
   type MonthLessonLine,
   type MonthLessonsFilter,
   type MyMonthView,
 } from './model'
 import { CountUp, TiltCard } from './pay-card'
 
-/** УД4 shows this many lessons, the rest behind «ещё N занятий». */
+/** Empty lesson list with a group picked in the filter (#76). */
+const EMPTY_GROUP = 'В этой группе проведённых занятий за месяц нет.'
+
+/** УД4 shows this many lessons, the rest behind «ещё N занятий» (unconfirmed ones always shown). */
 const LESSONS_SHOWN = 7
 
 interface Props {
@@ -54,17 +59,18 @@ export function MyMonthPage({ month, group }: Props) {
 
   usePayrollRealtime()
   const source = useQuery(myMonthQuery(userId, month))
+  const view = source.data ? myMonthView(source.data, month, now) : null
+  const filter = view ? filterMonthLessons(view, group) : null
+  useScrollToNextUnconfirmed(filter ? nextUnconfirmed(filter.unconfirmed) : null, isDesktop)
 
   let body: ReactNode
   if (source.isError) {
     body = <Notice>Не удалось загрузить месяц. Проверьте интернет — обновим сами.</Notice>
   } else if (source.data === null) {
     body = <Notice>Вы ещё не привязаны к карточке учителя — обратитесь к администратору.</Notice>
-  } else if (!source.data) {
+  } else if (!view || !filter) {
     body = <Notice>Считаем месяц…</Notice>
   } else {
-    const view = myMonthView(source.data, month, now)
-    const filter = filterMonthLessons(view, group)
     body = isDesktop ? (
       <DesktopMonth view={view} filter={filter} month={month} />
     ) : (
@@ -78,6 +84,22 @@ export function MyMonthPage({ month, group }: Props) {
       {body}
     </section>
   )
+}
+
+/**
+ * Back from a lesson (#unconfirmed, #72): the next unconfirmed lesson — the oldest one left — is
+ * scrolled into view and its «Подтвердить →» focused (#76). Runs again when the refetch after the
+ * confirm moves the anchor from the lesson just confirmed to the next one.
+ */
+function useScrollToNextUnconfirmed(anchor: string | null, isDesktop: boolean) {
+  const hash = useLocation({ select: (l) => l.hash })
+  useEffect(() => {
+    if (hash !== NEXT_UNCONFIRMED_ID || !anchor) return
+    const row = document.getElementById(NEXT_UNCONFIRMED_ID)
+    if (!row) return
+    row.scrollIntoView({ block: 'center' })
+    row.querySelector<HTMLElement>('a[href]')?.focus({ preventScroll: true })
+  }, [hash, anchor, isDesktop])
 }
 
 function Notice({ children }: { children: ReactNode }) {
@@ -322,6 +344,10 @@ function MobileMonth({
         <UnconfirmedBlock lessons={filter.unconfirmed} month={month} group={filter.group} />
       )}
 
+      {filter.group && filter.lessons.length === 0 && (
+        <p className="text-[13px] font-bold text-ink-muted">{EMPTY_GROUP}</p>
+      )}
+
       {held.length > 0 && (
         <section className="flex flex-col gap-2" aria-label={`Занятия ${inMonthPrep(month)}`}>
           <h2 className="text-sm font-extrabold">Занятия {inMonthPrep(month)}</h2>
@@ -381,16 +407,20 @@ function UnconfirmedBlock({
   month: string
   group: string | null
 }) {
+  const anchor = nextUnconfirmed(lessons)
   return (
     <section
-      id={NEXT_UNCONFIRMED_ID}
-      className="flex scroll-mt-4 flex-col gap-2 rounded-2xl bg-burned-soft px-4 py-3.5 text-burned-deep"
+      className="flex flex-col gap-2 rounded-2xl bg-burned-soft px-4 py-3.5 text-burned-deep"
       aria-label="Не подтверждено — не в ЗП"
     >
       <h2 className="text-sm font-extrabold">Не подтверждено — не в ЗП</h2>
       <ul className="flex flex-col gap-1.5">
         {lessons.map((l) => (
-          <li key={l.id} className="flex items-center justify-between gap-3 text-[13px] font-bold">
+          <li
+            key={l.id}
+            id={l.id === anchor ? NEXT_UNCONFIRMED_ID : undefined}
+            className="flex scroll-mt-4 items-center justify-between gap-3 text-[13px] font-bold"
+          >
             <span className="min-w-0">
               {l.when} · {l.group}
             </span>
@@ -432,9 +462,9 @@ function DesktopMonth({
 }) {
   const { pay } = view
   const [all, setAll] = useState(false)
-  const shown = all ? filter.lessons : filter.lessons.slice(0, LESSONS_SHOWN)
+  const shown = all ? filter.lessons : visibleLessons(filter.lessons, LESSONS_SHOWN)
   const more = filter.lessons.length - shown.length
-  const firstUnconfirmed = shown.find((l) => l.state === 'unconfirmed')?.id
+  const anchor = nextUnconfirmed(filter.unconfirmed)
   const lessonSearch = fromMyMonth(month, filter.group ?? undefined)
   return (
     <>
@@ -469,7 +499,7 @@ function DesktopMonth({
           </div>
           {filter.lessons.length === 0 ? (
             <p className="px-5 py-4 text-sm font-bold text-ink-muted">
-              Проведённых занятий пока нет.
+              {filter.group ? EMPTY_GROUP : 'Проведённых занятий пока нет.'}
             </p>
           ) : (
             <table
@@ -488,12 +518,7 @@ function DesktopMonth({
               </thead>
               <tbody>
                 {shown.map((l) => (
-                  <LessonRow
-                    key={l.id}
-                    lesson={l}
-                    search={lessonSearch}
-                    anchor={l.id === firstUnconfirmed}
-                  />
+                  <LessonRow key={l.id} lesson={l} search={lessonSearch} anchor={l.id === anchor} />
                 ))}
                 {more > 0 && (
                   <tr>
@@ -570,7 +595,7 @@ function LessonRow({
 }: {
   lesson: MonthLessonLine
   search: LessonSearch
-  /** The first unconfirmed row — the return from a lesson scrolls here (#72). */
+  /** The oldest unconfirmed row — the return from a lesson scrolls here (#72, #76). */
   anchor: boolean
 }) {
   const unconfirmed = l.state === 'unconfirmed'

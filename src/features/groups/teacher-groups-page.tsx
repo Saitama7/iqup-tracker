@@ -7,6 +7,7 @@ import { Info, Plus } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { PageHeader, PageTitle } from '@/components/page'
 import { BackButton } from '@/components/shell/back-button'
+import { fromGroup } from '@/features/lessons/return-to'
 import { lessonState, lessonsWord, pluralRu } from '@/features/lessons/select'
 import { displayPhone, groupLabel } from '@/features/students/model'
 import { tariffFor } from '@/features/tariffs/current'
@@ -308,6 +309,7 @@ function MarkTodayLink({
     <Link
       to="/lessons/$lessonId"
       params={{ lessonId: lesson.id }}
+      search={fromGroup(group.id)}
       className={cn(className, 'bg-ink text-brand')}
     >
       {lesson.status === 'held' ? 'Проведено сегодня' : 'Отметить сегодня'}
@@ -353,6 +355,7 @@ function MonthLessons({ group, today }: { group: TeacherGroup; today: string }) 
               <Link
                 to="/lessons/$lessonId"
                 params={{ lessonId: v.id }}
+                search={fromGroup(group.id)}
                 className="flex min-h-14 items-center gap-3 px-4 py-2.5"
               >
                 {inner}
