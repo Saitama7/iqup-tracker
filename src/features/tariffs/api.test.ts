@@ -84,8 +84,15 @@ describe('planRows', () => {
       max_students: 8,
       lesson_duration_min: 60,
       freeze_limit: 2,
+      hour_price: null,
       valid_from: '2027-09-01',
     })
+  })
+
+  it('продлёнка: the hour price goes to the after-school row only (#82)', () => {
+    const rows = planRows({ ...input, hourPrice: 130 }, tariffs)
+    expect(rows.find((r) => r.group_type === 'afterschool')?.hour_price).toBe(130)
+    expect(rows.find((r) => r.group_type === 'group')?.hour_price).toBeNull()
   })
 
   it('refuses when a type has no tariff to start from', () => {

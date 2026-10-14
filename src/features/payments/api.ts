@@ -102,6 +102,9 @@ const paymentSchema = z.object({
     lessons_total: z.number().int(),
     price_final: z.number().int(),
     discount_percent: z.number().int(),
+    /** After-school month in hours (#82). */
+    hours_total: z.number().nullable(),
+    period_month: z.string().nullable(),
     enrollment: z.object({ student_id: z.uuid(), group_id: z.uuid() }),
   }),
 })
@@ -109,7 +112,7 @@ const paymentSchema = z.object({
 export type PaymentRow = z.infer<typeof paymentSchema> & { createdByName: string | null }
 
 const PAYMENT_FIELDS =
-  'id, amount, method, paid_at, kind, reason, created_by, subscription:subscriptions!inner(id, lessons_total, price_final, discount_percent, enrollment:enrollments!inner(student_id, group_id))'
+  'id, amount, method, paid_at, kind, reason, created_by, subscription:subscriptions!inner(id, lessons_total, price_final, discount_percent, hours_total, period_month, enrollment:enrollments!inner(student_id, group_id))'
 
 async function withAuthors(rows: z.infer<typeof paymentSchema>[]): Promise<PaymentRow[]> {
   const ids = [...new Set(rows.flatMap((r) => (r.created_by ? [r.created_by] : [])))]

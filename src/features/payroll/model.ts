@@ -424,17 +424,25 @@ const STUDENTS = ['ученик', 'ученика', 'учеников'] as const
 
 export const studentLessonsWord = (n: number) => `${n} ${pluralRu(n, STUDENT_LESSONS)}`
 
+/** «16 ученико-часов продлёнки» (#82) — hours of after-school hour subscriptions. */
+export const studentHoursWord = (h: number) =>
+  `${String(Math.round(h * 10) / 10).replace('.', ',')} ученико-ч продлёнки`
+
 /** «4 занятия · 30 ученико-уроков · 8 учеников», «… · 1 не подтверждено — не в сумме» (У6). */
 export function groupCaption(g: MonthGroupLine): string {
   return [
     lessonsWord(g.lessonsHeld),
     studentLessonsWord(g.studentLessons),
+    // продлёнка по часам (#82): what the pay of the group is counted from
+    g.studentHours > 0 ? studentHoursWord(g.studentHours) : null,
     g.unconfirmed > 0
       ? `${g.unconfirmed} не подтверждено — не в сумме`
       : g.laterToday > 0
         ? `сегодня ещё ${g.laterToday === 1 ? 'одно' : g.laterToday}`
         : `${g.students} ${pluralRu(g.students, STUDENTS)}`,
-  ].join(' · ')
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /**

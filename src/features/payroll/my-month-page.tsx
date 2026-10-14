@@ -35,6 +35,7 @@ import {
   PRELIMINARY_NOTE,
   STUDENT_LESSON_NOTE,
   shiftMonth,
+  studentHoursWord,
   toPayCaption,
   visibleLessons,
   type MonthLessonLine,
@@ -514,7 +515,14 @@ function DesktopMonth({
         <Kpi label="Занятий · часов">
           {pay.lessonsHeld} · {hoursCaption(pay.hours)}
         </Kpi>
-        <Kpi label="Ученико-уроков">{pay.studentLessons}</Kpi>
+        <Kpi label="Ученико-уроков">
+          {pay.studentLessons}
+          {pay.studentHours > 0 && (
+            <span className="block text-sm font-bold text-ink-muted">
+              {studentHoursWord(pay.studentHours)}
+            </span>
+          )}
+        </Kpi>
         <div className="flex flex-col gap-1.5 rounded-[20px] bg-burned-soft px-[22px] py-5 text-burned-deep">
           <span className={kpiLabel}>Не подтверждено</span>
           <span className="font-display text-[28px] font-bold" data-testid="kpi-unconfirmed">
@@ -587,6 +595,7 @@ function DesktopMonth({
               <p key={g.id} className="flex justify-between gap-3 text-[13px] font-bold">
                 <span>
                   {g.name} · {g.studentLessons} уч-ур
+                  {g.studentHours > 0 ? ` · ${String(g.studentHours).replace('.', ',')} уч-ч` : ''}
                 </span>
                 <span className="font-display">{formatSom(g.amount)}</span>
               </p>

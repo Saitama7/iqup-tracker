@@ -13,6 +13,7 @@ import {
 import { DateInput } from '@/components/ui/date-picker'
 import { formatDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { tariffHourPrice } from '@/features/afterschool/model'
 import { deleteTariffVersion, planTariffs, planTariffsForm, settingsQuery } from './api'
 import { GROUP_TYPES, lessonPrice, tariffFor, teacherShare, type GroupType } from './current'
 import {
@@ -315,6 +316,10 @@ function PlanForm({
         GROUP_TYPES.map((t) => [t, String(tariffFor(t, today, tariffs)?.package_price ?? '')]),
       ) as Record<GroupType, string>,
   )
+  const currentAfterschool = tariffFor('afterschool', today, tariffs)
+  const [hourPrice, setHourPrice] = useState(() =>
+    currentAfterschool ? String(tariffHourPrice(currentAfterschool)) : '',
+  )
   const [error, setError] = useState<string | null>(null)
   const mutation = useMutation({
     mutationFn: (input: Parameters<typeof planTariffs>[0]) => planTariffs(input, tariffs),
@@ -330,7 +335,7 @@ function PlanForm({
 
   function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
-    const parsed = planTariffsForm(min).safeParse({ validFrom, prices })
+    const parsed = planTariffsForm(min).safeParse({ validFrom, prices, hourPrice })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Проверьте дату и цены')
       return
@@ -396,6 +401,29 @@ function PlanForm({
             </div>
           )
         })}
+      </div>
+      <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3">
+        <div className="flex min-w-0 flex-col">
+          <label htmlFor={`${priceId}-hour`} className="text-sm font-extrabold">
+            Продлёнка · цена часа
+          </label>
+          <span className="text-xs font-bold text-ink-muted">
+            счёт за месяц = часы по графику × цена часа
+            {currentAfterschool
+              ? ` · сейчас ${formatSom(tariffHourPrice(currentAfterschool))}`
+              : ''}
+          </span>
+        </div>
+        <input
+          id={`${priceId}-hour`}
+          inputMode="numeric"
+          autoComplete="off"
+          className={cn(inputClass, 'text-right tabular-nums')}
+          value={hourPrice}
+          onChange={(e) => {
+            setHourPrice(e.target.value)
+          }}
+        />
       </div>
       <p className="rounded-xl bg-muted px-3 py-2.5 text-xs font-bold text-ink-muted">
         Мест, уроков в пакете, длительность и заморозки переносятся из действующего тарифа.

@@ -17,6 +17,7 @@ const tariffSchema = z.object({
   max_students: z.number().int(),
   lesson_duration_min: z.number().int(),
   freeze_limit: z.number().int(),
+  hour_price: z.number().int().nullable(),
   valid_from: z.string(),
   created_at: z.string(),
   created_by: z.uuid().nullable(),
@@ -105,6 +106,8 @@ export const planTariffsForm = (min: PlanMinDate) =>
         typeof priceField
       >,
     ),
+    /** Продлёнка: цена часа (#82); absent — package / (lessons × h). */
+    hourPrice: priceField.optional(),
   })
 
 export type PlanTariffsInput = z.output<ReturnType<typeof planTariffsForm>>
@@ -149,6 +152,7 @@ export function planRows(input: PlanTariffsInput, tariffs: readonly Tariff[]) {
       max_students: base.max_students,
       lesson_duration_min: base.lesson_duration_min,
       freeze_limit: base.freeze_limit,
+      hour_price: type === 'afterschool' ? (input.hourPrice ?? null) : null,
       valid_from: input.validFrom,
     }
   })

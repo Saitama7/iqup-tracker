@@ -10,6 +10,7 @@ import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import { SubjectsSection } from '@/features/subjects/subjects-section'
 import { addHoliday, deleteHolidays, holidayForm, settingsQuery } from './api'
+import { tariffHourPrice } from '@/features/afterschool/model'
 import { lessonPrice, teacherShare } from './current'
 import { HistorySheet, PlanTariffsDialog } from './history-sheet'
 import {
@@ -176,7 +177,14 @@ function TariffTable({ tariffs }: { tariffs: Tariff[] }) {
             <td className={cn(tdClass, numClass, 'font-extrabold')}>
               {formatSom(t.package_price)}
             </td>
-            <td className={cn(tdClass, numClass)}>{formatLessonPrice(lessonPrice(t))}</td>
+            <td className={cn(tdClass, numClass)}>
+              {formatLessonPrice(lessonPrice(t))}
+              {t.group_type === 'afterschool' && (
+                <span className="block text-xs font-bold text-teal">
+                  час {formatSom(tariffHourPrice(t))}
+                </span>
+              )}
+            </td>
             <td className={cn(tdClass, numClass)}>{t.lesson_duration_min} мин</td>
             <td className={cn(tdClass, numClass)}>{t.freeze_limit}</td>
             <td className={cn(tdClass, numClass, 'text-ink-muted')}>{share(t)}</td>
@@ -207,7 +215,11 @@ function TariffCards({ tariffs }: { tariffs: Tariff[] }) {
               {t.lessons_in_package} уроков · {t.lesson_duration_min} мин · мест{' '}
               {seatsLabel(t.max_students)}
             </span>
-            <span className="whitespace-nowrap">урок {formatLessonPrice(lessonPrice(t))}</span>
+            <span className="whitespace-nowrap">
+              {t.group_type === 'afterschool'
+                ? `час ${formatSom(tariffHourPrice(t))}`
+                : `урок ${formatLessonPrice(lessonPrice(t))}`}
+            </span>
           </div>
           <div className="flex items-baseline justify-between gap-3 text-[13px] text-ink-muted">
             <span>Заморозок {t.freeze_limit}</span>

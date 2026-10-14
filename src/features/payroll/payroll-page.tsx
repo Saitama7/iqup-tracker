@@ -293,7 +293,14 @@ function DesktopPayroll({ view, actions }: { view: PayrollView; actions: Advance
                     </td>
                     <td className={cn(td, num)}>{r.lessonsHeld}</td>
                     <td className={cn(td, num)}>{String(r.hours).replace('.', ',')}</td>
-                    <td className={cn(td, num)}>{r.studentLessons}</td>
+                    <td className={cn(td, num)}>
+                      {r.studentLessons}
+                      {r.studentHours > 0 && (
+                        <span className="block text-xs font-bold text-ink-muted">
+                          {String(r.studentHours).replace('.', ',')} уч-ч продлёнки
+                        </span>
+                      )}
+                    </td>
                     <td className={cn(td, num)}>{r.percent ?? '—'}</td>
                     <td className={cn(td, num, 'font-extrabold')}>{formatSom(r.amount)}</td>
                     <td className={cn(td, num)}>
@@ -471,6 +478,9 @@ function MobilePayroll({ view, actions }: { view: PayrollView; actions: AdvanceA
                         `${r.lessonsHeld} зан`,
                         r.hours !== r.lessonsHeld ? hoursCaption(r.hours) : null,
                         `${r.studentLessons} уч-ур`,
+                        r.studentHours > 0
+                          ? `${String(r.studentHours).replace('.', ',')} уч-ч продлёнки`
+                          : null,
                         r.percent !== null ? `${r.percent} %` : null,
                         r.advances > 0 ? `аванс ${minusSom(r.advances)}` : null,
                       ]
