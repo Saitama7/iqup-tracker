@@ -1,9 +1,11 @@
 // А10 «Журнал изменений» (docs/design/AuditLog.dc.html): admin, and the accountant read-only (#45).
 // A feed of v_audit_feed, newest first, 50 at a time; chips — the kind, selects — table / author /
-// period, all in the URL. On the phone (no artboard) the same rows become cards under the day bands.
+// period, the search box «Ученик, группа, учитель…» (server-side, #52), all in the URL. On the phone
+// (no artboard) the same rows become cards under the day bands.
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { useMemo, type ReactNode } from 'react'
+import { Search } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { PageHeader, PageTitle } from '@/components/page'
 import { NativeSelect } from '@/features/students/parts'
 import { useSession } from '@/lib/auth'
@@ -29,6 +31,7 @@ import {
   PERIOD_LABEL,
   PERIODS,
   periodStart,
+  searchKey,
   SYSTEM_ACTOR,
   type Period,
 } from './model'
@@ -38,9 +41,12 @@ export interface AuditSearch {
   entity?: string
   actor?: string
   period?: Period
+  q?: string
 }
 
 export const DEFAULT_PERIOD: Period = '7d'
+/** The search goes to the server once typing pauses. */
+const SEARCH_DELAY_MS = 300
 
 export function AuditPage({
   search,
@@ -56,7 +62,12 @@ export function AuditPage({
   const period = search.period ?? DEFAULT_PERIOD
   // the period starts at a Bishkek midnight: the key changes once a day, not every tick
   const since = periodStart(period, now)
-  const base = { entity: search.entity ?? null, actor: search.actor ?? null, since }
+  const base = {
+    entity: search.entity ?? null,
+    actor: search.actor ?? null,
+    since,
+    q: searchKey(search.q),
+  }
 
   const feed = useInfiniteQuery(auditFeedQuery({ ...base, kind: search.kind ?? null }))
   const counts = useQuery(auditCountsQuery(base))
@@ -81,6 +92,12 @@ export function AuditPage({
 
   const filters = (
     <div className="grid grid-cols-2 gap-2 min-[900px]:flex min-[900px]:flex-wrap">
+      <SearchBox
+        value={search.q ?? ''}
+        onChange={(q) => {
+          set({ q: q.trim() === '' ? undefined : q })
+        }}
+      />
       <NativeSelect
         aria-label="Таблица"
         className="min-[900px]:w-48"
@@ -136,13 +153,21 @@ export function AuditPage({
   } else if (!feed.data) {
     body = <Notice>Загружаем журнал…</Notice>
   } else if (entries.length === 0) {
-    body = <Notice>За этот период изменений нет.</Notice>
+    body = (
+      <Notice>
+        {base.q
+          ? `По «${search.q?.trim() ?? ''}» ничего не нашли.`
+          : 'За этот период изменений нет.'}
+      </Notice>
+    )
   } else {
     body = (
       <div
         className={cn(
           'flex flex-col',
           isDesktop && 'overflow-hidden rounded-[20px] border border-line bg-card',
+          // the previous search's rows while the new answer is on its way
+          feed.isPlaceholderData && 'opacity-60',
         )}
         aria-label="Изменения"
         role="feed"
@@ -213,6 +238,51 @@ export function AuditPage({
         </button>
       )}
     </section>
+  )
+}
+
+/** «Ученик, группа, учитель…»: typed locally, sent to the URL (and the server) after a pause. */
+function SearchBox({ value, onChange }: { value: string; onChange: (q: string) => void }) {
+  const [text, setText] = useState(value)
+  const sent = useRef(value)
+  const change = useRef(onChange)
+  useEffect(() => {
+    change.current = onChange
+  })
+  // the URL changed from outside (back, a link, the reset) — show it; our own writes are skipped,
+  // so a reply to «ал» never overwrites «али» typed meanwhile
+  useEffect(() => {
+    if (value !== sent.current) {
+      sent.current = value
+      setText(value)
+    }
+  }, [value])
+  useEffect(() => {
+    if (text.trim() === sent.current.trim()) return
+    const timer = setTimeout(() => {
+      sent.current = text.trim() === '' ? '' : text
+      change.current(text)
+    }, SEARCH_DELAY_MS)
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [text])
+
+  return (
+    <div className="col-span-2 flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-line-strong bg-card px-3.5 focus-within:border-ink min-[900px]:w-[260px]">
+      <Search className="size-4 shrink-0 text-ink-muted" strokeWidth={2.5} aria-hidden />
+      <input
+        type="search"
+        aria-label="Поиск по журналу"
+        placeholder="Ученик, группа, учитель…"
+        autoComplete="off"
+        className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none placeholder:font-semibold placeholder:text-placeholder min-[900px]:text-sm"
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value)
+        }}
+      />
+    </div>
   )
 }
 

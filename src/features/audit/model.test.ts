@@ -1,5 +1,5 @@
 import type { AuditEntry } from './describe'
-import { dayTitle, groupByDay, periodStart } from './model'
+import { dayTitle, groupByDay, likePattern, periodStart, searchKey } from './model'
 
 // Thursday 8 October 2026, 14:24 in Bishkek
 const NOW = Date.parse('2026-10-08T14:24:00+06:00')
@@ -54,5 +54,18 @@ describe('groupByDay', () => {
       ['Сегодня, 8 октября', ['a', 'b']],
       ['Вчера, 7 октября', ['c']],
     ])
+  })
+})
+
+describe('searchKey / likePattern', () => {
+  it('normalises the box as person_name_key does', () => {
+    expect(searchKey('  Алёна\u00a0 ТЕСТОВА ')).toBe('алена тестова')
+    expect(searchKey('   ')).toBeNull()
+    expect(searchKey(undefined)).toBeNull()
+    expect(searchKey('8*класс')).toBe('8 класс')
+  })
+
+  it('takes % _ \\ literally', () => {
+    expect(likePattern('100%_a\\b')).toBe('%100\\%\\_a\\\\b%')
   })
 })

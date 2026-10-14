@@ -125,6 +125,19 @@ describe('attendance', () => {
     )
     expect(describeAuditRow({ ...r, reason: 'confirm_lesson' }, lookups).note).toBeNull()
   })
+
+  it('marks removed by cancel_lesson: the code in words (#52)', () => {
+    const r = row({ entity: 'attendance', action: 'delete', before: mark })
+    expect(describeAuditRow({ ...r, reason: 'cancel: teacher' }, lookups).note).toBe(
+      'Причина: занятие отменено — отменил учитель',
+    )
+    expect(describeAuditRow({ ...r, reason: 'cancel:all_frozen' }, lookups).note).toBe(
+      'Причина: занятие отменено — вся группа заморозила',
+    )
+    expect(describeAuditRow({ ...r, reason: 'archive_group' }, lookups).note).toBe(
+      'Причина: группа переведена в архив',
+    )
+  })
 })
 
 describe('lessons', () => {
@@ -191,6 +204,17 @@ describe('lessons', () => {
       'Занятие Математика · 8 класс Б, 10.10 в 09:00 отменено: отменил центр',
     )
     expect(describeAuditRow(cancelled, lookups).note).toBe('Комментарий: «нет света»')
+    // cancel_lesson writes the comment as the reason too (0008) — shown once (#52)
+    expect(describeAuditRow({ ...cancelled, reason: 'нет света' }, lookups).note).toBe(
+      'Комментарий: «нет света»',
+    )
+    // no comment: reason `cancel: <code>` — the text already says «отменил центр»
+    const bare = row({
+      before: lesson,
+      after: { ...lesson, status: 'cancelled', cancel_reason: 'center' },
+      reason: 'cancel: center',
+    })
+    expect(describeAuditRow(bare, lookups).note).toBeNull()
     const heldCancelled = row({
       kind: 'retro',
       before: { ...lesson, status: 'held' },
@@ -309,6 +333,15 @@ describe('teacher_rates', () => {
     expect(text(row({ entity: 'teacher_rates', action: 'delete', before: rate }))).toBe(
       'Гульзат Асанова — ставка 45 % с 01.09.2026 удалена',
     )
+  })
+
+  it('a rate inserted with a past date is a correction (#52)', () => {
+    const e = describeAuditRow(
+      row({ entity: 'teacher_rates', action: 'insert', kind: 'retro', after: rate }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe('Гульзат Асанова — ставка 45 % с 01.09.2026 — задним числом')
+    expect(e.badge).toEqual({ label: 'Правка', tone: 'burned' })
   })
 })
 

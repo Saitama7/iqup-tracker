@@ -1,13 +1,14 @@
 // А10 data: v_audit_feed (0014, RLS — admin and accountant) a page of 50 at a time, newest first,
 // keyset by (at, id) so rows written while the page is open never shift «Показать ещё»; then the
-// names the page's rows point at (students, groups, lessons…) in one round of reads.
-import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
+// names the page's rows point at (students, groups, lessons…) in one round of reads. The search box
+// filters on the server (v_audit_feed.search, 0019); the chip counts are one RPC (audit_feed_counts).
+import { infiniteQueryOptions, keepPreviousData, queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import type { AuditKind, AuditLookups, AuditRow } from './describe'
-import { KINDS, PAGE_SIZE, SYSTEM_ACTOR, type AuditFilters } from './model'
+import { KINDS, likePattern, PAGE_SIZE, SYSTEM_ACTOR, type AuditFilters } from './model'
 
 export const AUDIT_KEY = 'audit'
 const POLL_MS = 60_000
@@ -56,15 +57,15 @@ export interface AuditPage {
   next: Cursor | null
 }
 
-/** The feed with the table / author / period filters — the page and the chip counts (`head`). */
-function feed(f: Omit<AuditFilters, 'kind'>, head = false) {
-  let query = supabase
-    .from('v_audit_feed')
-    .select(FIELDS, head ? { count: 'exact', head: true } : undefined)
+/** The feed with the kind / table / author / period / search filters. */
+function feed(f: AuditFilters) {
+  let query = supabase.from('v_audit_feed').select(FIELDS)
+  if (f.kind) query = query.eq('kind', f.kind)
   if (f.entity) query = query.eq('entity', f.entity)
   if (f.actor === SYSTEM_ACTOR) query = query.is('actor_id', null)
   else if (f.actor) query = query.eq('actor_id', f.actor)
   if (f.since) query = query.gte('at', f.since)
+  if (f.q) query = query.like('search', likePattern(f.q))
   return query
 }
 
@@ -228,7 +229,6 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
 
 async function fetchPage(f: AuditFilters, cursor: Cursor | null): Promise<AuditPage> {
   let query = feed(f)
-  if (f.kind) query = query.eq('kind', f.kind)
   if (cursor) {
     query = query.or(`at.lt."${cursor.at}",and(at.eq."${cursor.at}",id.lt.${cursor.id})`)
   }
@@ -253,28 +253,37 @@ export const auditFeedQuery = (f: AuditFilters) =>
     queryFn: ({ pageParam }) => fetchPage(f, pageParam),
     initialPageParam: null as Cursor | null,
     getNextPageParam: (page) => page.next,
+    // a new search / filter keeps the old rows on screen until the answer comes
+    placeholderData: keepPreviousData,
     refetchInterval: POLL_MS,
   })
 
 export type KindCounts = Record<AuditKind | 'all', number>
 
-/** «Все · 214», «Правки задним числом · 6»… for the current table / author / period. */
+const countSchema = z.object({ kind: z.enum(KINDS as [AuditKind, ...AuditKind[]]), n: z.number() })
+
+/** «Все · 214», «Правки задним числом · 6»… for the current table / author / period / search. */
 export const auditCountsQuery = (f: Omit<AuditFilters, 'kind'>) =>
   queryOptions({
     queryKey: [AUDIT_KEY, 'counts', f],
     queryFn: async (): Promise<KindCounts> => {
-      const keys = ['all', ...KINDS] as const
-      const counts = await Promise.all(
-        keys.map(async (k) => {
-          let q = feed(f, true)
-          if (k !== 'all') q = q.eq('kind', k)
-          const { count, error } = await q
-          if (error) throw error
-          return [k, count ?? 0] as const
-        }),
-      )
-      return Object.fromEntries(counts) as KindCounts
+      const system = f.actor === SYSTEM_ACTOR
+      const { data, error } = await supabase.rpc('audit_feed_counts', {
+        p_entity: f.entity ?? undefined,
+        p_actor: f.actor && !system ? f.actor : undefined,
+        p_system: system,
+        p_since: f.since ?? undefined,
+        p_q: f.q ?? undefined,
+      })
+      if (error) throw error
+      const counts = Object.fromEntries([['all', 0], ...KINDS.map((k) => [k, 0])]) as KindCounts
+      for (const { kind, n } of z.array(countSchema).parse(data)) {
+        counts[kind] = n
+        counts.all += n
+      }
+      return counts
     },
+    placeholderData: keepPreviousData,
     refetchInterval: POLL_MS,
   })
 
