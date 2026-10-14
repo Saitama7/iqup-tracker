@@ -202,6 +202,9 @@ select lives_ok(
   $$ select * from public.enroll_student('e8250000-0000-4000-8000-000000000001', 'd8250000-0000-4000-8000-000000000001', '2002-10-01') $$,
   'A enrolls from 1 October (default plan ПН–ПТ 3 ч)'
 );
+-- every invoice of A is paid in full: unused paid hours are credit (И70)
+select public.record_payment(pg_temp.sub('e8250000-0000-4000-8000-000000000001', '2002-10-01'),
+  (select price_final from public.subscriptions where id = pg_temp.sub('e8250000-0000-4000-8000-000000000001', '2002-10-01')), 'cash');
 select results_eq(
   $$ select hours_total, price_full from public.subscriptions where id = pg_temp.sub('e8250000-0000-4000-8000-000000000001', '2002-10-01') $$,
   $$ values (69.0::numeric, 6900) $$,
@@ -233,6 +236,8 @@ select results_eq(
   $$ values (63.0, 6.0, 0::numeric) $$,
   'the November invoice holds 57 billed + 6 credit hours; the credit counts as paid'
 );
+select public.record_payment(pg_temp.sub('e8250000-0000-4000-8000-000000000001', '2002-11-01'),
+  (select price_final from public.subscriptions where id = pg_temp.sub('e8250000-0000-4000-8000-000000000001', '2002-11-01')), 'cash');
 select lives_ok(
   $$ select public.confirm_lesson(pg_temp.g1('2002-11-01'), jsonb_build_array(jsonb_build_object(
        'student_id', 'e8250000-0000-4000-8000-000000000001', 'status', 'absent_frozen'))) $$,
@@ -318,6 +323,8 @@ select lives_ok(
   $$ select public.issue_afterschool_invoice(pg_temp.enr('e8250000-0000-4000-8000-000000000001'), '2002-12-01') $$,
   'December invoice: the credit (33 h) is bigger than the month (5 Mondays × 3 h)'
 );
+select public.record_payment(pg_temp.sub('e8250000-0000-4000-8000-000000000001', '2002-12-01'),
+  (select price_final from public.subscriptions where id = pg_temp.sub('e8250000-0000-4000-8000-000000000001', '2002-12-01')), 'cash');
 select results_eq(
   $$ select hours_total, credit_hours, price_full from public.subscriptions where id = pg_temp.sub('e8250000-0000-4000-8000-000000000001', '2002-12-01') $$,
   $$ values (0.5::numeric, 14.5::numeric, 50) $$,

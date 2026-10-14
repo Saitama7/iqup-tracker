@@ -1,6 +1,6 @@
 -- 0025 — Продлёнка по часам (issue #82): гибкий график ученика по дням недели, помесячный абонемент
 -- в часах (счёт = часы месяца × цена часа, скидки В5), списание часов по графику, ЗП учителя по часам.
--- Docs: 05-decisions И58–И63, 01-domain-model §3, §5.2, §6.
+-- Docs: 05-decisions И58–И63, И65–И71, 01-domain-model §3, §5.2, §6.
 --
 -- Production-safe and idempotent (prod has real data, 14.10):
 --   * only additive DDL (new nullable columns, new table, new functions); nothing is deleted;
@@ -41,6 +41,49 @@ as $$
   )
   from public.tariffs t
   where t.id = p_tariff_id;
+$$;
+
+-- The after-school hour price on a date: of the tariff version in effect (И69 — an hour mark with no
+-- invoice is priced by it, for the teacher and as the student's debt).
+create or replace function public.afterschool_hour_price_on(p_date date)
+returns integer
+language sql
+stable
+set search_path = ''
+as $$
+  select public.tariff_hour_price(t.id)
+  from public.tariffs t
+  where t.group_type = 'afterschool' and t.valid_from <= p_date
+  order by t.valid_from desc
+  limit 1;
+$$;
+
+-- Exact teacher's pay of one consumed mark (not rounded): a lesson package — price_full /
+-- lessons_total × percent (the very expression of 0020 / 0022); an hour invoice — price_full × hours
+-- / hours_total × percent (И62); no subscription but hours (an after-school month not invoiced yet,
+-- И69) — hours × the hour price on the lesson date × percent; else null (paid 0). The one rule of
+-- v_payroll_preview, enrollment_payroll_impact and afterschool_plan_preview — calc.ts markPay().
+create or replace function public.mark_pay(
+  p_price_full integer,
+  p_lessons_total integer,
+  p_hours_total numeric,
+  p_percent numeric,
+  p_hours numeric,
+  p_hour_price integer
+)
+returns numeric
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when p_price_full is not null and p_hours_total is null
+      then p_price_full * p_percent / (p_lessons_total * 100.0)
+    when p_price_full is not null
+      then p_price_full * p_percent * coalesce(p_hours, 0) / (p_hours_total * 100.0)
+    when p_hours is not null
+      then p_hour_price * p_percent * p_hours / 100.0
+  end;
 $$;
 
 -- ─── 2. Student's after-school plan (hours per weekday, from a date) ───────
@@ -300,6 +343,35 @@ for each row execute function public.attendance_hours();
 
 revoke execute on function public.attendance_hours() from public, anon, authenticated;
 
+-- PostgREST computed fields (И69): the hour price of an after-school lesson on its date (null — not
+-- after-school), and of a mark with hours and no invoice (null — the mark has a subscription or no
+-- hours). calc.ts prices such a mark by it, as v_payroll_preview does. Security invoker.
+create or replace function public.hour_price(p_lesson public.lessons)
+returns integer
+language sql
+stable
+set search_path = ''
+as $$
+  select case
+    when (select g.group_type from public.groups g where g.id = p_lesson.group_id) = 'afterschool'
+      then public.afterschool_hour_price_on(p_lesson.lesson_date)
+  end;
+$$;
+
+create or replace function public.unbilled_hour_price(p_mark public.attendance)
+returns integer
+language sql
+stable
+set search_path = ''
+as $$
+  select case
+    when p_mark.subscription_id is null and p_mark.hours is not null then (
+      select public.afterschool_hour_price_on(l.lesson_date)
+      from public.lessons l where l.id = p_mark.lesson_id
+    )
+  end;
+$$;
+
 -- ─── 5. Month quote, credit ─────────────────────────────────────────────────
 
 -- Hours of an enrollment in a month (И60): every non-cancelled lesson day of the group in the month
@@ -350,11 +422,14 @@ as $$
 $$;
 
 -- Hours paid on the hour invoices of an enrollment that will not be used (И61, #82 review): per
--- invoice capacity (hours_total + credit_hours) − hours of its charged marks − planned hours still
--- ahead in its month (lessons not held yet, from its start). Freezes, lessons cancelled after the
--- invoice, a plan cut in the middle of the month, the end of the enrollment — all land here once
--- the day is past. An invoice used beyond its capacity owes it (v_student_balance), it does not eat
--- the credit. The credit = Σ unused − the credit already taken off later invoices. Security invoker.
+-- invoice its paid hours (credit_hours + payments in hours, floor 0,5 h as v_student_balance; at most
+-- the capacity hours_total + credit_hours) − hours of its charged marks − planned hours still ahead in
+-- its month (lessons not held yet, from its start). Unpaid hours are never credit (И70): an unpaid
+-- invoice with freezes gives none, paying it later gives it to the next invoice. Freezes, lessons
+-- cancelled after the invoice, a plan cut in the middle of the month, the end of the enrollment — all
+-- land here once the day is past. An invoice used beyond what is paid owes it (v_student_balance), it
+-- does not eat the credit. The credit = Σ unused − the credit already taken off later invoices.
+-- Security invoker.
 create or replace function public.afterschool_credit_hours(p_enrollment_id uuid)
 returns numeric
 language sql
@@ -365,7 +440,18 @@ as $$
     select * from public.enrollments where id = p_enrollment_id
   ),
   inv as (
-    select s.id, s.hours_total, s.credit_hours, s.started_at, s.period_month
+    select
+      s.id, s.hours_total, s.credit_hours, s.started_at, s.period_month,
+      case
+        when s.price_final = 0 then s.hours_total + s.credit_hours
+        else least(
+          s.hours_total + s.credit_hours,
+          s.credit_hours + floor(
+            coalesce((select sum(p.amount) from public.payments p where p.subscription_id = s.id), 0)
+            * s.hours_total * 2 / s.price_final
+          ) / 2
+        )
+      end as paid_hours
     from public.subscriptions s
     where s.enrollment_id = p_enrollment_id
       and s.hours_total is not null
@@ -373,7 +459,7 @@ as $$
   ),
   unused as (
     select
-      inv.hours_total + inv.credit_hours
+      inv.paid_hours
       - coalesce((
           select sum(a.hours) from public.attendance a
           where a.subscription_id = inv.id and a.consumes_credit
@@ -606,6 +692,14 @@ begin
   ) then
     raise exception 'a later month is already invoiced' using errcode = 'check_violation';
   end if;
+  -- «Считать с» only for the first invoice after an old package (И66): a later month is billed from
+  -- its first day, else its marks before p_from would stay without an invoice for good
+  if p_from is not null and exists (
+    select 1 from public.subscriptions s
+    where s.enrollment_id = p_enrollment_id and s.status <> 'refunded' and s.hours_total is not null
+  ) then
+    raise exception 'billing date is only for the first invoice' using errcode = 'check_violation';
+  end if;
 
   perform public.assert_discount(v_enrollment.student_id, p_discount_pct, p_discount_reason);
 
@@ -740,8 +834,9 @@ as $$
 $$;
 
 -- What «Изменить с даты» does to marks already there (А6 warning before saving a date in the past):
--- marks whose hours change, Σ Δ hours, the teacher's pay Δ (v_payroll_preview expression) and the
--- student's Δ (hours × the invoice's paid hour price; + — owes more). Admin only.
+-- marks whose hours change, Σ Δ hours, the teacher's pay Δ (mark_pay, as v_payroll_preview) and the
+-- student's Δ (hours × the invoice's paid hour price, a month not invoiced — the hour price on the
+-- date, И69; + — owes more). Admin only.
 create or replace function public.afterschool_plan_preview(
   p_enrollment_id uuid,
   p_valid_from date,
@@ -769,9 +864,11 @@ begin
   with m as (
     select
       a.consumes_credit,
+      a.subscription_id is null as unbilled,
       s.hours_total,
       s.price_full,
       s.price_final,
+      public.afterschool_hour_price_on(l.lesson_date) as hour_price,
       r.percent,
       public.afterschool_plan_mark_hours(p_enrollment_id, p_valid_from, p_hours, a.lesson_id, a.student_id)
         - coalesce(a.hours, 0) as delta
@@ -794,11 +891,11 @@ begin
     (count(*) filter (where m.delta <> 0))::integer,
     coalesce(sum(m.delta), 0),
     round(coalesce(sum(
-      m.price_full * coalesce(m.percent, 0) * m.delta / (m.hours_total * 100.0)
-    ) filter (where m.consumes_credit and m.hours_total is not null), 0))::integer,
+      public.mark_pay(m.price_full, null, m.hours_total, coalesce(m.percent, 0), m.delta, m.hour_price)
+    ) filter (where m.consumes_credit and (m.hours_total is not null or m.unbilled)), 0))::integer,
     round(coalesce(sum(
-      m.price_final * m.delta / m.hours_total
-    ) filter (where m.consumes_credit and m.hours_total is not null), 0))::integer
+      case when m.unbilled then m.hour_price * m.delta else m.price_final * m.delta / m.hours_total end
+    ) filter (where m.consumes_credit and (m.hours_total is not null or m.unbilled)), 0))::integer
   from m;
 end;
 $$;
@@ -1608,9 +1705,11 @@ $$;
 
 -- Same as 0022 (#83: advances, to_pay; a teacher with advances only — a row with zeros). A mark on an
 -- hour subscription pays price_full × hours / hours_total × percent (И62: the hour price of the
--- subscription, not of the tariff on the lesson date — К6); lesson subscriptions — the very same
--- expression as before. student_hours — Σ hours of those marks, appended last (create or replace
--- keeps the column order). Same rules as calcMonth() + toPay() in src/features/payroll/calc.ts —
+-- subscription, not of the tariff on the lesson date — К6); a mark with hours and no invoice yet —
+-- hours × the hour price on the lesson date × percent (И69: the teacher's pay does not wait for the
+-- invoice); lesson subscriptions — the very same expression as before (mark_pay). no_subscription —
+-- consumed marks paid 0 (no subscription, no hours). student_hours — Σ hours of the hour marks,
+-- appended last (create or replace keeps the column order). Same rules as calcMonth() + toPay() in src/features/payroll/calc.ts —
 -- tests/integration/payroll.test.ts.
 create or replace view public.v_payroll_preview
 with (security_invoker = true)
@@ -1635,14 +1734,13 @@ with held as (
   cross join lateral (
     select
       count(*)::integer as student_lessons,
-      (count(*) - count(s.id))::integer as no_subscription,
-      sum(
-        case
-          when s.hours_total is null then s.price_full * r.percent / (s.lessons_total * 100.0)
-          else s.price_full * r.percent * coalesce(a.hours, 0) / (s.hours_total * 100.0)
-        end
-      ) as amount,
-      coalesce(sum(a.hours) filter (where s.hours_total is not null), 0) as student_hours
+      (count(*) filter (where s.id is null and a.hours is null))::integer as no_subscription,
+      sum(public.mark_pay(
+        s.price_full, s.lessons_total, s.hours_total, r.percent, a.hours,
+        public.afterschool_hour_price_on(l.lesson_date)
+      )) as amount,
+      coalesce(sum(a.hours) filter (where s.hours_total is not null or s.id is null), 0)
+        as student_hours
     from public.attendance a
     left join public.subscriptions s on s.id = a.subscription_id
     where a.lesson_id = l.id and a.consumes_credit
@@ -1690,6 +1788,40 @@ comment on view public.v_payroll_preview is
 revoke all on public.v_payroll_preview from anon;
 
 -- ─── 13. v_student_balance: units (lessons or hours) ────────────────────────
+
+-- After-school hours not invoiced yet (И69): consumed marks with hours and no subscription, per
+-- enrollment and month — the student owes them at the hour price on the lesson date (amount, whole
+-- som up), the teacher is paid for them by the same price (v_payroll_preview). active — the enrollment
+-- is still on: «Требует внимания» → «Продлёнка: не выставлен счёт за <месяц>». A void record holds no
+-- dates (enrollment_attendance). Security invoker — the caller's RLS.
+create or replace view public.v_afterschool_unbilled
+with (security_invoker = true)
+as
+select
+  e.id as enrollment_id,
+  e.student_id,
+  e.group_id,
+  date_trunc('month', l.lesson_date)::date as month,
+  min(l.lesson_date) as first_date,
+  count(*)::integer as marks,
+  sum(a.hours) as hours,
+  ceil(sum(a.hours * coalesce(public.afterschool_hour_price_on(l.lesson_date), 0)))::integer as amount,
+  e.status = 'active' as active
+from public.attendance a
+join public.lessons l on l.id = a.lesson_id
+join public.enrollments e
+  on e.group_id = l.group_id and e.student_id = a.student_id
+  and l.lesson_date >= e.start_date
+  and (l.lesson_date <= e.end_date or (e.end_date is null and e.status = 'active'))
+where a.subscription_id is null and a.hours is not null and a.consumes_credit
+group by e.id, date_trunc('month', l.lesson_date);
+
+comment on view public.v_afterschool_unbilled is
+  'After-school hours charged with no invoice (И69), per enrollment and month: the debt at the hour price on the date. Same as src/features/payments/balance.ts unbilledDebt().';
+
+revoke all on public.v_afterschool_unbilled from anon;
+revoke insert, update, delete on public.v_afterschool_unbilled from authenticated;
+grant select on public.v_afterschool_unbilled to authenticated;
 
 -- Same as 0024 (#81: a carried debt floors paid_lessons below 0, exhausted suggests no refund) in
 -- «units»: lessons of a package, hours of a monthly after-school subscription (paid hours floor to
@@ -1831,11 +1963,49 @@ select
   unit,
   hours_total,
   period_month,
-  credit_hours
-from balance;
+  credit_hours,
+  false as unbilled
+from balance
+union all
+-- a month not invoiced (И69): no subscription, its hours owed at the hour price on the date — like an
+-- unpaid invoice of exactly those hours; out of the chain and never current
+select
+  null::uuid,
+  u.enrollment_id,
+  u.student_id,
+  u.group_id,
+  'active'::public.subscription_status,
+  u.first_date,
+  u.hours,
+  u.amount,
+  u.amount,
+  0,
+  0::numeric,
+  u.hours,
+  0::numeric,
+  u.hours,
+  0::numeric,
+  u.hours,
+  u.amount,
+  0,
+  (select count(*)::integer from public.attendance a
+   join public.lessons l on l.id = a.lesson_id
+   where l.group_id = u.group_id and a.student_id = u.student_id
+     and a.subscription_id is null and a.status = 'absent_frozen'
+     and date_trunc('month', l.lesson_date)::date = u.month),
+  coalesce((select t.freeze_limit from public.tariffs t
+            where t.group_type = 'afterschool' and t.valid_from <= u.first_date
+            order by t.valid_from desc limit 1), 0),
+  false,
+  'hour',
+  u.hours,
+  u.month,
+  0::numeric,
+  true
+from public.v_afterschool_unbilled u;
 
 comment on view public.v_student_balance is
-  'Per subscription: paid / used / debt / refund (В7, В7.1, В8, И37, #81) in units — lessons, or hours of an after-school month (#82). Same as src/features/payments/balance.ts.';
+  'Per subscription: paid / used / debt / refund (В7, В7.1, В8, И37, #81) in units — lessons, or hours of an after-school month (#82); unbilled — an after-school month not invoiced (subscription_id null, И69). Same as src/features/payments/balance.ts.';
 
 revoke all on public.v_student_balance from anon;
 revoke insert, update, delete on public.v_student_balance from authenticated;
@@ -1912,8 +2082,10 @@ $$;
 
 -- Same as 0024; lessons_used is numeric — an hour subscription counts hours, priced at its billed
 -- hour price (price_final / hours_total): an invoice that used its credit hours goes below 0 by them,
--- the earlier invoice they were paid on stays above 0 by them — the enrollment's sum is right. The
--- return type changes — drop and create.
+-- the earlier invoice they were paid on stays above 0 by them — the enrollment's sum is right. A month
+-- not invoiced (И69) — a row with subscription_id null: its hours at the hour price on the date, below
+-- 0 by them (no payment can land on it — callers moving money skip it). unit — 'lesson' / 'hour',
+-- appended last. The return type changes — drop and create.
 drop function if exists public.subscription_settlement(uuid);
 create function public.subscription_settlement(p_enrollment_id uuid)
 returns table (
@@ -1923,7 +2095,8 @@ returns table (
   paid_som integer,
   lessons_used numeric,
   used_som integer,
-  remainder integer
+  remainder integer,
+  unit text
 )
 language sql
 stable
@@ -1932,21 +2105,23 @@ set search_path = ''
 as $$
   select
     b.subscription_id,
-    s.started_at,
+    b.started_at,
     s.created_at,
     b.paid_som,
     b.lessons_used,
-    ceil(b.lessons_used::numeric * b.price_final / coalesce(s.hours_total, s.lessons_total))::integer,
+    ceil(b.lessons_used::numeric * b.price_final / coalesce(b.hours_total, s.lessons_total))::integer,
     b.paid_som
-      - ceil(b.lessons_used::numeric * b.price_final / coalesce(s.hours_total, s.lessons_total))::integer
+      - ceil(b.lessons_used::numeric * b.price_final / coalesce(b.hours_total, s.lessons_total))::integer,
+    b.unit
   from public.v_student_balance b
-  join public.subscriptions s on s.id = b.subscription_id
+  left join public.subscriptions s on s.id = b.subscription_id
   where b.enrollment_id = p_enrollment_id and b.status <> 'refunded';
 $$;
 
--- Same as 0024 except: lessons_used is numeric (hours of an hour subscription), lesson_price of an
--- hour subscription is its paid hour price (price_final / hours_total), unit — of the newest live
--- subscription ('lesson' / 'hour'), appended last. The return type changes — drop and create.
+-- Same as 0024 except: lessons_used — lessons of the packages only, hours_used — hours of the hour
+-- subscriptions and of the months not invoiced (И69), appended last; used_som / remainder — of both.
+-- lesson_price of an hour subscription is its paid hour price (price_final / hours_total), unit — of
+-- the newest live subscription ('lesson' / 'hour'). The return type changes — drop and create.
 drop function if exists public.enrollment_settlement(uuid);
 create function public.enrollment_settlement(p_enrollment_id uuid)
 returns table (
@@ -1963,7 +2138,8 @@ returns table (
   remainder integer,
   lesson_price numeric,
   has_trial boolean,
-  unit text
+  unit text,
+  hours_used numeric
 )
 language plpgsql
 stable
@@ -1991,7 +2167,8 @@ begin
   settled as (
     select
       coalesce(sum(x.paid_som), 0)::integer as paid_som,
-      coalesce(sum(x.lessons_used), 0)::numeric as lessons_used,
+      coalesce(sum(x.lessons_used) filter (where x.unit = 'lesson'), 0)::numeric as lessons_used,
+      coalesce(sum(x.lessons_used) filter (where x.unit = 'hour'), 0)::numeric as hours_used,
       coalesce(sum(x.used_som), 0)::integer as used_som,
       coalesce(sum(x.remainder), 0)::integer as remainder
     from public.subscription_settlement(p_enrollment_id) x
@@ -2017,13 +2194,15 @@ begin
     settled.remainder,
     (select n.price_final::numeric / coalesce(n.hours_total, n.lessons_total) from newest n),
     exists (select 1 from public.trials t where t.enrollment_id = p_enrollment_id),
-    coalesce((select case when n.hours_total is null then 'lesson' else 'hour' end from newest n), 'lesson')
+    coalesce((select case when n.hours_total is null then 'lesson' else 'hour' end from newest n), 'lesson'),
+    settled.hours_used
   from money, settled;
 end;
 $$;
 
--- Same as 0024 except: a mark on an hour subscription pays price_full × hours / hours_total × percent
--- — the very expression of v_payroll_preview (И62), so «Записан по ошибке» shows the real payroll drop;
+-- Same as 0024 except: a mark on an hour subscription pays price_full × hours / hours_total × percent,
+-- a mark with hours and no invoice — by the hour price on the date (И69) — mark_pay, the very rule of
+-- v_payroll_preview (И62), so «Записан по ошибке» shows the real payroll drop;
 -- plus hour_marks / hours of those marks for the caption «за 2 дн. (3 ч)» (new columns — drop first).
 drop function public.enrollment_payroll_impact(uuid);
 create function public.enrollment_payroll_impact(p_enrollment_id uuid)
@@ -2047,14 +2226,12 @@ begin
     l.teacher_id,
     t.full_name,
     count(*)::integer,
-    round(coalesce(sum(
-      case
-        when s.hours_total is null then s.price_full * r.percent / (s.lessons_total * 100.0)
-        else s.price_full * r.percent * coalesce(a.hours, 0) / (s.hours_total * 100.0)
-      end
-    ), 0))::integer,
-    (count(*) filter (where s.hours_total is not null))::integer,
-    coalesce(sum(a.hours) filter (where s.hours_total is not null), 0)
+    round(coalesce(sum(public.mark_pay(
+      s.price_full, s.lessons_total, s.hours_total, r.percent, a.hours,
+      public.afterschool_hour_price_on(l.lesson_date)
+    )), 0))::integer,
+    (count(*) filter (where s.hours_total is not null or (s.id is null and a.hours is not null)))::integer,
+    coalesce(sum(a.hours) filter (where s.hours_total is not null or s.id is null), 0)
   from public.enrollment_attendance(p_enrollment_id) a
   join public.lessons l on l.id = a.lesson_id
   join public.teachers t on t.id = l.teacher_id
@@ -2318,6 +2495,7 @@ begin
   v_left := v_refund;
   for r in
     select * from public.subscription_settlement(p_enrollment_id) x
+    where x.subscription_id is not null
     order by x.started_at desc, x.created_at desc, x.subscription_id desc
   loop
     v_take := least(v_left, greatest(r.remainder, 0));
@@ -2578,6 +2756,199 @@ end;
 $$;
 
 
+-- «Ушёл» from after-school with months not invoiced (И69): each such month gets an invoice of exactly
+-- the hours charged (v_afterschool_unbilled: hours × the hour price on the date, no discount, no
+-- credit) and its marks without a subscription (frozen too) move to it — the debt joins the
+-- remainder and the transfer pairs of withdraw_enrollment. A month with marks in a closed period
+-- cannot move (invariant 2): its debt stays unbilled (v_student_balance, subscription_settlement).
+-- Core, no role check (withdraw_enrollment checks). Returns the number of invoices made.
+create or replace function public.afterschool_bill_unbilled(p_enrollment_id uuid)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_e public.enrollments%rowtype;
+  v_id uuid;
+  v_count integer := 0;
+  r record;
+begin
+  select * into v_e from public.enrollments e where e.id = p_enrollment_id;
+  for r in
+    select u.* from public.v_afterschool_unbilled u
+    where u.enrollment_id = p_enrollment_id
+      and not exists (
+        select 1 from public.subscriptions s
+        where s.enrollment_id = p_enrollment_id and s.status <> 'refunded' and s.period_month = u.month
+      )
+      and not exists (
+        select 1 from public.attendance a
+        join public.lessons l on l.id = a.lesson_id
+        where l.group_id = u.group_id and a.student_id = u.student_id and l.is_locked
+          and date_trunc('month', l.lesson_date)::date = u.month
+      )
+    order by u.month
+  loop
+    v_id := null;
+    insert into public.subscriptions (
+      enrollment_id, tariff_id, lessons_total, price_full, discount_percent, discount_reason,
+      price_final, started_at, hours_total, period_month, credit_hours
+    )
+    select p_enrollment_id, t.id, r.marks, r.amount, 0, 'none', r.amount, r.first_date, r.hours, r.month, 0
+    from public.tariffs t
+    where t.group_type = 'afterschool' and t.valid_from <= r.first_date
+    order by t.valid_from desc
+    limit 1
+    returning id into v_id;
+    continue when v_id is null;
+
+    update public.attendance a set subscription_id = v_id
+    from public.lessons l
+    where l.id = a.lesson_id
+      and l.group_id = v_e.group_id
+      and a.student_id = v_e.student_id
+      and a.subscription_id is null
+      and date_trunc('month', l.lesson_date)::date = r.month
+      and l.lesson_date >= v_e.start_date
+      and (v_e.end_date is null or l.lesson_date <= v_e.end_date);
+    v_count := v_count + 1;
+  end loop;
+  return v_count;
+end;
+$$;
+
+-- Same as 0024 plus #82 × И69: the months not invoiced get an invoice of the hours charged
+-- (afterschool_bill_unbilled) once the enrollment is finished — «Ушёл» on 10.11 with 7 days of
+-- November not invoiced: those hours are a debt in the remainder, never lost; a month in a closed
+-- period stays an unbilled debt (no payment moves onto it).
+create or replace function public.withdraw_enrollment(
+  p_enrollment_id uuid,
+  p_end_date date,
+  p_refund integer default 0,
+  p_method public.payment_method default null,
+  p_reason text default null,
+  p_paid_on date default null,
+  p_center_reason text default null
+)
+returns table (remainder integer, refunded integer, left_to_center integer)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_enrollment public.enrollments%rowtype;
+  v_remainder integer;
+  v_refund integer := coalesce(p_refund, 0);
+  v_rest integer;
+  v_reason text := coalesce(nullif(btrim(coalesce(p_reason, '')), ''), 'ученик ушёл из группы');
+  v_center_reason text := nullif(btrim(coalesce(p_center_reason, '')), '');
+  v_target uuid;
+  v_moved integer := 0;
+  v_transfer uuid := gen_random_uuid();
+  r record;
+begin
+  perform public.assert_admin();
+
+  select * into v_enrollment from public.enrollments e where e.id = p_enrollment_id for update;
+  if not found then
+    raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
+  end if;
+  -- the subscriptions too, as record_payment does: no payment / refund lands between the settlement
+  -- read below and the rows written from it
+  perform 1 from public.subscriptions s where s.enrollment_id = p_enrollment_id for update;
+  if v_enrollment.status <> 'active' then
+    raise exception 'enrollment is finished' using errcode = 'check_violation';
+  end if;
+  if p_end_date is null or p_end_date < v_enrollment.start_date then
+    raise exception 'end date is before the enrollment start' using errcode = 'check_violation';
+  end if;
+  if exists (
+    select 1 from public.enrollment_attendance(p_enrollment_id) a
+    join public.lessons l on l.id = a.lesson_id
+    where a.consumes_credit and l.lesson_date > p_end_date
+  ) then
+    raise exception 'the enrollment has present or burned marks after %', p_end_date
+      using errcode = 'check_violation';
+  end if;
+  if exists (
+    select 1 from public.enrollment_attendance(p_enrollment_id) a
+    join public.lessons l on l.id = a.lesson_id
+    where l.is_locked and l.lesson_date > p_end_date
+  ) then
+    raise exception 'the enrollment has marks in a closed period' using errcode = 'check_violation';
+  end if;
+
+  select coalesce(sum(x.remainder), 0)::integer into v_remainder
+  from public.subscription_settlement(p_enrollment_id) x;
+  if v_refund < 0 or v_refund > greatest(v_remainder, 0) then
+    raise exception 'refund must be between 0 and the remainder' using errcode = 'check_violation';
+  end if;
+  if v_refund > 0 and p_method is null then
+    raise exception 'payment method is required for a refund' using errcode = 'check_violation';
+  end if;
+  v_rest := greatest(v_remainder, 0) - v_refund;
+  if v_rest > 0 and v_center_reason is null then
+    raise exception 'the rest of the remainder must be refunded or left to the center with a reason'
+      using errcode = 'check_violation';
+  end if;
+
+  perform set_config('iqup.audit_reason', 'withdraw_enrollment', true);
+
+  delete from public.attendance a
+  where a.id in (
+    select m.id from public.enrollment_attendance(p_enrollment_id) m
+    join public.lessons l on l.id = m.lesson_id
+    where l.lesson_date > p_end_date
+  )
+    and a.status = 'absent_frozen';
+
+  update public.enrollments set end_date = p_end_date, status = 'finished' where id = p_enrollment_id;
+
+  -- after-school months not invoiced (И69): an invoice of the hours charged, so their debt is in the
+  -- remainder and moves with the money below
+  perform public.afterschool_bill_unbilled(p_enrollment_id);
+
+  -- even the subscriptions out onto the newest one: every other one to remainder 0 (a transfer pair, as
+  -- transfer_student), so a debt on an old one and a surplus on a new one cancel instead of the refund /
+  -- the rest left to the center taking the surplus and the old debt staying in the debtors list
+  for r in
+    select * from public.subscription_settlement(p_enrollment_id) x
+    where x.subscription_id is not null
+    order by x.started_at desc, x.created_at desc, x.subscription_id desc
+  loop
+    if v_target is null then
+      v_target := r.subscription_id;
+    elsif r.remainder <> 0 then
+      insert into public.payments (subscription_id, amount, method, kind, reason, transfer_id)
+      values (r.subscription_id, -r.remainder, null, 'transfer', 'перенос между абонементами: ' || v_reason,
+              v_transfer);
+      v_moved := v_moved + r.remainder;
+    end if;
+  end loop;
+  if v_moved <> 0 then
+    insert into public.payments (subscription_id, amount, method, kind, reason, transfer_id)
+    values (v_target, v_moved, null, 'transfer', 'перенос между абонементами: ' || v_reason, v_transfer);
+  end if;
+
+  if v_refund > 0 then
+    insert into public.payments (subscription_id, amount, method, paid_at, kind, reason)
+    values (v_target, -v_refund, p_method, public.payment_time(p_paid_on), 'refund', v_reason);
+  end if;
+
+  if v_rest > 0 then
+    perform set_config('iqup.audit_reason',
+      'остаток ' || v_rest || ' сом оставлен центру: ' || v_center_reason, true);
+  end if;
+  update public.subscriptions s set status = 'exhausted'
+  where s.enrollment_id = p_enrollment_id and s.status = 'active';
+
+  perform set_config('iqup.audit_reason', '', true);
+  return query select v_remainder, v_refund, v_rest;
+end;
+$$;
+
+
 -- ─── 14c. reschedule_group: after-school plans follow the new weekdays ──────
 
 -- A student's plan on a new schedule (#82 review): a weekday the group keeps — the student's hours
@@ -2801,6 +3172,17 @@ grant execute on function public.enroll_student(uuid, uuid, date, integer, publi
 to authenticated;
 
 revoke execute on function public.subscription_settlement(uuid) from public, anon, authenticated;
+revoke execute on function public.afterschool_bill_unbilled(uuid) from public, anon, authenticated;
+revoke execute on function public.mark_pay(integer, integer, numeric, numeric, numeric, integer)
+from public, anon;
+grant execute on function public.mark_pay(integer, integer, numeric, numeric, numeric, integer)
+to authenticated;
+revoke execute on function public.afterschool_hour_price_on(date) from public, anon;
+grant execute on function public.afterschool_hour_price_on(date) to authenticated;
+revoke execute on function public.hour_price(public.lessons) from public, anon;
+grant execute on function public.hour_price(public.lessons) to authenticated;
+revoke execute on function public.unbilled_hour_price(public.attendance) from public, anon;
+grant execute on function public.unbilled_hour_price(public.attendance) to authenticated;
 revoke execute on function public.enrollment_payroll_impact(uuid) from public, anon;
 grant execute on function public.enrollment_payroll_impact(uuid) to authenticated;
 revoke execute on function public.enrollment_settlement(uuid) from public, anon;

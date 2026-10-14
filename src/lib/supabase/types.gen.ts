@@ -54,6 +54,13 @@ export type Database = {
             referencedRelation: 'enrollments'
             referencedColumns: ['id']
           },
+          {
+            foreignKeyName: 'afterschool_plans_enrollment_id_fkey'
+            columns: ['enrollment_id']
+            isOneToOne: false
+            referencedRelation: 'v_afterschool_unbilled'
+            referencedColumns: ['enrollment_id']
+          },
         ]
       }
       attendance: {
@@ -67,8 +74,9 @@ export type Database = {
           status: Database['public']['Enums']['attendance_status']
           student_id: string
           subscription_id: string | null
+          unbilled_hour_price: number | null
         }
-        ComputedFields: never
+        ComputedFields: 'unbilled_hour_price'
         Insert: {
           consumes_credit?: never
           hours?: number | null
@@ -126,13 +134,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'subscriptions'
             referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'attendance_subscription_id_fkey'
-            columns: ['subscription_id']
-            isOneToOne: false
-            referencedRelation: 'v_student_balance'
-            referencedColumns: ['subscription_id']
           },
           {
             foreignKeyName: 'attendance_subscription_id_fkey'
@@ -464,8 +465,9 @@ export type Database = {
           status: Database['public']['Enums']['lesson_status']
           substitute_teacher_id: string | null
           teacher_id: string
+          hour_price: number | null
         }
-        ComputedFields: never
+        ComputedFields: 'hour_price'
         Insert: {
           cancel_reason?: Database['public']['Enums']['cancel_reason'] | null
           comment?: string | null
@@ -601,13 +603,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'subscriptions'
             referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'payments_subscription_id_fkey'
-            columns: ['subscription_id']
-            isOneToOne: false
-            referencedRelation: 'v_student_balance'
-            referencedColumns: ['subscription_id']
           },
           {
             foreignKeyName: 'payments_subscription_id_fkey'
@@ -866,6 +861,13 @@ export type Database = {
             referencedColumns: ['id']
           },
           {
+            foreignKeyName: 'subscriptions_enrollment_id_fkey'
+            columns: ['enrollment_id']
+            isOneToOne: false
+            referencedRelation: 'v_afterschool_unbilled'
+            referencedColumns: ['enrollment_id']
+          },
+          {
             foreignKeyName: 'subscriptions_tariff_id_fkey'
             columns: ['tariff_id']
             isOneToOne: false
@@ -1058,6 +1060,13 @@ export type Database = {
             referencedColumns: ['id']
           },
           {
+            foreignKeyName: 'trials_enrollment_id_fkey'
+            columns: ['enrollment_id']
+            isOneToOne: false
+            referencedRelation: 'v_afterschool_unbilled'
+            referencedColumns: ['enrollment_id']
+          },
+          {
             foreignKeyName: 'trials_group_id_fkey'
             columns: ['group_id']
             isOneToOne: false
@@ -1103,6 +1112,36 @@ export type Database = {
       }
     }
     Views: {
+      v_afterschool_unbilled: {
+        Row: {
+          active: boolean | null
+          amount: number | null
+          enrollment_id: string | null
+          first_date: string | null
+          group_id: string | null
+          hours: number | null
+          marks: number | null
+          month: string | null
+          student_id: string | null
+        }
+        ComputedFields: never
+        Relationships: [
+          {
+            foreignKeyName: 'enrollments_group_id_fkey'
+            columns: ['group_id']
+            isOneToOne: false
+            referencedRelation: 'groups'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'enrollments_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'students'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       v_audit_feed: {
         Row: {
           action: string | null
@@ -1297,33 +1336,12 @@ export type Database = {
           status: Database['public']['Enums']['subscription_status'] | null
           student_id: string | null
           subscription_id: string | null
+          unbilled: boolean | null
           unit: string | null
           used_own: number | null
         }
         ComputedFields: never
-        Relationships: [
-          {
-            foreignKeyName: 'enrollments_group_id_fkey'
-            columns: ['group_id']
-            isOneToOne: false
-            referencedRelation: 'groups'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'enrollments_student_id_fkey'
-            columns: ['student_id']
-            isOneToOne: false
-            referencedRelation: 'students'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'subscriptions_enrollment_id_fkey'
-            columns: ['enrollment_id']
-            isOneToOne: false
-            referencedRelation: 'enrollments'
-            referencedColumns: ['id']
-          },
-        ]
+        Relationships: []
       }
       v_subscription_balances: {
         Row: {
@@ -1361,12 +1379,20 @@ export type Database = {
             referencedRelation: 'enrollments'
             referencedColumns: ['id']
           },
+          {
+            foreignKeyName: 'subscriptions_enrollment_id_fkey'
+            columns: ['enrollment_id']
+            isOneToOne: false
+            referencedRelation: 'v_afterschool_unbilled'
+            referencedColumns: ['enrollment_id']
+          },
         ]
       }
     }
     Functions: {
       afterschool_backfill_plans: { Args: Record<PropertyKey, never>; Returns: number }
       afterschool_bill_from: { Args: { p_enrollment_id: string; p_month: string }; Returns: string }
+      afterschool_bill_unbilled: { Args: { p_enrollment_id: string }; Returns: number }
       afterschool_credit_hours: { Args: { p_enrollment_id: string }; Returns: number }
       afterschool_day_hours: {
         Args: { p_date: string; p_group_id: string; p_student_id: string }
@@ -1374,6 +1400,7 @@ export type Database = {
       }
       afterschool_default_hours: { Args: { p_date: string }; Returns: number }
       afterschool_default_plan: { Args: { p_date: string; p_group_id: string }; Returns: number[] }
+      afterschool_hour_price_on: { Args: { p_date: string }; Returns: number }
       afterschool_hours_of: { Args: { p_extra_min: number; p_plan_hours: number }; Returns: number }
       afterschool_hours_valid: { Args: { p_hours: number[] }; Returns: boolean }
       afterschool_invoice_insert: {
@@ -1640,6 +1667,7 @@ export type Database = {
           burned_marks: number
           frozen_marks: number
           has_trial: boolean
+          hours_used: number
           last_mark_date: string
           lesson_price: number
           lessons_used: number
@@ -1670,6 +1698,15 @@ export type Database = {
       generate_lessons: { Args: { p_group_id: string; p_until: string }; Returns: number }
       group_delete_blockers: { Args: { p_group_id: string }; Returns: string[] }
       group_title: { Args: { p_group_id: string }; Returns: string }
+      hour_price: {
+        Args: {
+          p_lesson: Omit<
+            Database['public']['Tables']['lessons']['Row'],
+            Database['public']['Tables']['lessons']['ComputedFields']
+          >
+        }
+        Returns: number
+      }
       is_accountant: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean }
@@ -1695,6 +1732,17 @@ export type Database = {
       }
       leads_group: { Args: { p_group_id: string }; Returns: boolean }
       lesson_starts_at: { Args: { p_date: string; p_start: string }; Returns: string }
+      mark_pay: {
+        Args: {
+          p_hour_price: number
+          p_hours: number
+          p_hours_total: number
+          p_lessons_total: number
+          p_percent: number
+          p_price_full: number
+        }
+        Returns: number
+      }
       payment_time: { Args: { p_paid_on: string }; Returns: string }
       payroll_month_locked: { Args: { p_month: string; p_teacher_id: string }; Returns: boolean }
       person_name_key: { Args: { p_name: string }; Returns: string }
@@ -1776,6 +1824,7 @@ export type Database = {
           remainder: number
           started_at: string
           subscription_id: string
+          unit: string
           used_som: number
         }[]
       }
@@ -1830,6 +1879,15 @@ export type Database = {
           transferred: number
           whole_move: boolean
         }[]
+      }
+      unbilled_hour_price: {
+        Args: {
+          p_mark: Omit<
+            Database['public']['Tables']['attendance']['Row'],
+            Database['public']['Tables']['attendance']['ComputedFields']
+          >
+        }
+        Returns: number
       }
       user_last_sign_in: {
         Args: Record<PropertyKey, never>

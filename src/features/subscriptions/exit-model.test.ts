@@ -41,6 +41,7 @@ const settlement = (extra: Partial<Settlement> = {}): Settlement => ({
   moneySom: 7200,
   paidSom: 7200,
   lessonsUsed: 9,
+  hoursUsed: 0,
   usedSom: 5400,
   remainder: 1800,
   lessonPrice: 600,
@@ -107,7 +108,8 @@ describe('money captions', () => {
       settlementLines(
         settlement({
           paidSom: 2000,
-          lessonsUsed: 5.5,
+          lessonsUsed: 0,
+          hoursUsed: 5.5,
           usedSom: 550,
           remainder: 1450,
           lessonPrice: 100,
@@ -117,6 +119,23 @@ describe('money captions', () => {
     )
     expect(lines[1]).toEqual({ label: 'Списано', value: '5,5 ч × 100/ч = 550 сом' })
     expect(lines[2]).toEqual({ label: 'Остаток', value: '1 450 сом', tone: 'left' })
+  })
+
+  it('old lessons and hours are not summed into one number (#82)', () => {
+    const lines = spLines(
+      settlementLines(
+        settlement({
+          paidSom: 9400,
+          lessonsUsed: 20,
+          hoursUsed: 6,
+          usedSom: 8138,
+          remainder: 1262,
+          lessonPrice: 123,
+          unit: 'hour',
+        }),
+      ),
+    )
+    expect(lines[1]).toEqual({ label: 'Списано', value: '20 уроков + 6 ч × 123/ч = 8 138 сом' })
   })
 
   it('no transfer to an after-school group (#82)', () => {

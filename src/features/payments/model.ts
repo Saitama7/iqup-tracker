@@ -377,7 +377,8 @@ export function paymentHint(
 /** «остаток 5 ур × 266,67» under the refund amount (В8). */
 export function refundHint(b: StudentBalance): string {
   const lessons = Math.max(0, Math.min(b.paidLessons, b.lessonsTotal) - b.lessonsUsed)
-  return `Остаток ${unitCount(b, lessons)} × ${formatLessonPrice(b.priceFinal / b.lessonsTotal, true)} сом = ${som(b.refundSuggested)}`
+  // the paid price of a unit: of a billed hour, not of the capacity with its credit (#82)
+  return `Остаток ${unitCount(b, lessons)} × ${formatLessonPrice(b.priceFinal / b.pricedTotal, true)} сом = ${som(b.refundSuggested)}`
 }
 
 /** Digits of the amount field: «3 200» → 3200; empty / junk → null. */

@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { Search } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { PageHeader, PageTitle } from '@/components/page'
-import { balancesQuery } from '@/features/payments/api'
+import { balancesQuery, unbilledQuery } from '@/features/payments/api'
 import { formatSom } from '@/features/tariffs/model'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -43,6 +43,8 @@ export function StudentsPage({
   const navigate = useNavigate()
   const studentsResult = useQuery(studentsQuery())
   const balancesResult = useQuery(balancesQuery())
+  // after-school hours not invoiced yet are a debt too (И69); the list does not wait for them
+  const unbilled = useQuery(unbilledQuery()).data
   const query = {
     isPending: studentsResult.isPending || balancesResult.isPending,
     isError: studentsResult.isError || balancesResult.isError,
@@ -52,8 +54,8 @@ export function StudentsPage({
   const [creating, setCreating] = useState(false)
 
   const rows = useMemo(
-    () => (data && balances ? studentListRows(data, balances) : []),
-    [data, balances],
+    () => (data && balances ? studentListRows(data, balances, unbilled) : []),
+    [data, balances, unbilled],
   )
   const counts = useMemo(() => payCounts(rows), [rows])
   const groups = useMemo(() => (data ? enrollableGroups(data.groups) : []), [data])

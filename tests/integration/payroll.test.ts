@@ -8,6 +8,7 @@ import { calcMonth, toPay, type PayLesson } from '../../src/features/payroll/cal
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { phoneToEmail } from '../../supabase/functions/_shared/phone'
 import { localSupabase } from '../../scripts/local-supabase'
+import { ensureAfterschoolFixture, FIXTURE } from './afterschool-fixture'
 
 const env = localSupabase()
 
@@ -43,7 +44,7 @@ async function source(supabase: Client) {
     supabase
       .from('lessons')
       .select(
-        'id, group_id, lesson_date, duration_min, status, teacher_id, attendance(status, hours, subscription:subscriptions(price_full, lessons_total, hours_total))',
+        'id, group_id, lesson_date, duration_min, status, teacher_id, attendance(status, hours, unbilled_hour_price, subscription:subscriptions(price_full, lessons_total, hours_total))',
       ),
     supabase.from('teacher_rates').select('teacher_id, percent, valid_from'),
   ])
@@ -59,6 +60,8 @@ async function source(supabase: Client) {
   }
   return { byKey, rates: rates.data }
 }
+
+beforeAll(ensureAfterschoolFixture)
 
 describe('v_payroll_preview ↔ calcMonth on the seed', () => {
   it('every teacher and month: the same lessons, hours, student-lessons and sum', async () => {
@@ -116,6 +119,28 @@ describe('v_payroll_preview ↔ calcMonth on the seed', () => {
       studentHours: 0,
       amount: 38_160,
     })
+  })
+})
+
+describe('after-school by hours (#82 fixture): invoiced, credit and not invoiced yet', () => {
+  it('the hour price of the invoice, and of the date for a month not invoiced (И69)', async () => {
+    const supabase = await signIn('0555 300 300')
+    const rows = (await viewRows(supabase)).filter((r) => r.teacher_id === FIXTURE.teacher)
+    const { byKey, rates } = await source(supabase)
+    const own = rates.filter((r) => r.teacher_id === FIXTURE.teacher)
+    // hour price 7 000 / 60 h = 117; October 9 h on the October invoices, November F1 6 h on its
+    // invoice (54 h + 6 h credit) + F2 6 h not invoiced, by the hour price on the date
+    expect(rows.map((r) => [r.month, r.base_amount, r.student_hours, r.no_subscription])).toEqual(
+      expect.arrayContaining([
+        ['2025-10-01', 474, 9, 0],
+        ['2025-11-01', 632, 12, 0],
+      ]),
+    )
+    for (const row of rows) {
+      const ts = calcMonth(byKey.get(`${FIXTURE.teacher}|${row.month}`) ?? [], own)
+      expect(ts.amount).toBe(row.base_amount)
+      expect(ts.studentHours).toBe(row.student_hours)
+    }
   })
 })
 

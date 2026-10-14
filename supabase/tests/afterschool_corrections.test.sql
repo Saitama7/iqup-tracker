@@ -77,6 +77,9 @@ set local request.jwt.claims = '{"sub":"a8210000-0000-4000-8000-000000000003","r
 select * from public.enroll_student('e8210000-0000-4000-8000-000000000001', 'd8210000-0000-4000-8000-000000000001',
   '2003-03-01', 0, 'none', array[2, 0, 1, 0, 2, 0, 0]::numeric[]);
 select * from public.enroll_student('e8210000-0000-4000-8000-000000000002', 'd8210000-0000-4000-8000-000000000001', '2003-03-01');
+-- A pays March in full: unused paid hours are credit (И70)
+select public.record_payment(pg_temp.sub_a('2003-03-01'),
+  (select price_final from public.subscriptions where id = pg_temp.sub_a('2003-03-01')), 'cash');
 
 set local request.jwt.claims = '{"sub":"a8210000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"roles":["teacher"]}}';
 select public.confirm_lesson(pg_temp.lesson(d), jsonb_build_array(

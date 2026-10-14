@@ -124,10 +124,11 @@ select is(
 
 -- ─── «Ушёл»: remainder = hour price × unused paid hours ─────────────────────
 select results_eq(
-  $$ select present_marks, burned_marks, paid_som, lessons_used, used_som, remainder, lesson_price, unit
+  $$ select present_marks, burned_marks, paid_som, lessons_used, hours_used, used_som, remainder,
+            lesson_price, unit
      from public.enrollment_settlement(pg_temp.enr('e8200000-0000-4000-8000-000000000081')) $$,
-  $$ values (2, 1, 2000, 5.0::numeric, 500, 1500, 100::numeric, 'hour') $$,
-  'W: paid 2 000, 5 h × 100 = 500 used, 1 500 left, price — of an hour'
+  $$ values (2, 1, 2000, 0::numeric, 5.0::numeric, 500, 1500, 100::numeric, 'hour') $$,
+  'W: paid 2 000, 5 h × 100 = 500 used (hours apart from lessons), 1 500 left, price — of an hour'
 );
 select results_eq(
   $$ select remainder, refunded, left_to_center from public.withdraw_enrollment(

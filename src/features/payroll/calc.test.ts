@@ -325,3 +325,35 @@ describe('after-school hour subscriptions (#82, И62)', () => {
     expect(month.studentLessons).toBe(3)
   })
 })
+
+describe('after-school hours not invoiced yet (И69)', () => {
+  it('markPay: hours × the hour price on the date × percent — the pay does not wait for the invoice', () => {
+    expect(markPay(null, 45, 3, 123)).toBeCloseTo(166.05)
+    expect(markPay(null, 45, null, 123)).toBe(0)
+    expect(markPay(null, 45, 3, null)).toBe(0)
+    expect(markPay(null, null, 3, 123)).toBe(0)
+  })
+
+  it('calcMonth: 7 days × 3 h with no invoice = 21 h × 123 × 45 % = 1 162, not «без абонемента»', () => {
+    const l = lesson({ duration_min: 180, marks: [] })
+    const day = {
+      ...l,
+      attendance: [
+        { status: 'present' as const, subscription: null, hours: 3, unbilled_hour_price: 123 },
+      ],
+    }
+    const month = calcMonth(
+      Array.from({ length: 7 }, (_, i) => ({ ...day, id: `l${i}` })),
+      RATE_45,
+    )
+    expect(month.amount).toBe(1162)
+    expect(month.studentHours).toBe(21)
+    expect(month.noSubscription).toBe(0)
+  })
+
+  it('a lesson mark without a subscription still pays 0 and is flagged', () => {
+    const month = calcMonth([lesson({ sub: null })], RATE_45)
+    expect(month.amount).toBe(0)
+    expect(month.noSubscription).toBe(1)
+  })
+})

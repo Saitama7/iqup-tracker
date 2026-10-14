@@ -170,6 +170,8 @@ export function afterschoolErrorMessage(error: { code?: string; message?: string
   if (error.code === '23514') {
     if (m.includes('later month')) return 'Уже выставлен счёт за более поздний месяц'
     if (m.includes('no planned hours')) return 'В этом месяце по графику нет часов'
+    if (m.includes('only for the first invoice'))
+      return '«Считать с» — только для первого счёта, следующие считаются с 1-го числа'
     if (m.includes('billing date')) return 'Дата должна быть в месяце счёта'
     if (m.includes('reason is required')) return 'Дата в прошлом — укажите причину'
     if (m.includes('outside the enrollment')) return 'Дата вне периода зачисления'

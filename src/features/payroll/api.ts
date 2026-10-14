@@ -31,9 +31,11 @@ export const PAY_ATTENDANCE = z.object({
     .nullable(),
   /** After-school: hours charged by the student's plan (#82). */
   hours: z.number().nullable(),
+  /** After-school hours not invoiced yet: the hour price on the lesson date (И69). */
+  unbilled_hour_price: z.number().nullable(),
 })
 export const PAY_ATTENDANCE_FIELDS =
-  'attendance(status, hours, subscription:subscriptions(price_full, lessons_total, hours_total))'
+  'attendance(status, hours, unbilled_hour_price, subscription:subscriptions(price_full, lessons_total, hours_total))'
 
 const tariffSchema = z.object({
   group_type: GROUP_TYPE,

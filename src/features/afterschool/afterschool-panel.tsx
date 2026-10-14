@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId, useState, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { DateInput } from '@/components/ui/date-picker'
-import { BALANCES_KEY } from '@/features/payments/api'
+import { BALANCES_KEY, unbilledQuery } from '@/features/payments/api'
 import { STUDENTS_KEY } from '@/features/students/api'
 import { formatDayMonth } from '@/features/students/model'
 import { FormDialog } from '@/features/students/parts'
@@ -88,6 +88,7 @@ export function AfterschoolPanel({
 }) {
   const query = useQuery(enrollmentAfterschoolQuery(e.enrollmentId, monthStart(today)))
   const tariffs = useQuery(tariffsQuery())
+  const unbilled = useQuery(unbilledQuery())
   const [editing, setEditing] = useState(false)
   const [invoicing, setInvoicing] = useState<MonthBill | null>(null)
 
@@ -149,6 +150,22 @@ export function AfterschoolPanel({
           </span>
         </div>
       ))}
+      {(unbilled.data ?? [])
+        .filter((u) => u.enrollmentId === e.enrollmentId)
+        .map((u) => (
+          // marks of a month with no invoice: the teacher is paid, the student owes them (И69)
+          <div
+            key={u.month}
+            className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-line-strong pt-2"
+          >
+            <span className="text-xs font-extrabold">
+              {cap(monthAccusative(u.month))} · не выставлен счёт
+            </span>
+            <span className="text-xs font-extrabold whitespace-nowrap text-warn-strong">
+              долг {formatHours(u.hours)} ч · {formatSom(u.som)} сом
+            </span>
+          </div>
+        ))}
       {months.map((m) => {
         const hours = m.rows.reduce((n, r) => n + r.hours * r.days, 0)
         const price = hourPrice(m.month)

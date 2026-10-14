@@ -76,6 +76,7 @@ const bal = (subscriptionId: string, over: Partial<Balance> = {}): Balance => ({
   unit: 'lesson',
   periodMonth: null,
   lessonsTotal: 12,
+  pricedTotal: 12,
   priceFinal: 3200,
   paidSom: 3200,
   paidLessons: 12,
@@ -185,6 +186,17 @@ describe('studentListRows (А5)', () => {
   it('debt sums over all subscriptions, old ones too', () => {
     expect(by('elina')).toMatchObject({ debtLessons: 3, debtSom: 800 })
     expect(by('nurlan')).toMatchObject({ debtLessons: 0, debtSom: 0 })
+  })
+
+  it('after-school hours not invoiced yet are a debt too (И69)', () => {
+    const withUnbilled = studentListRows(source, balances, [
+      { studentId: 'nurlan', hours: 21, som: 2583 },
+    ])
+    expect(withUnbilled.find((r) => r.id === 'nurlan')).toMatchObject({
+      payState: 'debt',
+      debtLessons: 21,
+      debtSom: 2583,
+    })
   })
 
   it('a fully paid student is «Оплачено» and needs no payment', () => {

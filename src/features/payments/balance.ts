@@ -204,3 +204,36 @@ export function totalDebt(balances: readonly SubscriptionBalance[]): {
     { lessons: 0, som: 0 },
   )
 }
+
+/** An after-school mark charged with no invoice yet (И69): its hours and the hour price on its date. */
+export interface UnbilledMark {
+  lesson_date: string
+  hours: number
+  hourPrice: number
+}
+
+export interface UnbilledDebt {
+  /** First day of the month. */
+  month: string
+  hours: number
+  /** Σ hours × hour price, whole som up — what the student owes for the month. */
+  som: number
+}
+
+/**
+ * Hours of the months not invoiced yet are a debt («долг 21 ч · 2 583 сом»): per month Σ hours and
+ * Σ hours × the hour price on the date, rounded up once — v_afterschool_unbilled (0025). By month.
+ */
+export function unbilledDebt(marks: readonly UnbilledMark[]): UnbilledDebt[] {
+  const months = new Map<string, { hours: number; exact: number }>()
+  for (const m of marks) {
+    const month = `${m.lesson_date.slice(0, 7)}-01`
+    const t = months.get(month) ?? { hours: 0, exact: 0 }
+    t.hours += m.hours
+    t.exact += m.hours * m.hourPrice
+    months.set(month, t)
+  }
+  return [...months.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, t]) => ({ month, hours: units(t.hours), som: Math.ceil(units(t.exact)) }))
+}

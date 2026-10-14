@@ -36,6 +36,7 @@ const balanceSchema = z.object({
   freeze_limit: z.number().int(),
   is_current: z.boolean(),
   unit: z.enum(['lesson', 'hour']),
+  hours_total: z.number().nullable(),
   period_month: z.string().nullable(),
 })
 
@@ -48,10 +49,12 @@ export interface StudentBalance extends SubscriptionBalance {
   unit: 'lesson' | 'hour'
   /** After-school: the billed month (first day). */
   periodMonth: string | null
+  /** Units the price is for: billed hours of an hour invoice (without its credit), else lessons_total. */
+  pricedTotal: number
 }
 
 const BALANCE_FIELDS =
-  'subscription_id, student_id, group_id, status, lessons_total, price_final, paid_som, paid_lessons, carried_in, lessons_used, lessons_left, debt_lessons, debt_som, refund_suggested, freezes_used, freeze_limit, is_current, unit, period_month'
+  'subscription_id, student_id, group_id, status, lessons_total, price_final, paid_som, paid_lessons, carried_in, lessons_used, lessons_left, debt_lessons, debt_som, refund_suggested, freezes_used, freeze_limit, is_current, unit, hours_total, period_month'
 
 const toBalance = (r: z.infer<typeof balanceSchema>): StudentBalance => ({
   subscriptionId: r.subscription_id,
@@ -73,6 +76,7 @@ const toBalance = (r: z.infer<typeof balanceSchema>): StudentBalance => ({
   freezeLimit: r.freeze_limit,
   unit: r.unit,
   periodMonth: r.period_month,
+  pricedTotal: r.hours_total ?? r.lessons_total,
 })
 
 /** Every visible subscription's balance (~100 rows) — А5 / А6 / А7 read the view, not the formula. */
@@ -80,9 +84,64 @@ export const balancesQuery = () =>
   queryOptions({
     queryKey: [BALANCES_KEY],
     queryFn: async (): Promise<StudentBalance[]> => {
-      const { data, error } = await supabase.from('v_student_balance').select(BALANCE_FIELDS)
+      // the months not invoiced (subscription_id null, И69) — unbilledQuery
+      const { data, error } = await supabase
+        .from('v_student_balance')
+        .select(BALANCE_FIELDS)
+        .not('subscription_id', 'is', null)
       if (error) throw error
       return z.array(balanceSchema).parse(data).map(toBalance)
+    },
+  })
+
+// ─── v_afterschool_unbilled ─────────────────────────────────────────────────
+
+const unbilledSchema = z.object({
+  enrollment_id: z.uuid(),
+  student_id: z.uuid(),
+  group_id: z.uuid(),
+  month: z.string(),
+  hours: z.number(),
+  amount: z.number().int(),
+  active: z.boolean(),
+})
+
+/** After-school hours charged with no invoice for their month (И69) — a debt at the hour price. */
+export interface UnbilledMonth {
+  enrollmentId: string
+  studentId: string
+  groupId: string
+  /** First day of the month. */
+  month: string
+  hours: number
+  som: number
+  /** The enrollment is still on — «Требует внимания»: the invoice is to be issued. */
+  active: boolean
+}
+
+export const UNBILLED_KEY = 'afterschool-unbilled'
+
+export const unbilledQuery = () =>
+  queryOptions({
+    queryKey: [BALANCES_KEY, UNBILLED_KEY],
+    queryFn: async (): Promise<UnbilledMonth[]> => {
+      const { data, error } = await supabase
+        .from('v_afterschool_unbilled')
+        .select('enrollment_id, student_id, group_id, month, hours, amount, active')
+        .order('month')
+      if (error) throw error
+      return z
+        .array(unbilledSchema)
+        .parse(data)
+        .map((r) => ({
+          enrollmentId: r.enrollment_id,
+          studentId: r.student_id,
+          groupId: r.group_id,
+          month: r.month,
+          hours: r.hours,
+          som: r.amount,
+          active: r.active,
+        }))
     },
   })
 

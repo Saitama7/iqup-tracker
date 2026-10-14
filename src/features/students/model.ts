@@ -287,10 +287,18 @@ export interface StudentListRow {
   debtSom: number
 }
 
+/** After-school hours of a month not invoiced yet (v_afterschool_unbilled, И69) — owed like a debt. */
+export interface UnbilledDebtRow {
+  studentId: string
+  hours: number
+  som: number
+}
+
 export function studentListRow(
   s: StudentRow,
   groups: ReadonlyMap<string, GroupBrief>,
   balances: ReadonlyMap<string, Balance>,
+  unbilled: readonly UnbilledDebtRow[] = [],
 ): StudentListRow {
   const active = enrollmentViews(s, groups, balances).filter((e) => e.active)
   const remaining = active
@@ -300,9 +308,12 @@ export function studentListRow(
       return remainingLabel(e.balance)
     })
     .join(' · ')
-  const debt = totalDebt(
+  const billed = totalDebt(
     s.enrollments.flatMap((e) => e.subscriptions.flatMap((x) => balances.get(x.id) ?? [])),
   )
+  const debt = unbilled
+    .filter((u) => u.studentId === s.id)
+    .reduce((t, u) => ({ lessons: t.lessons + u.hours, som: t.som + u.som }), billed)
   const current = active.flatMap((e) => (e.balance ? [e.balance] : []))
   const states = current.map((b) => ({ b, state: payState(b) }))
   const state: PayState | null = debt.lessons > 0 ? 'debt' : worstState(states.map((x) => x.state))
@@ -326,11 +337,12 @@ export function studentListRow(
 export function studentListRows(
   source: StudentsSource,
   balanceRows: readonly Balance[],
+  unbilled: readonly UnbilledDebtRow[] = [],
 ): StudentListRow[] {
   const groups = new Map(source.groups.map((g) => [g.id, g]))
   const balances = new Map(balanceRows.map((b) => [b.subscriptionId, b]))
   return source.students
-    .map((s) => studentListRow(s, groups, balances))
+    .map((s) => studentListRow(s, groups, balances, unbilled))
     .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
 }
 

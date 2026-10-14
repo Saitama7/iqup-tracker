@@ -394,16 +394,21 @@ export interface LessonAccrual {
   perStudentLesson: number | null
 }
 
-/** Teacher's pay of one lesson — same rule as payroll/calc.ts calcMonth(), `percent` on its date. */
+/**
+ * Teacher's pay of one lesson — same rule as payroll/calc.ts calcMonth(), `percent` on its date;
+ * an after-school student with no invoice for the month — by `hourPrice` on the date (И69).
+ */
 export function lessonAccrual(
   rows: readonly (Pick<RosterRow, 'studentId' | 'paySubscription'> & { hours?: number | null })[],
   marks: ReadonlyMap<string, Mark>,
   percent: number,
+  hourPrice: number | null = null,
 ): LessonAccrual {
   let pay = 0
   for (const r of rows) {
     const m = marks.get(r.studentId)
-    if (m && consumesCredit(m)) pay += markPay(r.paySubscription, percent, r.hours ?? null)
+    if (m && consumesCredit(m))
+      pay += markPay(r.paySubscription, percent, r.hours ?? null, hourPrice)
   }
   const subs = rows.flatMap((r) => (r.paySubscription ? [r.paySubscription] : []))
   // hour subscriptions pay by each student's hours — no single «за ученико-урок» (#82)

@@ -72,6 +72,7 @@ const balance = (over: Partial<StudentBalance> = {}): StudentBalance => ({
   unit: 'lesson',
   periodMonth: null,
   lessonsTotal: 12,
+  pricedTotal: 12,
   priceFinal: 3200,
   paidSom: 3200,
   paidLessons: 12,
@@ -290,6 +291,7 @@ describe('продлёнка: счёт за месяц в часах (#82)', () 
       unit: 'hour',
       periodMonth: '2026-10-01',
       lessonsTotal: 21,
+      pricedTotal: 21,
       priceFinal: 2583,
       paidSom: 2583,
       paidLessons: 21,
@@ -315,6 +317,20 @@ describe('продлёнка: счёт за месяц в часах (#82)', () 
         }),
       ).note,
     ).toBe('долг 2 ч · 246 сом')
+  })
+
+  it('refund hint of an invoice with credit: the price of a billed hour (7 011 / 57, not / 63)', () => {
+    const b = hours({
+      lessonsTotal: 63,
+      pricedTotal: 57,
+      priceFinal: 7011,
+      paidSom: 7011,
+      paidLessons: 63,
+      lessonsUsed: 60,
+      lessonsLeft: 3,
+      refundSuggested: 369,
+    })
+    expect(refundHint(b)).toBe('Остаток 3 ч × 123 сом = 369 сом')
   })
 
   it('paymentHint after a part payment — in hours', () => {

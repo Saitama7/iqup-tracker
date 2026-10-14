@@ -46,10 +46,15 @@ export interface MoneyLine {
 /** Оплачено / Отучено N × цена / Остаток (или Долг) — the money of an enrollment. */
 export function settlementLines(s: Settlement): MoneyLine[] {
   const price = s.lessonPrice !== null ? ` × ${formatLessonPrice(s.lessonPrice, true)}` : ''
+  // the price is of the newest subscription's unit; old lessons beside hours — just counted (#82)
+  const lessons = (p: string) => `${s.lessonsUsed} ${pluralRu(s.lessonsUsed, LESSONS)}${p}`
+  const hours = (p: string) => `${formatHours(s.hoursUsed)} ч${p}`
   const used =
     s.unit === 'hour'
-      ? `${formatHours(s.lessonsUsed)} ч${price}/ч`
-      : `${s.lessonsUsed} ${pluralRu(s.lessonsUsed, LESSONS)}${price}`
+      ? [s.lessonsUsed > 0 ? lessons('') : null, hours(price ? `${price}/ч` : '')]
+          .filter(Boolean)
+          .join(' + ')
+      : [lessons(price), s.hoursUsed > 0 ? hours('') : null].filter(Boolean).join(' + ')
   return [
     { label: 'Оплачено', value: som(s.paidSom) },
     { label: s.unit === 'hour' ? 'Списано' : 'Отучено', value: `${used} = ${som(s.usedSom)}` },

@@ -6,6 +6,7 @@ import {
   payState,
   subscriptionBalances,
   totalDebt,
+  unbilledDebt,
   type BalanceSubscription,
 } from './balance'
 
@@ -311,5 +312,31 @@ describe('after-school hours (#82)', () => {
     // 2 h beyond the paid ones: 2 × 100 = 200
     const [debt] = subscriptionBalances([nov({ paid: 1000, used: 18 })])
     expect(debt).toMatchObject({ paidLessons: 16, debtLessons: 2, debtSom: 200 })
+  })
+})
+
+describe('unbilledDebt (И69)', () => {
+  it('a month not invoiced: Σ hours × the hour price on the date, rounded up once', () => {
+    const marks = [
+      '2026-11-02',
+      '2026-11-03',
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+      '2026-11-09',
+      '2026-11-10',
+    ].map((d) => ({ lesson_date: d, hours: 3, hourPrice: 123 }))
+    expect(unbilledDebt(marks)).toEqual([{ month: '2026-11-01', hours: 21, som: 2583 }])
+  })
+  it('by month, half hours, ceil on the month', () => {
+    expect(
+      unbilledDebt([
+        { lesson_date: '2026-12-01', hours: 0.5, hourPrice: 123 },
+        { lesson_date: '2026-11-30', hours: 1.5, hourPrice: 123 },
+      ]),
+    ).toEqual([
+      { month: '2026-11-01', hours: 1.5, som: 185 },
+      { month: '2026-12-01', hours: 0.5, som: 62 },
+    ])
   })
 })

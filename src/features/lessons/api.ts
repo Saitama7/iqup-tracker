@@ -217,6 +217,7 @@ const sheetSchema = z.object({
   confirmed_at: z.string().nullable(),
   confirmed_late: z.boolean(),
   is_locked: z.boolean(),
+  hour_price: z.number().nullable(),
   teacher: z.object({
     rates: z.array(z.object({ percent: z.number(), valid_from: z.string() })),
   }),
@@ -243,6 +244,8 @@ export interface LessonSheet {
   confirmed_late: boolean
   /** In a closed period — nobody changes the marks (invariant 2). */
   is_locked: boolean
+  /** After-school: the hour price on the lesson date (lessons.hour_price, И69); else null. */
+  hour_price?: number | null
   group: { id: string; name: string; subject: string; group_type: GroupType; room: string | null }
   /** Rates of the lesson's teacher — payroll goes to lessons.teacher_id (invariant 6, 0020). */
   rates: { percent: number; valid_from: string }[]
@@ -263,7 +266,7 @@ export const lessonSheetQuery = (lessonId: string) =>
       const lesson = await supabase
         .from('lessons')
         .select(
-          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, is_locked, teacher:teachers!lessons_teacher_id_fkey(rates:teacher_rates(percent, valid_from)), group:groups!inner(id, name, subject:subjects(name), group_type, room, enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status), attendance_presets(student_id, comment)`,
+          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, is_locked, hour_price, teacher:teachers!lessons_teacher_id_fkey(rates:teacher_rates(percent, valid_from)), group:groups!inner(id, name, subject:subjects(name), group_type, room, enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status), attendance_presets(student_id, comment)`,
         )
         .eq('id', lessonId)
         .maybeSingle()

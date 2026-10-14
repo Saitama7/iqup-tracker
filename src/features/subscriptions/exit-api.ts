@@ -87,6 +87,7 @@ const settlementRow = z.object({
   lesson_price: z.number().nullable(),
   has_trial: z.boolean(),
   unit: z.enum(['lesson', 'hour']),
+  hours_used: z.number(),
 })
 
 export interface Settlement {
@@ -101,8 +102,10 @@ export interface Settlement {
   moneySom: number
   /** Σ payments of the live subscriptions. */
   paidSom: number
-  /** Lessons, or hours of an after-school month bill (unit = hour, #82). */
+  /** Lessons of the packages. */
   lessonsUsed: number
+  /** Hours of the after-school month bills and of the months not invoiced yet (#82, И69). */
+  hoursUsed: number
   usedSom: number
   /** paid − used; negative — a debt. */
   remainder: number
@@ -133,6 +136,7 @@ export const settlementQuery = (enrollmentId: string) =>
         moneySom: r.money_som,
         paidSom: r.paid_som,
         lessonsUsed: r.lessons_used,
+        hoursUsed: r.hours_used,
         usedSom: r.used_som,
         remainder: r.remainder,
         lessonPrice: r.lesson_price,
