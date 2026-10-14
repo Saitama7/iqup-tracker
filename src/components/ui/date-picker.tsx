@@ -55,17 +55,28 @@ function PickerPopup({
   anchor: ReactElement
   /** The button that opens / closes the popup (the icon in a field, the title itself). */
   toggleRef: RefObject<HTMLElement | null>
-  onCloseAutoFocus?: (e: Event) => void
+  /** `interactedOutside`: closed by a click / focus outside the popup, not Esc or a pick (#68). */
+  onCloseAutoFocus?: (e: Event, interactedOutside: boolean) => void
   children: ReactNode
 }) {
   const isDesktop = useIsDesktop()
+  const interactedOutside = useRef(false)
+  const closeAutoFocus = (e: Event) => {
+    const outside = interactedOutside.current
+    interactedOutside.current = false
+    onCloseAutoFocus?.(e, outside)
+  }
+  const markOutside = (e: Event) => {
+    if (!toggleRef.current?.contains(e.target as Node)) interactedOutside.current = true
+  }
   if (isDesktop) {
     return (
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverAnchor asChild>{anchor}</PopoverAnchor>
         <PopoverContent
           aria-label={title}
-          onCloseAutoFocus={onCloseAutoFocus}
+          onCloseAutoFocus={closeAutoFocus}
+          onInteractOutside={markOutside}
           onPointerDownOutside={(e) => {
             // a tap on the toggle opens / closes the picker itself — not «outside». A click into
             // the field is outside: it closes the popover (#66)
@@ -88,7 +99,8 @@ function PickerPopup({
         <SheetContent
           side="bottom"
           showCloseButton={false}
-          onCloseAutoFocus={onCloseAutoFocus}
+          onCloseAutoFocus={closeAutoFocus}
+          onInteractOutside={markOutside}
           className="items-center gap-0 rounded-t-[24px] border-line bg-card px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
           <div className="mx-auto mb-2 h-1 w-10 shrink-0 rounded-full bg-line-strong" aria-hidden />
@@ -112,17 +124,21 @@ const inBounds = (iso: string, { min, max }: DateBounds) =>
 
 // ─── Day calendar ───────────────────────────────────────────────────────────
 
-/** A typo like «01.01.0202» must not unroll 1800 years in the dropdown (#66). */
+/** A typo like «01.01.0202» or «01.01.9999» must not unroll centuries in the dropdown (#66, #68). */
 const MIN_YEAR = 1900
+const MAX_YEAR = 2100
 
 /**
  * Years in the month/year dropdowns without bounds: 5 back and 2 ahead of today, widened so the
- * field's value is always in range (#64), but not before 1900 (#66).
+ * field's value is always in range (#64), but within 1900–2100 (#66, #68).
  */
 export function yearRange(today: string, value: string | null): { from: number; to: number } {
   const year = Number(today.slice(0, 4))
   const own = value ? Number(value.slice(0, 4)) : year
-  return { from: Math.max(MIN_YEAR, Math.min(own, year - 5)), to: Math.max(own, year + 2) }
+  return {
+    from: Math.max(MIN_YEAR, Math.min(own, year - 5)),
+    to: Math.min(MAX_YEAR, Math.max(own, year + 2)),
+  }
 }
 
 /** Monday – Sunday around an ISO date, as local dates for the day picker. */
@@ -226,7 +242,6 @@ export function DateInput({
   /** Phone: typing chosen via «Ввести вручную» — until the field loses focus. */
   const typing = useRef(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const anchorRef = useRef<HTMLDivElement>(null)
   const iconRef = useRef<HTMLButtonElement>(null)
   const iso = parseDateRu(value)
 
@@ -236,17 +251,13 @@ export function DateInput({
       onOpenChange={setOpen}
       title={title}
       toggleRef={iconRef}
-      onCloseAutoFocus={(e) => {
+      onCloseAutoFocus={(e, interactedOutside) => {
         e.preventDefault()
-        if (!isDesktop) return
-        // closed by a click into another field: the focus stays there, typing goes there (#66)
-        const active = document.activeElement
-        if (!active || active === document.body || anchorRef.current?.contains(active)) {
-          inputRef.current?.focus()
-        }
+        // closed by a click outside (another field, the page): the focus stays where it went (#66, #68)
+        if (isDesktop && !interactedOutside) inputRef.current?.focus()
       }}
       anchor={
-        <div ref={anchorRef} className="relative min-w-0">
+        <div className="relative min-w-0">
           <input
             ref={inputRef}
             id={id}
