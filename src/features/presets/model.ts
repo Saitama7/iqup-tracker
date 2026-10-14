@@ -76,7 +76,10 @@ export function presetErrorReason(error: { code?: string; message?: string }): s
   if (error.code === '42501') return 'заморозку заранее ставит только администратор'
   if (error.code === 'PGRST202' || error.code === '42883')
     return 'сервер не обновлён — сообщите администратору'
-  if (m.includes('freeze limit')) return 'лимит заморозок 2 на абонемент исчерпан'
+  if (m.includes('freeze limit'))
+    return m.includes('month')
+      ? 'лимит заморозок 2 на месяц исчерпан'
+      : 'лимит заморозок 2 на абонемент исчерпан'
   if (m.includes('in the past')) return 'занятие уже прошло'
   if (m.includes('already started')) return 'занятие уже началось — это не «заранее»'
   if (m.includes('closed period')) return 'период закрыт'

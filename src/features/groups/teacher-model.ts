@@ -76,7 +76,7 @@ export function memberRows(group: Pick<TeacherGroup, 'enrollments'>, today: stri
     const subs = group.enrollments
       .filter((x) => x.student.id === e.student.id)
       .flatMap((x) => x.subscriptions)
-    const balance = pickSubscription(subs, null)
+    const balance = pickSubscription(subs, null, today)
     const money = studentPay(subs, null)
     rows.set(e.student.id, {
       studentId: e.student.id,

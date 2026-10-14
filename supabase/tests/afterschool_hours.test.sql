@@ -258,7 +258,7 @@ select results_eq(
 
 -- ─── Plan change from a date ────────────────────────────────────────────────
 select lives_ok(
-  $$ select public.set_afterschool_plan(pg_temp.enr('e8200000-0000-4000-8000-000000000001'), '2002-03-04', array[3, 0, 1, 0, 2, 0, 0]::numeric[]) $$,
+  $$ select public.set_afterschool_plan(pg_temp.enr('e8200000-0000-4000-8000-000000000001'), '2002-03-04', array[3, 0, 1, 0, 2, 0, 0]::numeric[], 'внесено задним числом') $$,
   'admin changes the plan from 4 March: Monday 3 h'
 );
 select is(
@@ -301,7 +301,7 @@ update public.lessons set is_locked = true where id = pg_temp.lesson('2002-03-15
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"a8200000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"roles":["admin"]}}';
 select throws_ok(
-  $$ select public.set_afterschool_plan(pg_temp.enr('e8200000-0000-4000-8000-000000000001'), '2002-03-11', array[1, 0, 1, 0, 1, 0, 0]::numeric[]) $$,
+  $$ select public.set_afterschool_plan(pg_temp.enr('e8200000-0000-4000-8000-000000000001'), '2002-03-11', array[1, 0, 1, 0, 1, 0, 0]::numeric[], 'задним числом') $$,
   '23514', 'marks from this date are in a closed period',
   'invariant 2: no plan change over a closed period'
 );
@@ -345,7 +345,7 @@ select ok(
   'plans are in the journal (invariant 4)'
 );
 select is(
-  (select count(*)::integer from public.audit_log where entity = 'afterschool_plans' and reason = 'afterschool_plan'),
+  (select count(*)::integer from public.audit_log where entity = 'afterschool_plans' and reason = 'внесено задним числом'),
   1,
   'the plan change is journaled with its reason'
 );

@@ -294,4 +294,22 @@ describe('after-school hours (#82)', () => {
     expect(o).toMatchObject({ lessonsUsed: 20, debtLessons: 0, isCurrent: false })
     expect(n).toMatchObject({ carriedIn: 2, lessonsUsed: 2, isCurrent: true })
   })
+
+  it('an invoice holds its credit hours: they count as paid, money is per billed hour (И61)', () => {
+    // November: 63 planned − 6 h credit = 57 billed × 100 = 5 700
+    const nov = (over: Partial<BalanceSubscription>) =>
+      hours({ lessons_total: 57, credit: 6, price_final: 5700, ...over })
+    const [unpaid] = subscriptionBalances([nov({ paid: 0, used: 6 })])
+    expect(unpaid).toMatchObject({
+      lessonsTotal: 63,
+      paidLessons: 6,
+      debtLessons: 0,
+      lessonsLeft: 57,
+    })
+    const [all] = subscriptionBalances([nov({ paid: 5700, used: 63 })])
+    expect(all).toMatchObject({ paidLessons: 63, debtLessons: 0, lessonsLeft: 0 })
+    // 2 h beyond the paid ones: 2 × 100 = 200
+    const [debt] = subscriptionBalances([nov({ paid: 1000, used: 18 })])
+    expect(debt).toMatchObject({ paidLessons: 16, debtLessons: 2, debtSom: 200 })
+  })
 })

@@ -17,9 +17,9 @@ export function exitTargets(groups: readonly GroupBrief[], from: GroupBrief | nu
     .sort((a, b) => groupLabel(a).localeCompare(groupLabel(b), 'ru'))
 }
 
-/** Why an after-school (hours) enrollment has no transfer, and the way instead (#82). */
+/** Why an enrollment billed by hours has no transfer, and the way instead (#82). */
 export const AFTERSCHOOL_NO_TRANSFER =
-  'Перевод в продлёнку по часам и из неё — через «Ушёл» с возвратом и новое зачисление'
+  'Продлёнка по часам не переводится — «Ушёл» с возвратом и новое зачисление'
 
 /** Transfer targets: no after-school (hours) groups — the month bill does not move (#82). */
 export const transferTargets = (groups: readonly GroupBrief[], from: GroupBrief | null) =>

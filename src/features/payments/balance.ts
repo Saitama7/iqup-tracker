@@ -17,8 +17,13 @@ export interface BalanceSubscription {
   status: 'active' | 'exhausted' | 'refunded'
   started_at: string
   created_at: string
-  /** Units of the subscription: lessons_total, or hours_total of an hour subscription. */
+  /** Units the price is for: lessons_total, or hours_total (billed hours) of an hour subscription. */
   lessons_total: number
+  /**
+   * An hour invoice: credit hours taken off it (paid on earlier invoices, И61) — it holds
+   * lessons_total + credit, and the credit counts as paid. Default 0.
+   */
+  credit?: number
   price_final: number
   /**
    * present + absent_burned marks written off this subscription (attendance.subscription_id);
@@ -34,6 +39,7 @@ export interface BalanceSubscription {
 export interface SubscriptionBalance {
   subscriptionId: string
   refunded: boolean
+  /** Capacity: lessons_total, an hour invoice + its credit hours. */
   lessonsTotal: number
   priceFinal: number
   paidSom: number
@@ -84,6 +90,17 @@ const byStart = (a: BalanceSubscription, b: BalanceSubscription) =>
   a.created_at.localeCompare(b.created_at) ||
   a.id.localeCompare(b.id)
 
+const creditOf = (s: BalanceSubscription) => s.credit ?? 0
+
+/** Capacity: lessons_total (+ credit hours of an hour invoice). */
+const capacityOf = (s: BalanceSubscription) => s.lessons_total + creditOf(s)
+
+/** Paid units: by money (В7.1), + the credit hours of an hour invoice; free — the capacity. */
+function paidUnits(s: BalanceSubscription, unit: BalanceUnit): number {
+  if (s.price_final <= 0) return capacityOf(s)
+  return creditOf(s) + paidLessons(s.paid, s.lessons_total, s.price_final, unit)
+}
+
 function finish(
   s: BalanceSubscription,
   paid: number,
@@ -93,20 +110,24 @@ function finish(
 ): SubscriptionBalance {
   const refunded = s.status === 'refunded'
   const closed = refunded || s.status === 'exhausted'
+  const total = capacityOf(s)
   const debtLessons = refunded ? 0 : units(Math.max(0, used - paid))
-  // Ceil, not round: paying debtSom must open every debt lesson (paidLessons floors).
-  const owed = Math.ceil((used * s.price_final - s.paid * s.lessons_total) / s.lessons_total)
-  const remaining = Math.max(0, Math.min(paid, s.lessons_total) - used)
+  // Ceil, not round: paying debtSom must open every debt lesson (paidLessons floors). Money is per
+  // billed unit — the credit hours were paid on an earlier invoice.
+  const owed = Math.ceil(
+    ((used - creditOf(s)) * s.price_final - s.paid * s.lessons_total) / s.lessons_total,
+  )
+  const remaining = Math.max(0, Math.min(paid, total) - used)
   return {
     subscriptionId: s.id,
     refunded,
-    lessonsTotal: s.lessons_total,
+    lessonsTotal: total,
     priceFinal: s.price_final,
     paidSom: s.paid,
     paidLessons: paid,
     carriedIn: units(carriedIn),
     lessonsUsed: units(used),
-    lessonsLeft: units(s.lessons_total - used),
+    lessonsLeft: units(total - used),
     debtLessons,
     debtSom: debtLessons > 0 ? Math.max(0, owed) : 0,
     refundSuggested: closed ? 0 : roundSom((remaining * s.price_final) / s.lessons_total),
@@ -132,9 +153,9 @@ export function subscriptionBalances(
     const chain = live.filter((s) => (s.unit ?? 'lesson') === unit)
     let carry = 0
     chain.forEach((s, i) => {
-      const paid = paidLessons(s.paid, s.lessons_total, s.price_final, unit)
+      const paid = paidUnits(s, unit)
       const last = i === chain.length - 1
-      const capacity = Math.max(s.lessons_total, paid)
+      const capacity = Math.max(capacityOf(s), paid)
       const total = s.used + carry
       const used = last ? total : Math.min(total, capacity)
       result.set(s.id, finish(s, paid, carry, used, s.id === newest))
@@ -142,9 +163,7 @@ export function subscriptionBalances(
     })
   }
   return subscriptions.map(
-    (s) =>
-      result.get(s.id) ??
-      finish(s, paidLessons(s.paid, s.lessons_total, s.price_final, s.unit), 0, s.used, false),
+    (s) => result.get(s.id) ?? finish(s, paidUnits(s, s.unit ?? 'lesson'), 0, s.used, false),
   )
 }
 

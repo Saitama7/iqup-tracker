@@ -106,12 +106,13 @@ as $$
 $$;
 
 -- Planned hours of a student in an after-school group on a date (same enrollment rule as the roster
--- of confirm_lesson). Null — not an after-school group or no plan (lessons as before).
+-- of confirm_lesson). Null — not an after-school group or no plan (lessons as before). Security
+-- invoker: a teacher sees only the plans of their own groups (afterschool_plans RLS); the triggers
+-- and RPCs that need every plan are security definer themselves.
 create or replace function public.afterschool_day_hours(p_group_id uuid, p_student_id uuid, p_date date)
 returns numeric
 language sql
 stable
-security definer
 set search_path = ''
 as $$
   select (public.afterschool_plan_on(e.id, p_date))[extract(isodow from p_date)::integer]
@@ -126,30 +127,92 @@ as $$
   limit 1;
 $$;
 
--- Default plan (И59, prod backfill): the group's weekdays on the date × the tariff duration (3 h);
--- no schedule — Mon–Fri.
+-- Minutes → plan hours: whole half-hours, 0,5 … 4 h.
+create or replace function public.afterschool_minutes_hours(p_minutes integer)
+returns numeric
+language sql
+immutable
+set search_path = ''
+as $$
+  select least(4, greatest(0.5, floor(p_minutes / 30.0) / 2))::numeric;
+$$;
+
+-- Hours of a lesson day: the plan; an extra lesson (create_extra_lesson) on a day the plan has 0 h —
+-- the lesson's duration (whoever comes is charged like a usual day, #82 review). Null plan — null.
+create or replace function public.afterschool_hours_of(p_plan_hours numeric, p_extra_min integer)
+returns numeric
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when p_plan_hours = 0 and p_extra_min is not null then public.afterschool_minutes_hours(p_extra_min)
+    else p_plan_hours
+  end;
+$$;
+
+-- Hours of a student on a lesson (attendance.hours, the roster). Security invoker.
+create or replace function public.afterschool_lesson_hours(p_lesson_id uuid, p_student_id uuid)
+returns numeric
+language sql
+stable
+set search_path = ''
+as $$
+  select public.afterschool_hours_of(
+    public.afterschool_day_hours(l.group_id, p_student_id, l.lesson_date),
+    case when l.is_extra then l.duration_min end
+  )
+  from public.lessons l
+  where l.id = p_lesson_id;
+$$;
+
+-- Default hours of a day: the group's lesson duration (tariff, 3 h), at most 4 h.
+create or replace function public.afterschool_default_hours(p_date date)
+returns numeric
+language sql
+stable
+set search_path = ''
+as $$
+  select public.afterschool_minutes_hours(coalesce(public.tariff_duration('afterschool', p_date), 180));
+$$;
+
+-- Default plan (И59, prod backfill): the group's weekdays on the date (none on it — the latest
+-- schedule before it, else the first one) × the default hours; no schedule at all — Mon–Fri.
+-- Security invoker.
 create or replace function public.afterschool_default_plan(p_group_id uuid, p_date date)
 returns numeric[]
 language sql
 stable
-security definer
 set search_path = ''
 as $$
   with h as (
-    select coalesce(public.tariff_duration('afterschool', p_date), 180) / 60.0 as hours
+    select public.afterschool_default_hours(p_date) as hours
   ),
-  days as (
+  on_date as (
     select distinct r.weekday
     from public.schedule_rules r
     where r.group_id = p_group_id
       and r.valid_from <= p_date
       and (r.valid_to is null or r.valid_to >= p_date)
+  ),
+  days as (
+    select weekday from on_date
+    union
+    select r.weekday
+    from public.schedule_rules r
+    where r.group_id = p_group_id
+      and not exists (select 1 from on_date)
+      and r.valid_from = coalesce(
+        (select max(x.valid_from) from public.schedule_rules x
+         where x.group_id = p_group_id and x.valid_from <= p_date),
+        (select min(x.valid_from) from public.schedule_rules x where x.group_id = p_group_id)
+      )
   )
   select array_agg(
     case
       when exists (select 1 from days) then
-        case when exists (select 1 from days where days.weekday = d) then least(h.hours, 4) else 0 end
-      else case when d <= 5 then least(h.hours, 4) else 0 end
+        case when exists (select 1 from days where days.weekday = d) then h.hours else 0 end
+      else case when d <= 5 then h.hours else 0 end
     end
     order by d
   )::numeric[]
@@ -157,7 +220,8 @@ as $$
   group by h.hours;
 $$;
 
--- Every after-school enrollment without a plan gets the default one from its start (idempotent).
+-- Every after-school enrollment without a plan gets the default one from its start (idempotent), by
+-- the group's current schedule (#82 review: not the one on the enrollment start).
 create or replace function public.afterschool_backfill_plans()
 returns integer
 language plpgsql
@@ -168,7 +232,8 @@ declare
   v_count integer;
 begin
   insert into public.afterschool_plans (enrollment_id, valid_from, hours)
-  select e.id, e.start_date, public.afterschool_default_plan(e.group_id, e.start_date)
+  select e.id, e.start_date,
+         public.afterschool_default_plan(e.group_id, greatest(public.bishkek_today(), e.start_date))
   from public.enrollments e
   join public.groups g on g.id = e.group_id
   where g.group_type = 'afterschool'
@@ -223,9 +288,7 @@ security definer
 set search_path = ''
 as $$
 begin
-  select public.afterschool_day_hours(l.group_id, new.student_id, l.lesson_date) into new.hours
-  from public.lessons l
-  where l.id = new.lesson_id;
+  new.hours := public.afterschool_lesson_hours(new.lesson_id, new.student_id);
   return new;
 end;
 $$;
@@ -240,9 +303,15 @@ revoke execute on function public.attendance_hours() from public, anon, authenti
 -- ─── 5. Month quote, credit ─────────────────────────────────────────────────
 
 -- Hours of an enrollment in a month (И60): every non-cancelled lesson day of the group in the month
--- within the enrollment (holidays have no lessons), × the plan hours of that weekday on that day.
--- One row per (weekday, hours): «ПН 2 ч × 4». Security invoker — the caller's RLS.
-create or replace function public.afterschool_month_quote(p_enrollment_id uuid, p_month date)
+-- within the enrollment (holidays have no lessons) from p_from (the first invoice after an old
+-- package — afterschool_bill_from), × the plan hours of that weekday on that day; a day with 0 h
+-- that has an extra lesson — its duration (afterschool_hours_of). One row per (weekday, hours):
+-- «ПН 2 ч × 4». Security invoker — the caller's RLS.
+create or replace function public.afterschool_month_quote(
+  p_enrollment_id uuid,
+  p_month date,
+  p_from date default null
+)
 returns table (weekday integer, hours numeric, days integer)
 language sql
 stable
@@ -255,19 +324,22 @@ as $$
     select date_trunc('month', p_month)::date as first_day
   ),
   d as (
-    select distinct l.lesson_date
+    select l.lesson_date, max(l.duration_min) filter (where l.is_extra) as extra_min
     from e, m, public.lessons l
     where l.group_id = e.group_id
       and l.status <> 'cancelled'
-      and l.lesson_date >= greatest(m.first_day, e.start_date)
+      and l.lesson_date >= greatest(m.first_day, e.start_date, coalesce(p_from, m.first_day))
       and l.lesson_date < (m.first_day + interval '1 month')::date
       and (e.end_date is null or l.lesson_date <= e.end_date)
+    group by l.lesson_date
   ),
   h as (
     select
       d.lesson_date,
-      (public.afterschool_plan_on(p_enrollment_id, d.lesson_date))[extract(isodow from d.lesson_date)::integer]
-        as hours
+      public.afterschool_hours_of(
+        (public.afterschool_plan_on(p_enrollment_id, d.lesson_date))[extract(isodow from d.lesson_date)::integer],
+        d.extra_min
+      ) as hours
     from d
   )
   select extract(isodow from h.lesson_date)::integer, h.hours, count(*)::integer
@@ -277,30 +349,141 @@ as $$
   order by 1, 2;
 $$;
 
--- Frozen hours (absent_frozen on hour subscriptions of the enrollment) not yet taken off an invoice
--- (И61). Security invoker.
+-- Hours paid on the hour invoices of an enrollment that will not be used (И61, #82 review): per
+-- invoice capacity (hours_total + credit_hours) − hours of its charged marks − planned hours still
+-- ahead in its month (lessons not held yet, from its start). Freezes, lessons cancelled after the
+-- invoice, a plan cut in the middle of the month, the end of the enrollment — all land here once
+-- the day is past. An invoice used beyond its capacity owes it (v_student_balance), it does not eat
+-- the credit. The credit = Σ unused − the credit already taken off later invoices. Security invoker.
 create or replace function public.afterschool_credit_hours(p_enrollment_id uuid)
 returns numeric
 language sql
 stable
 set search_path = ''
 as $$
+  with e as (
+    select * from public.enrollments where id = p_enrollment_id
+  ),
+  inv as (
+    select s.id, s.hours_total, s.credit_hours, s.started_at, s.period_month
+    from public.subscriptions s
+    where s.enrollment_id = p_enrollment_id
+      and s.hours_total is not null
+      and s.status <> 'refunded'
+  ),
+  unused as (
+    select
+      inv.hours_total + inv.credit_hours
+      - coalesce((
+          select sum(a.hours) from public.attendance a
+          where a.subscription_id = inv.id and a.consumes_credit
+        ), 0)
+      - coalesce((
+          select sum(public.afterschool_lesson_hours(l.id, e.student_id))
+          from e, public.lessons l
+          where l.group_id = e.group_id
+            and l.status = 'planned'
+            and l.lesson_date >= inv.started_at
+            and l.lesson_date < (inv.period_month + interval '1 month')::date
+            and l.lesson_date >= e.start_date
+            and (e.end_date is null or l.lesson_date <= e.end_date)
+            and not (e.end_date is null and e.status = 'finished')
+            and not exists (
+              select 1 from public.attendance a
+              where a.lesson_id = l.id and a.student_id = e.student_id
+            )
+        ), 0) as hours
+    from inv
+  )
   select greatest(0,
-    coalesce((
-      select sum(a.hours)
-      from public.attendance a
-      join public.subscriptions s on s.id = a.subscription_id
-      where s.enrollment_id = p_enrollment_id
-        and s.hours_total is not null
-        and s.status <> 'refunded'
-        and a.status = 'absent_frozen'
-    ), 0)
-    - coalesce((
-      select sum(s.credit_hours)
-      from public.subscriptions s
-      where s.enrollment_id = p_enrollment_id and s.status <> 'refunded'
-    ), 0)
+    coalesce((select sum(greatest(0, u.hours)) from unused u), 0)
+    - coalesce((select sum(inv.credit_hours) from inv), 0)
   );
+$$;
+
+-- The first billed day of the first hour invoice of an enrollment with an old lesson package (#82
+-- review): the day after the mark that used the package's last lesson (capacity = Σ max(lessons,
+-- paid lessons) of its live packages); marks beyond it are «в долг» on the package and move to the
+-- invoice. Lessons still left on the package — the first lesson day after them where the student
+-- has hours (an estimate: the admin may pick another date in the form); none in the generated
+-- lessons — the next month. Not the first hour invoice / no package — the month (or the enrollment)
+-- start. Security invoker.
+create or replace function public.afterschool_bill_from(p_enrollment_id uuid, p_month date)
+returns date
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v_e public.enrollments%rowtype;
+  v_month date := date_trunc('month', p_month)::date;
+  v_from date;
+  v_capacity integer;
+  v_marks integer;
+  v_last date;
+  v_next date;
+begin
+  select * into v_e from public.enrollments e where e.id = p_enrollment_id;
+  if not found or p_month is null then
+    return null;
+  end if;
+  v_from := greatest(v_month, v_e.start_date);
+  if exists (
+    select 1 from public.subscriptions s
+    where s.enrollment_id = p_enrollment_id and s.hours_total is not null and s.status <> 'refunded'
+  ) or not exists (
+    select 1 from public.subscriptions s
+    where s.enrollment_id = p_enrollment_id and s.hours_total is null and s.status <> 'refunded'
+  ) then
+    return v_from;
+  end if;
+
+  select coalesce(sum(greatest(b.lessons_total, b.paid_lessons)), 0)::integer into v_capacity
+  from public.v_student_balance b
+  where b.enrollment_id = p_enrollment_id and b.unit = 'lesson' and b.status <> 'refunded';
+
+  select count(*)::integer, max(l.lesson_date) into v_marks, v_last
+  from public.attendance a
+  join public.subscriptions s on s.id = a.subscription_id
+  join public.lessons l on l.id = a.lesson_id
+  where s.enrollment_id = p_enrollment_id and s.hours_total is null and s.status <> 'refunded'
+    and a.consumes_credit;
+
+  if v_marks >= v_capacity then
+    if v_capacity = 0 then
+      return v_from;
+    end if;
+    select l.lesson_date into v_last
+    from public.attendance a
+    join public.subscriptions s on s.id = a.subscription_id
+    join public.lessons l on l.id = a.lesson_id
+    where s.enrollment_id = p_enrollment_id and s.hours_total is null and s.status <> 'refunded'
+      and a.consumes_credit
+    order by l.lesson_date, l.planned_start, a.id
+    offset v_capacity - 1
+    limit 1;
+    return greatest(v_from, v_last + 1);
+  end if;
+
+  select x.lesson_date into v_next
+  from (
+    select distinct l.lesson_date
+    from public.lessons l
+    where l.group_id = v_e.group_id
+      and l.status <> 'cancelled'
+      and l.lesson_date > coalesce(v_last, v_e.start_date - 1)
+      and l.lesson_date >= v_e.start_date
+      and (v_e.end_date is null or l.lesson_date <= v_e.end_date)
+      and coalesce(public.afterschool_lesson_hours(l.id, v_e.student_id), 0) > 0
+      and not exists (
+        select 1 from public.attendance a where a.lesson_id = l.id and a.student_id = v_e.student_id
+      )
+  ) x
+  order by x.lesson_date
+  offset v_capacity - v_marks
+  limit 1;
+  return greatest(v_from, coalesce(v_next, (v_month + interval '1 month')::date));
+end;
 $$;
 
 -- ─── 6. Discounts (В5) — the same checks as enroll_student / buy_subscription ─
@@ -352,15 +535,19 @@ $$;
 -- ─── 7. Invoice of a month ──────────────────────────────────────────────────
 
 -- Core (no role check — callers check): the hour subscription of p_month for an after-school
--- enrollment. hours = planned hours of the month − credit (frozen hours of earlier months); price
--- = hours × hour price of the tariff on the first billed day; discount as В5. Null when the month has
--- no planned hours and p_strict is false.
+-- enrollment. Billed from p_from (null — afterschool_bill_from: the month, or after the old package
+-- on the first invoice); hours = planned hours from then − credit (unused hours of earlier invoices);
+-- price = hours × hour price of the tariff on the first billed day; discount as В5. The marks of the
+-- billed days already there (a month not invoiced yet, a package's debt) move to the invoice. A
+-- credit as big as the month leaves 0,5 h billed. Null when the month has no planned hours and
+-- p_strict is false.
 create or replace function public.afterschool_invoice_insert(
   p_enrollment_id uuid,
   p_month date,
   p_discount_pct integer,
   p_discount_reason public.discount_reason,
-  p_strict boolean default true
+  p_strict boolean default true,
+  p_from date default null
 )
 returns uuid
 language plpgsql
@@ -372,6 +559,7 @@ declare
   v_group public.groups%rowtype;
   v_tariff public.tariffs%rowtype;
   v_month date := date_trunc('month', p_month)::date;
+  v_next date;
   v_start date;
   v_planned numeric;
   v_days integer;
@@ -382,6 +570,10 @@ declare
 begin
   if p_month is null then
     raise exception 'month is required' using errcode = 'check_violation';
+  end if;
+  v_next := (v_month + interval '1 month')::date;
+  if p_from is not null and (p_from < v_month or p_from >= v_next) then
+    raise exception 'billing date is outside the month' using errcode = 'check_violation';
   end if;
 
   select * into v_enrollment from public.enrollments e where e.id = p_enrollment_id for update;
@@ -418,11 +610,18 @@ begin
   perform public.assert_discount(v_enrollment.student_id, p_discount_pct, p_discount_reason);
 
   -- the month's lessons must exist to be counted (the generator is idempotent)
-  perform public.generate_lessons(v_group.id, (v_month + interval '1 month' - interval '1 day')::date);
+  perform public.generate_lessons(v_group.id, (v_next - 1)::date);
+
+  v_start := greatest(
+    v_month,
+    v_enrollment.start_date,
+    coalesce(p_from, public.afterschool_bill_from(p_enrollment_id, v_month))
+  );
 
   select coalesce(sum(q.hours * q.days), 0), coalesce(sum(q.days), 0)::integer
   into v_planned, v_days
-  from public.afterschool_month_quote(p_enrollment_id, v_month) q;
+  from public.afterschool_month_quote(p_enrollment_id, v_month, v_start) q
+  where v_start < v_next;
   if v_planned <= 0 then
     if not p_strict then
       return null;
@@ -430,19 +629,28 @@ begin
     raise exception 'no planned hours in %', to_char(v_month, 'YYYY-MM') using errcode = 'check_violation';
   end if;
 
-  v_credit := least(public.afterschool_credit_hours(p_enrollment_id), v_planned);
+  -- the credit leaves at least 0,5 h billed: the month's marks need an invoice (the teacher's pay
+  -- by its hour price, И62), the rest of the credit goes to the next one
+  v_credit := greatest(0, least(public.afterschool_credit_hours(p_enrollment_id), v_planned - 0.5));
   v_hours := v_planned - v_credit;
-  if v_hours <= 0 then
-    raise exception 'credit covers the month' using errcode = 'check_violation';
-  end if;
 
-  v_start := greatest(v_month, v_enrollment.start_date);
   select * into v_tariff from public.tariffs t
   where t.group_type = 'afterschool' and t.valid_from <= v_start
   order by t.valid_from desc
   limit 1;
   if not found then
     raise exception 'no tariff for afterschool on %', v_start using errcode = 'check_violation';
+  end if;
+
+  -- a mark of a billed day in a closed period cannot move to the invoice (invariant 2)
+  if exists (
+    select 1 from public.attendance a
+    join public.lessons l on l.id = a.lesson_id
+    where l.group_id = v_enrollment.group_id and a.student_id = v_enrollment.student_id
+      and l.lesson_date >= v_start and l.lesson_date < v_next
+      and l.is_locked
+  ) then
+    raise exception 'marks from this date are in a closed period' using errcode = 'check_violation';
   end if;
 
   v_price := round(v_hours * public.tariff_hour_price(v_tariff.id))::integer;
@@ -459,16 +667,31 @@ begin
     v_start, v_hours, v_month, v_credit
   )
   returning id into v_id;
+
+  -- the billed days' marks already there go to the invoice (attendance_subscription would pick it)
+  perform set_config('iqup.audit_reason', 'afterschool_invoice', true);
+  update public.attendance a set subscription_id = v_id
+  from public.lessons l
+  where l.id = a.lesson_id
+    and l.group_id = v_enrollment.group_id
+    and a.student_id = v_enrollment.student_id
+    and l.lesson_date >= v_start and l.lesson_date < v_next
+    and (v_enrollment.end_date is null or l.lesson_date <= v_enrollment.end_date)
+    and a.subscription_id is distinct from v_id;
+  perform set_config('iqup.audit_reason', '', true);
   return v_id;
 end;
 $$;
 
--- «Выставить счёт за ноябрь» (А6): admin only, no payment — paid with record_payment.
+-- «Выставить счёт за ноябрь» (А6): admin only, no payment — paid with record_payment. p_from — the
+-- first billed day (the first invoice after an old package; null — afterschool_bill_from).
+drop function if exists public.issue_afterschool_invoice(uuid, date, integer, public.discount_reason);
 create or replace function public.issue_afterschool_invoice(
   p_enrollment_id uuid,
   p_month date,
   p_discount_pct integer default 0,
-  p_discount_reason public.discount_reason default 'none'
+  p_discount_reason public.discount_reason default 'none',
+  p_from date default null
 )
 returns uuid
 language plpgsql
@@ -482,17 +705,141 @@ begin
   join public.enrollments e on e.student_id = s.id
   where e.id = p_enrollment_id
   for update of s;
-  return public.afterschool_invoice_insert(p_enrollment_id, p_month, p_discount_pct, p_discount_reason, true);
+  return public.afterschool_invoice_insert(
+    p_enrollment_id, p_month, p_discount_pct, p_discount_reason, true, p_from);
+end;
+$$;
+
+-- New hours of a held mark under a plan version (p_hours from p_valid_from): a later version keeps
+-- its days; the extra-lesson rule as afterschool_lesson_hours.
+create or replace function public.afterschool_plan_mark_hours(
+  p_enrollment_id uuid,
+  p_valid_from date,
+  p_hours numeric[],
+  p_lesson_id uuid,
+  p_student_id uuid
+)
+returns numeric
+language sql
+stable
+set search_path = ''
+as $$
+  select case
+    when exists (
+      select 1 from public.afterschool_plans p
+      where p.enrollment_id = p_enrollment_id
+        and p.valid_from > p_valid_from and p.valid_from <= l.lesson_date
+    ) then public.afterschool_lesson_hours(l.id, p_student_id)
+    else public.afterschool_hours_of(
+      p_hours[extract(isodow from l.lesson_date)::integer],
+      case when l.is_extra then l.duration_min end
+    )
+  end
+  from public.lessons l
+  where l.id = p_lesson_id;
+$$;
+
+-- What «Изменить с даты» does to marks already there (А6 warning before saving a date in the past):
+-- marks whose hours change, Σ Δ hours, the teacher's pay Δ (v_payroll_preview expression) and the
+-- student's Δ (hours × the invoice's paid hour price; + — owes more). Admin only.
+create or replace function public.afterschool_plan_preview(
+  p_enrollment_id uuid,
+  p_valid_from date,
+  p_hours numeric[]
+)
+returns table (marks integer, hours_delta numeric, payroll_delta integer, balance_delta integer)
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_enrollment public.enrollments%rowtype;
+begin
+  perform public.assert_admin();
+  if not public.afterschool_hours_valid(p_hours) then
+    raise exception 'hours must be 7 values of 0 … 4 h, step 0.5' using errcode = 'check_violation';
+  end if;
+  select * into v_enrollment from public.enrollments e where e.id = p_enrollment_id;
+  if not found then
+    raise exception 'enrollment % not found', p_enrollment_id using errcode = 'foreign_key_violation';
+  end if;
+
+  return query
+  with m as (
+    select
+      a.consumes_credit,
+      s.hours_total,
+      s.price_full,
+      s.price_final,
+      r.percent,
+      public.afterschool_plan_mark_hours(p_enrollment_id, p_valid_from, p_hours, a.lesson_id, a.student_id)
+        - coalesce(a.hours, 0) as delta
+    from public.attendance a
+    join public.lessons l on l.id = a.lesson_id
+    left join public.subscriptions s on s.id = a.subscription_id
+    left join lateral (
+      select tr.percent from public.teacher_rates tr
+      where tr.teacher_id = l.teacher_id and tr.valid_from <= l.lesson_date
+      order by tr.valid_from desc
+      limit 1
+    ) r on true
+    where l.group_id = v_enrollment.group_id
+      and a.student_id = v_enrollment.student_id
+      and l.lesson_date >= p_valid_from
+      and l.lesson_date >= v_enrollment.start_date
+      and (v_enrollment.end_date is null or l.lesson_date <= v_enrollment.end_date)
+  )
+  select
+    (count(*) filter (where m.delta <> 0))::integer,
+    coalesce(sum(m.delta), 0),
+    round(coalesce(sum(
+      m.price_full * coalesce(m.percent, 0) * m.delta / (m.hours_total * 100.0)
+    ) filter (where m.consumes_credit and m.hours_total is not null), 0))::integer,
+    round(coalesce(sum(
+      m.price_final * m.delta / m.hours_total
+    ) filter (where m.consumes_credit and m.hours_total is not null), 0))::integer
+  from m;
+end;
+$$;
+
+-- Marks of an enrollment from a date get their hours from the plan again (attendance_hours).
+create or replace function public.afterschool_reprice(p_enrollment_id uuid, p_from date)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_e public.enrollments%rowtype;
+  v_count integer;
+begin
+  select * into v_e from public.enrollments e where e.id = p_enrollment_id;
+  update public.attendance a set hours = null
+  from public.lessons l
+  where l.id = a.lesson_id
+    and l.group_id = v_e.group_id
+    and a.student_id = v_e.student_id
+    and l.lesson_date >= p_from
+    and l.lesson_date >= v_e.start_date
+    and (v_e.end_date is null or l.lesson_date <= v_e.end_date)
+    and a.hours is distinct from public.afterschool_lesson_hours(l.id, a.student_id);
+  get diagnostics v_count = row_count;
+  return v_count;
 end;
 $$;
 
 -- «Изменить с даты» (А6): a plan version from p_valid_from (same date — replaced). Marks from that
--- date are re-priced by the new plan (attendance_hours); not in a closed period (invariant 2).
--- Invoices already issued stay as they are (И60).
+-- date are re-priced by the new plan (attendance_hours); not in a closed period (invariant 2). A date
+-- in the past (Каныкей enters September afterwards) needs a reason — it goes to the journal; the
+-- form shows afterschool_plan_preview first. Invoices already issued stay as they are (И60): what
+-- the student did not use comes off the next one (afterschool_credit_hours).
+drop function if exists public.set_afterschool_plan(uuid, date, numeric[]);
 create or replace function public.set_afterschool_plan(
   p_enrollment_id uuid,
   p_valid_from date,
-  p_hours numeric[]
+  p_hours numeric[],
+  p_reason text default null
 )
 returns uuid
 language plpgsql
@@ -502,6 +849,7 @@ as $$
 declare
   v_enrollment public.enrollments%rowtype;
   v_type public.group_type;
+  v_reason text := btrim(coalesce(p_reason, ''));
   v_id uuid;
 begin
   if auth.uid() is not null and not public.is_admin() then
@@ -512,6 +860,9 @@ begin
   end if;
   if not exists (select 1 from unnest(p_hours) x where x > 0) then
     raise exception 'plan has no hours' using errcode = 'check_violation';
+  end if;
+  if length(v_reason) > 500 then
+    raise exception 'reason is too long' using errcode = 'check_violation';
   end if;
 
   select * into v_enrollment from public.enrollments e where e.id = p_enrollment_id for update;
@@ -526,30 +877,26 @@ begin
      or (v_enrollment.end_date is not null and p_valid_from > v_enrollment.end_date) then
     raise exception 'date is outside the enrollment' using errcode = 'check_violation';
   end if;
+  if p_valid_from < public.bishkek_today() and v_reason = '' then
+    raise exception 'reason is required for a date in the past' using errcode = 'check_violation';
+  end if;
   if exists (
-    select 1 from public.attendance a
-    join public.lessons l on l.id = a.lesson_id
-    where l.group_id = v_enrollment.group_id and a.student_id = v_enrollment.student_id
-      and l.lesson_date >= p_valid_from and l.is_locked
+    select 1 from public.lessons l
+    where l.group_id = v_enrollment.group_id
+      and l.lesson_date >= p_valid_from
+      and l.is_locked
   ) then
     raise exception 'marks from this date are in a closed period' using errcode = 'check_violation';
   end if;
 
-  perform set_config('iqup.audit_reason', 'afterschool_plan', true);
+  perform set_config('iqup.audit_reason', coalesce(nullif(v_reason, ''), 'afterschool_plan'), true);
 
   insert into public.afterschool_plans (enrollment_id, valid_from, hours)
   values (p_enrollment_id, p_valid_from, p_hours)
   on conflict (enrollment_id, valid_from) do update set hours = excluded.hours
   returning id into v_id;
 
-  -- re-price the marks from that date (the trigger recomputes hours from the plan)
-  update public.attendance a set hours = null
-  from public.lessons l
-  where l.id = a.lesson_id
-    and l.group_id = v_enrollment.group_id
-    and a.student_id = v_enrollment.student_id
-    and l.lesson_date >= p_valid_from
-    and a.hours is distinct from public.afterschool_day_hours(l.group_id, a.student_id, l.lesson_date);
+  perform public.afterschool_reprice(p_enrollment_id, p_valid_from);
 
   perform set_config('iqup.audit_reason', '', true);
   return v_id;
@@ -737,13 +1084,22 @@ begin
   perform public.assert_discount(v_student.id, p_discount_pct, p_discount_reason);
 
   if v_group.group_type = 'afterschool' then
-    v_month := coalesce(
-      (select (max(s.period_month) + interval '1 month')::date from public.subscriptions s
-       where s.enrollment_id = p_enrollment_id and s.status <> 'refunded'),
-      date_trunc('month', greatest(public.bishkek_today(), v_enrollment.start_date))::date
-    );
-    v_subscription_id := public.afterschool_invoice_insert(
-      p_enrollment_id, v_month, p_discount_pct, p_discount_reason, true);
+    v_month := (select (max(s.period_month) + interval '1 month')::date from public.subscriptions s
+                where s.enrollment_id = p_enrollment_id and s.status <> 'refunded');
+    if v_month is not null then
+      v_subscription_id := public.afterschool_invoice_insert(
+        p_enrollment_id, v_month, p_discount_pct, p_discount_reason, true);
+    else
+      -- the first invoice: this month from the day after the old package (afterschool_bill_from);
+      -- the package covers the month — the next one
+      v_month := date_trunc('month', greatest(public.bishkek_today(), v_enrollment.start_date))::date;
+      v_subscription_id := public.afterschool_invoice_insert(
+        p_enrollment_id, v_month, p_discount_pct, p_discount_reason, false);
+      if v_subscription_id is null then
+        v_subscription_id := public.afterschool_invoice_insert(
+          p_enrollment_id, (v_month + interval '1 month')::date, p_discount_pct, p_discount_reason, true);
+      end if;
+    end if;
   else
     v_start := greatest(
       public.bishkek_today(),
@@ -779,9 +1135,13 @@ begin
 end;
 $$;
 
--- ─── 10. Which subscription a mark goes to: units ───────────────────────────
+-- ─── 10. Which subscription a mark goes to ──────────────────────────────────
 
--- Same as 0010, «left» in the subscription's units: lessons, or hours for an hour subscription.
+-- Same as 0010 for packages. After-school by hours (#82 review): from the first billed day of the
+-- first hour invoice on, a mark goes to the invoice of the month of the lesson — never to an earlier
+-- month (its unused hours are credit, И61, and its freezes are its own: 2 per month) and never to an
+-- old package; the month not invoiced yet — none (the invoice takes the mark when it is issued,
+-- afterschool_invoice_insert). Days before that — the old packages as before.
 create or replace function public.attendance_subscription(p_lesson_id uuid, p_student_id uuid)
 returns uuid
 language sql
@@ -790,7 +1150,7 @@ security definer
 set search_path = ''
 as $$
   with lesson as (
-    select l.id, l.group_id from public.lessons l where l.id = p_lesson_id
+    select l.id, l.group_id, l.lesson_date from public.lessons l where l.id = p_lesson_id
   ),
   subs as (
     select
@@ -798,21 +1158,141 @@ as $$
       s.status,
       s.started_at,
       s.created_at,
-      coalesce(s.hours_total, s.lessons_total) - (
-        select case when s.hours_total is null then count(*) else coalesce(sum(a.hours), 0) end
-        from public.attendance a
+      s.hours_total,
+      s.period_month,
+      s.lessons_total - (
+        select count(*) from public.attendance a
         where a.subscription_id = s.id and a.consumes_credit and a.lesson_id <> p_lesson_id
       ) as lessons_left
     from lesson
     join public.enrollments e on e.group_id = lesson.group_id and e.student_id = p_student_id
     join public.subscriptions s on s.enrollment_id = e.id
     where s.status <> 'refunded'
+  ),
+  hours_since as (
+    select min(started_at) as first_day from subs where hours_total is not null
   )
-  select coalesce(
-    (select id from subs where status = 'active' and lessons_left > 0
-     order by started_at, created_at, id limit 1),
-    (select id from subs order by started_at desc, created_at desc, id desc limit 1)
-  );
+  select case
+    when lesson.lesson_date >= hours_since.first_day then (
+      select id from subs
+      where hours_total is not null
+        and period_month = date_trunc('month', lesson.lesson_date)::date
+        and started_at <= lesson.lesson_date
+      order by created_at desc, id desc
+      limit 1
+    )
+    else coalesce(
+      (select id from subs where hours_total is null and status = 'active' and lessons_left > 0
+       order by started_at, created_at, id limit 1),
+      (select id from subs where hours_total is null
+       order by started_at desc, created_at desc, id desc limit 1)
+    )
+  end
+  from lesson, hours_since;
+$$;
+
+-- Frozen days of a student in an after-school month not invoiced yet (their marks have no
+-- subscription): marks + «Заморозка заранее» on planned lessons, but p_except_lesson. Null — the day
+-- is not in such a month (an invoice or a package takes it).
+create or replace function public.afterschool_unbilled_freezes(
+  p_lesson_id uuid,
+  p_student_id uuid,
+  p_except_lesson uuid,
+  p_with_presets boolean
+)
+returns integer
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with lesson as (
+    select l.group_id, l.lesson_date, date_trunc('month', l.lesson_date)::date as month
+    from public.lessons l where l.id = p_lesson_id
+  )
+  select case
+    when public.attendance_subscription(p_lesson_id, p_student_id) is null
+      and exists (
+        select 1 from public.subscriptions s
+        join public.enrollments e on e.id = s.enrollment_id
+        where e.group_id = lesson.group_id and e.student_id = p_student_id
+          and s.hours_total is not null and s.status <> 'refunded'
+          and s.started_at <= lesson.lesson_date
+      )
+    then (
+      (select count(*) from public.attendance a
+       join public.lessons l on l.id = a.lesson_id
+       where a.student_id = p_student_id and l.group_id = lesson.group_id
+         and a.status = 'absent_frozen' and a.subscription_id is null
+         and date_trunc('month', l.lesson_date)::date = lesson.month
+         and a.lesson_id is distinct from p_except_lesson)
+      + case when p_with_presets then (
+          select count(*) from public.attendance_presets p
+          join public.lessons l on l.id = p.lesson_id
+          where p.student_id = p_student_id and l.group_id = lesson.group_id
+            and l.status = 'planned'
+            and date_trunc('month', l.lesson_date)::date = lesson.month
+            and p.lesson_id is distinct from p_except_lesson
+        ) else 0 end
+    )::integer
+  end
+  from lesson;
+$$;
+
+-- Same as 0001 plus #82: a frozen day of an after-school month not invoiced yet counts against the
+-- month (И61: 2 per invoice) — the invoice takes those marks when it is issued.
+create or replace function public.enforce_freeze_limit()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_limit integer;
+  v_used integer;
+begin
+  if new.status <> 'absent_frozen' then
+    return new;
+  end if;
+
+  if new.subscription_id is null then
+    v_used := public.afterschool_unbilled_freezes(new.lesson_id, new.student_id, new.lesson_id, false);
+    if v_used is null then
+      return new;
+    end if;
+    select t.freeze_limit into v_limit
+    from public.lessons l
+    join public.tariffs t on t.group_type = 'afterschool' and t.valid_from <= l.lesson_date
+    where l.id = new.lesson_id
+    order by t.valid_from desc
+    limit 1;
+    if v_used >= v_limit then
+      raise exception 'freeze limit (%) exceeded for the month', v_limit
+        using errcode = 'check_violation', hint = 'mark as absent_burned';
+    end if;
+    return new;
+  end if;
+
+  -- Serialize concurrent marks on the same subscription.
+  select t.freeze_limit into v_limit
+  from public.subscriptions s
+  join public.tariffs t on t.id = s.tariff_id
+  where s.id = new.subscription_id
+  for update of s;
+
+  select count(*) into v_used
+  from public.attendance a
+  where a.subscription_id = new.subscription_id
+    and a.status = 'absent_frozen'
+    and a.id <> new.id;
+
+  if v_used >= v_limit then
+    raise exception 'freeze limit (%) exceeded for subscription %', v_limit, new.subscription_id
+      using errcode = 'check_violation', hint = 'mark as absent_burned';
+  end if;
+
+  return new;
+end;
 $$;
 
 -- ─── 11. confirm_lesson: a student with 0 h that day is not on the roster ───
@@ -868,7 +1348,7 @@ begin
     where e.group_id = v_lesson.group_id
       and e.start_date <= v_lesson.lesson_date
       and (e.end_date >= v_lesson.lesson_date or (e.end_date is null and e.status = 'active'))
-      and coalesce(public.afterschool_day_hours(v_lesson.group_id, e.student_id, v_lesson.lesson_date), 1) > 0
+      and coalesce(public.afterschool_lesson_hours(p_lesson_id, e.student_id), 1) > 0
   );
 
   for v_mark in select * from jsonb_array_elements(p_marks) loop
@@ -1007,7 +1487,7 @@ begin
   end if;
   -- #82: an after-school student with 0 h by the plan that day is not on the roster (confirm_lesson)
   -- — nothing to freeze (И63)
-  if coalesce(public.afterschool_day_hours(v_lesson.group_id, new.student_id, v_lesson.lesson_date), 1) = 0 then
+  if coalesce(public.afterschool_lesson_hours(new.lesson_id, new.student_id), 1) = 0 then
     raise exception 'student % has no after-school hours on %', new.student_id, v_lesson.lesson_date
       using errcode = 'check_violation';
   end if;
@@ -1036,6 +1516,20 @@ begin
     if v_used >= v_limit then
       raise exception 'freeze limit (%) exceeded for subscription %', v_limit, v_sub
         using errcode = 'check_violation', hint = 'mark as absent_burned';
+    end if;
+  end if;
+  -- #82: a month of after-school hours not invoiced yet — the month's frozen days (И61)
+  if v_sub is null then
+    v_used := public.afterschool_unbilled_freezes(new.lesson_id, new.student_id, new.lesson_id, true);
+    if v_used is not null then
+      select t.freeze_limit into v_limit from public.tariffs t
+      where t.group_type = 'afterschool' and t.valid_from <= v_lesson.lesson_date
+      order by t.valid_from desc
+      limit 1;
+      if v_used >= v_limit then
+        raise exception 'freeze limit (%) exceeded for the month', v_limit
+          using errcode = 'check_violation', hint = 'mark as absent_burned';
+      end if;
     end if;
   end if;
 
@@ -1100,7 +1594,7 @@ begin
       where e.group_id = v_lesson.group_id and e.student_id = v_student
         and e.start_date <= v_lesson.lesson_date
         and (e.end_date >= v_lesson.lesson_date or (e.end_date is null and e.status = 'active'))
-        and coalesce(public.afterschool_day_hours(v_lesson.group_id, v_student, v_lesson.lesson_date), 1) > 0
+        and coalesce(public.afterschool_lesson_hours(p_lesson_id, v_student), 1) > 0
     ) then
       raise exception 'student % is not enrolled in the group on %', v_student, v_lesson.lesson_date
         using errcode = 'check_violation';
@@ -1198,7 +1692,9 @@ revoke all on public.v_payroll_preview from anon;
 -- ─── 13. v_student_balance: units (lessons or hours) ────────────────────────
 
 -- Same as 0024 (#81: a carried debt floors paid_lessons below 0, exhausted suggests no refund) in
--- «units»: lessons of a package, hours of a monthly after-school subscription (paid hours floor to 0,5 h). Debt carries only between subscriptions of the same unit
+-- «units»: lessons of a package, hours of a monthly after-school subscription (paid hours floor to
+-- 0,5 h). An hour invoice holds hours_total + credit_hours (lessons_total), the credit hours count as
+-- paid, money is priced per billed hour (price_final / hours_total). Debt carries only between subscriptions of the same unit
 -- (an old 20-lesson package does not carry into hours); is_current — the newest live one of the
 -- student in the group. Column types widen to numeric (hours have halves) — drop and create.
 drop view if exists public.v_student_balance;
@@ -1216,7 +1712,11 @@ with subs as (
     s.started_at,
     s.created_at,
     case when s.hours_total is null then 'lesson' else 'hour' end as unit,
-    coalesce(s.hours_total, s.lessons_total)::numeric as lessons_total,
+    -- capacity: an hour invoice also holds its credit hours (paid on earlier invoices, И61)
+    coalesce(s.hours_total + s.credit_hours, s.lessons_total)::numeric as lessons_total,
+    -- units the price is for: billed hours / lessons
+    coalesce(s.hours_total, s.lessons_total)::numeric as priced_total,
+    coalesce(s.credit_hours, 0) as credit,
     s.price_full,
     s.price_final,
     t.freeze_limit,
@@ -1245,7 +1745,7 @@ paid as (
     case
       when price_final = 0 then lessons_total
       -- floor, not truncation: a debt carried in by a transfer (paid_som < 0) is lessons owed
-      when unit = 'hour' then floor(paid_som::numeric * lessons_total * 2 / price_final) / 2
+      when unit = 'hour' then credit + floor(paid_som::numeric * priced_total * 2 / price_final) / 2
       else floor(paid_som::numeric * lessons_total / price_final)
     end as paid_lessons
   from subs
@@ -1316,13 +1816,13 @@ select
   case
     when status = 'refunded' or lessons_used <= paid_lessons then 0
     else greatest(0, ceil(
-      (lessons_used * price_final - paid_som::numeric * lessons_total) / lessons_total
+      ((lessons_used - credit) * price_final - paid_som::numeric * priced_total) / priced_total
     ))::integer
   end as debt_som,
   case
     when status in ('refunded', 'exhausted') then 0 -- exhausted: closed by a transfer / «ушёл» (#81)
     else round(
-      greatest(0, least(paid_lessons, lessons_total) - lessons_used) * price_final / lessons_total
+      greatest(0, least(paid_lessons, lessons_total) - lessons_used) * price_final / priced_total
     )::integer
   end as refund_suggested,
   freezes_used,
@@ -1410,8 +1910,9 @@ $$;
 
 -- ─── 14b. #81 × hours: settlement, payroll impact, no transfer ──────────────
 
--- Same as 0024; lessons_used is numeric — an hour subscription counts hours (v_student_balance
--- lessons_total / lessons_used are hours there, so used_som = used hours × its hour price). The
+-- Same as 0024; lessons_used is numeric — an hour subscription counts hours, priced at its billed
+-- hour price (price_final / hours_total): an invoice that used its credit hours goes below 0 by them,
+-- the earlier invoice they were paid on stays above 0 by them — the enrollment's sum is right. The
 -- return type changes — drop and create.
 drop function if exists public.subscription_settlement(uuid);
 create function public.subscription_settlement(p_enrollment_id uuid)
@@ -1435,8 +1936,9 @@ as $$
     s.created_at,
     b.paid_som,
     b.lessons_used,
-    ceil(b.lessons_used::numeric * b.price_final / b.lessons_total)::integer,
-    b.paid_som - ceil(b.lessons_used::numeric * b.price_final / b.lessons_total)::integer
+    ceil(b.lessons_used::numeric * b.price_final / coalesce(s.hours_total, s.lessons_total))::integer,
+    b.paid_som
+      - ceil(b.lessons_used::numeric * b.price_final / coalesce(s.hours_total, s.lessons_total))::integer
   from public.v_student_balance b
   join public.subscriptions s on s.id = b.subscription_id
   where b.enrollment_id = p_enrollment_id and b.status <> 'refunded';
@@ -1570,6 +2072,23 @@ begin
 end;
 $$;
 
+-- An enrollment billed by hours (#82): it has a live hour invoice. Its money does not move to a
+-- lesson package and back (transfer, «Записан по ошибке»); an after-school enrollment still on the
+-- old 20-lesson packages (prod on 14.10) does — as in 0024. No group moves into after-school by
+-- transfer: a new after-school enrollment is billed by hours.
+create or replace function public.enrollment_on_hours(p_enrollment_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.subscriptions s
+    where s.enrollment_id = p_enrollment_id and s.hours_total is not null and s.status <> 'refunded'
+  );
+$$;
+
 -- Same as 0024 plus: an after-school (hours) group on either side refuses — the month bill and the
 -- plan do not move to a lesson package and back; «Ушёл» with a refund and a new enrollment instead.
 create or replace function public.transfer_preview(
@@ -1610,8 +2129,9 @@ begin
     raise exception 'group % not found', p_group_id using errcode = 'foreign_key_violation';
   end if;
   select g.group_type into v_from_type from public.groups g where g.id = v_enrollment.group_id;
-  if v_from_type = 'afterschool' or v_to.group_type = 'afterschool' then
-    -- hours are billed by month and plan (И60): «ушёл» with a refund, then a new enrollment (#82)
+  if public.enrollment_on_hours(p_enrollment_id) or v_to.group_type = 'afterschool' then
+    -- hours are billed by month and plan (И60): «ушёл» with a refund, then a new enrollment (#82);
+    -- an after-school enrollment still on the old 20-lesson packages moves as in 0024
     raise exception 'after-school by hours: no transfer — withdraw and enroll anew'
       using errcode = 'check_violation';
   end if;
@@ -1700,8 +2220,9 @@ begin
     raise exception 'group % is archived', p_group_id using errcode = 'check_violation';
   end if;
   select * into v_from from public.groups g where g.id = v_old.group_id;
-  if v_from.group_type = 'afterschool' or v_to.group_type = 'afterschool' then
-    -- hours are billed by month and plan (И60): «ушёл» with a refund, then a new enrollment (#82)
+  if public.enrollment_on_hours(p_enrollment_id) or v_to.group_type = 'afterschool' then
+    -- hours are billed by month and plan (И60): «ушёл» with a refund, then a new enrollment (#82);
+    -- an after-school enrollment still on the old 20-lesson packages moves as in 0024
     raise exception 'after-school by hours: no transfer — withdraw and enroll anew'
       using errcode = 'check_violation';
   end if;
@@ -1917,8 +2438,9 @@ begin
       if v_to.status = 'archived' then
         raise exception 'group % is archived', p_group_id using errcode = 'check_violation';
       end if;
-      if v_from.group_type = 'afterschool' or v_to.group_type = 'afterschool' then
-        -- hours are billed by month and plan (И60): «ушёл» with a refund, then a new enrollment (#82)
+      if public.enrollment_on_hours(p_enrollment_id) or v_to.group_type = 'afterschool' then
+        -- hours are billed by month and plan (И60): «ушёл» with a refund, then a new enrollment (#82);
+        -- an after-school enrollment still on the old 20-lesson packages moves as in 0024
         raise exception 'after-school by hours: no transfer — withdraw and enroll anew'
           using errcode = 'check_violation';
       end if;
@@ -2056,17 +2578,205 @@ end;
 $$;
 
 
+-- ─── 14c. reschedule_group: after-school plans follow the new weekdays ──────
+
+-- A student's plan on a new schedule (#82 review): a weekday the group keeps — the student's hours
+-- (0 too); a new weekday — the default hours; a weekday the group drops — 0.
+create or replace function public.afterschool_remap_plan(
+  p_hours numeric[],
+  p_old_days integer[],
+  p_new_days integer[],
+  p_default numeric
+)
+returns numeric[]
+language sql
+immutable
+set search_path = ''
+as $$
+  select array_agg(
+    case
+      when d <> all (p_new_days) then 0
+      when d = any (p_old_days) then p_hours[d]
+      else p_default
+    end
+    order by d
+  )::numeric[]
+  from generate_series(1, 7) d;
+$$;
+
+-- Every after-school enrollment of the group live on p_valid_from or later: a plan version from
+-- p_valid_from (or its start) remapped to the new weekdays, later versions remapped too, marks from
+-- then re-priced. Returns how many enrollments changed.
+create or replace function public.afterschool_reschedule_plans(
+  p_group_id uuid,
+  p_valid_from date,
+  p_old_days integer[],
+  p_new_days integer[]
+)
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  r record;
+  v_from date;
+  v_default numeric;
+  v_cur numeric[];
+  v_new numeric[];
+  v_changed integer := 0;
+begin
+  for r in
+    select e.id, e.start_date from public.enrollments e
+    where e.group_id = p_group_id
+      and ((e.end_date is null and e.status = 'active') or e.end_date >= p_valid_from)
+      and exists (select 1 from public.afterschool_plans p where p.enrollment_id = e.id)
+  loop
+    v_from := greatest(p_valid_from, r.start_date);
+    v_default := public.afterschool_default_hours(v_from);
+    v_cur := public.afterschool_plan_on(r.id, v_from);
+    v_new := public.afterschool_remap_plan(v_cur, p_old_days, p_new_days, v_default);
+
+    update public.afterschool_plans p
+    set hours = public.afterschool_remap_plan(p.hours, p_old_days, p_new_days, v_default)
+    where p.enrollment_id = r.id and p.valid_from > v_from
+      and p.hours is distinct from public.afterschool_remap_plan(p.hours, p_old_days, p_new_days, v_default);
+
+    if v_new is distinct from v_cur then
+      insert into public.afterschool_plans (enrollment_id, valid_from, hours)
+      values (r.id, v_from, v_new)
+      on conflict (enrollment_id, valid_from) do update set hours = excluded.hours;
+      v_changed := v_changed + 1;
+    end if;
+    perform public.afterschool_reprice(r.id, v_from);
+  end loop;
+  return v_changed;
+end;
+$$;
+
+-- Same as 0015 plus #82: an after-school group's students get plans on the new weekdays
+-- (afterschool_reschedule_plans) — the admin checks them on the students' cards.
+create or replace function public.reschedule_group(
+  p_group_id uuid,
+  p_valid_from date,
+  p_weekdays integer[],
+  p_start_time time,
+  p_until date
+)
+returns table (lessons_deleted integer, lessons_created integer)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_group public.groups%rowtype;
+  v_deleted integer;
+  v_created integer;
+  v_old_days integer[];
+begin
+  perform public.assert_admin();
+
+  select * into v_group from public.groups g where g.id = p_group_id for update;
+  if not found then
+    raise exception 'group % not found', p_group_id using errcode = 'foreign_key_violation';
+  end if;
+  if v_group.status = 'archived' then
+    raise exception 'group % is archived', p_group_id using errcode = 'check_violation';
+  end if;
+  if p_valid_from is null or p_valid_from < public.bishkek_today() then
+    raise exception 'a schedule change starts today or later' using errcode = 'check_violation';
+  end if;
+  if p_valid_from < v_group.start_date
+     or (v_group.end_date is not null and p_valid_from > v_group.end_date) then
+    raise exception 'schedule change is outside the group dates' using errcode = 'check_violation';
+  end if;
+  if p_weekdays is null or cardinality(p_weekdays) = 0
+     or exists (select 1 from unnest(p_weekdays) w where w not between 1 and 7)
+     or p_start_time is null then
+    raise exception 'pick at least one weekday and a time' using errcode = 'check_violation';
+  end if;
+
+  -- the weekdays in effect on that date before the change (#82)
+  v_old_days := array(
+    select distinct r.weekday from public.schedule_rules r
+    where r.group_id = p_group_id
+      and r.valid_from <= p_valid_from
+      and (r.valid_to is null or r.valid_to >= p_valid_from)
+  );
+
+  delete from public.schedule_rules r
+  where r.group_id = p_group_id and r.valid_from >= p_valid_from;
+
+  update public.schedule_rules r
+  set valid_to = p_valid_from - 1
+  where r.group_id = p_group_id and (r.valid_to is null or r.valid_to >= p_valid_from);
+
+  with gone as (
+    delete from public.lessons l
+    where l.group_id = p_group_id
+      and l.status = 'planned'
+      and not l.is_extra
+      and l.lesson_date >= p_valid_from
+      and public.lesson_starts_at(l.lesson_date, l.planned_start) > now()
+      and not exists (select 1 from public.attendance a where a.lesson_id = l.id)
+      and not exists (select 1 from public.trials t where t.lesson_id = l.id)
+      -- a slot the new schedule keeps (same weekday and time) stays with its substitute / comment
+      and not (extract(isodow from l.lesson_date)::integer = any (p_weekdays) and l.planned_start = p_start_time)
+    returning 1
+  )
+  select count(*) into v_deleted from gone;
+
+  insert into public.schedule_rules (group_id, weekday, start_time, valid_from)
+  select p_group_id, w, p_start_time, p_valid_from
+  from (select distinct unnest(p_weekdays) as w) d;
+
+  v_created := public.generate_lessons(p_group_id, p_until);
+
+  if v_group.group_type = 'afterschool' then
+    perform set_config('iqup.audit_reason', 'reschedule_group', true);
+    perform public.afterschool_reschedule_plans(
+      p_group_id, p_valid_from, v_old_days, array(select distinct unnest(p_weekdays)));
+    perform set_config('iqup.audit_reason', '', true);
+  end if;
+
+  return query select v_deleted, v_created;
+end;
+$$;
+
 -- ─── 15. Grants ─────────────────────────────────────────────────────────────
 
 revoke execute on function public.afterschool_backfill_plans() from public, anon, authenticated;
-revoke execute on function public.afterschool_invoice_insert(uuid, date, integer, public.discount_reason, boolean)
+revoke execute on function public.afterschool_invoice_insert(uuid, date, integer, public.discount_reason, boolean, date)
 from public, anon, authenticated;
+revoke execute on function public.afterschool_reprice(uuid, date) from public, anon, authenticated;
+revoke execute on function public.afterschool_plan_mark_hours(uuid, date, numeric[], uuid, uuid)
+from public, anon, authenticated;
+revoke execute on function public.afterschool_unbilled_freezes(uuid, uuid, uuid, boolean)
+from public, anon, authenticated;
+revoke execute on function public.enrollment_on_hours(uuid) from public, anon, authenticated;
+revoke execute on function public.afterschool_remap_plan(numeric[], integer[], integer[], numeric)
+from public, anon, authenticated;
+revoke execute on function public.afterschool_reschedule_plans(uuid, date, integer[], integer[])
+from public, anon, authenticated;
+revoke execute on function public.afterschool_default_hours(date) from public, anon, authenticated;
 revoke execute on function public.assert_discount(uuid, integer, public.discount_reason)
 from public, anon, authenticated;
-revoke execute on function public.afterschool_default_plan(uuid, date) from public, anon;
-grant execute on function public.afterschool_default_plan(uuid, date) to authenticated;
+-- default plan: only enroll_student (definer) needs it
+revoke execute on function public.afterschool_default_plan(uuid, date) from public, anon, authenticated;
+-- security invoker: the caller sees only the plans the afterschool_plans RLS shows (a teacher — own
+-- groups); the quote / credit RPCs of the admin need them
 revoke execute on function public.afterschool_day_hours(uuid, uuid, date) from public, anon;
 grant execute on function public.afterschool_day_hours(uuid, uuid, date) to authenticated;
+revoke execute on function public.afterschool_lesson_hours(uuid, uuid) from public, anon;
+grant execute on function public.afterschool_lesson_hours(uuid, uuid) to authenticated;
+revoke execute on function public.afterschool_minutes_hours(integer) from public, anon;
+grant execute on function public.afterschool_minutes_hours(integer) to authenticated;
+revoke execute on function public.afterschool_hours_of(numeric, integer) from public, anon;
+grant execute on function public.afterschool_hours_of(numeric, integer) to authenticated;
+revoke execute on function public.afterschool_bill_from(uuid, date) from public, anon;
+grant execute on function public.afterschool_bill_from(uuid, date) to authenticated;
+revoke execute on function public.afterschool_plan_preview(uuid, date, numeric[]) from public, anon;
+grant execute on function public.afterschool_plan_preview(uuid, date, numeric[]) to authenticated;
 
 revoke execute on function public.tariff_hour_price(uuid) from public, anon;
 grant execute on function public.tariff_hour_price(uuid) to authenticated;
@@ -2074,17 +2784,17 @@ revoke execute on function public.afterschool_hours_valid(numeric[]) from public
 grant execute on function public.afterschool_hours_valid(numeric[]) to authenticated;
 revoke execute on function public.afterschool_plan_on(uuid, date) from public, anon;
 grant execute on function public.afterschool_plan_on(uuid, date) to authenticated;
-revoke execute on function public.afterschool_month_quote(uuid, date) from public, anon;
-grant execute on function public.afterschool_month_quote(uuid, date) to authenticated;
+revoke execute on function public.afterschool_month_quote(uuid, date, date) from public, anon;
+grant execute on function public.afterschool_month_quote(uuid, date, date) to authenticated;
 revoke execute on function public.afterschool_credit_hours(uuid) from public, anon;
 grant execute on function public.afterschool_credit_hours(uuid) to authenticated;
 
-revoke execute on function public.issue_afterschool_invoice(uuid, date, integer, public.discount_reason)
+revoke execute on function public.issue_afterschool_invoice(uuid, date, integer, public.discount_reason, date)
 from public, anon;
-grant execute on function public.issue_afterschool_invoice(uuid, date, integer, public.discount_reason)
+grant execute on function public.issue_afterschool_invoice(uuid, date, integer, public.discount_reason, date)
 to authenticated;
-revoke execute on function public.set_afterschool_plan(uuid, date, numeric[]) from public, anon;
-grant execute on function public.set_afterschool_plan(uuid, date, numeric[]) to authenticated;
+revoke execute on function public.set_afterschool_plan(uuid, date, numeric[], text) from public, anon;
+grant execute on function public.set_afterschool_plan(uuid, date, numeric[], text) to authenticated;
 revoke execute on function public.enroll_student(uuid, uuid, date, integer, public.discount_reason, numeric[])
 from public, anon;
 grant execute on function public.enroll_student(uuid, uuid, date, integer, public.discount_reason, numeric[])

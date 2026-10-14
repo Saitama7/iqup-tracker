@@ -167,6 +167,8 @@ const subscriptionSchema = z.object({
   created_at: z.string(),
   lessons_total: z.number().int(),
   hours_total: z.number().nullable(),
+  period_month: z.string().nullable(),
+  credit_hours: z.number(),
   price_full: z.number(),
   price_final: z.number(),
   tariff: z.object({ freeze_limit: z.number().int() }),
@@ -187,7 +189,7 @@ export const enrollmentSchema = z.object({
 
 /** subscriptions(…) of an enrollment, with every mark charged to them and their payments (teacher RLS: own students, Д3). */
 export const ENROLLMENT_FIELDS =
-  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, hours_total, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status, hours), payments(amount)), afterschool_plans(valid_from, hours)'
+  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, hours_total, period_month, credit_hours, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status, hours), payments(amount)), afterschool_plans(valid_from, hours)'
 
 export function toEnrollment({
   afterschool_plans,
@@ -306,7 +308,10 @@ export function confirmErrorReason(error: { code?: string; message?: string }): 
   if (error.code === 'PGRST202' || error.code === '42883')
     return 'сервер не обновлён — сообщите администратору'
   if (m.includes('already confirmed')) return 'занятие уже проведено'
-  if (m.includes('freeze limit')) return 'лимит заморозок 2 на абонемент — отметьте «Не был»'
+  if (m.includes('freeze limit'))
+    return m.includes('month')
+      ? 'лимит заморозок 2 на месяц — отметьте «Не был»'
+      : 'лимит заморозок 2 на абонемент — отметьте «Не был»'
   if (m.includes('not started')) return 'занятие ещё не началось'
   if (m.includes('closed period')) return 'период закрыт — исправления через администратора'
   if (m.includes('cancelled')) return 'занятие отменено'

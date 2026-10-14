@@ -1366,32 +1366,83 @@ export type Database = {
     }
     Functions: {
       afterschool_backfill_plans: { Args: Record<PropertyKey, never>; Returns: number }
+      afterschool_bill_from: { Args: { p_enrollment_id: string; p_month: string }; Returns: string }
       afterschool_credit_hours: { Args: { p_enrollment_id: string }; Returns: number }
       afterschool_day_hours: {
         Args: { p_date: string; p_group_id: string; p_student_id: string }
         Returns: number
       }
+      afterschool_default_hours: { Args: { p_date: string }; Returns: number }
       afterschool_default_plan: { Args: { p_date: string; p_group_id: string }; Returns: number[] }
+      afterschool_hours_of: { Args: { p_extra_min: number; p_plan_hours: number }; Returns: number }
       afterschool_hours_valid: { Args: { p_hours: number[] }; Returns: boolean }
       afterschool_invoice_insert: {
         Args: {
           p_discount_pct: number
           p_discount_reason: Database['public']['Enums']['discount_reason']
           p_enrollment_id: string
+          p_from?: string
           p_month: string
           p_strict?: boolean
         }
         Returns: string
       }
+      afterschool_lesson_hours: {
+        Args: { p_lesson_id: string; p_student_id: string }
+        Returns: number
+      }
+      afterschool_minutes_hours: { Args: { p_minutes: number }; Returns: number }
       afterschool_month_quote: {
-        Args: { p_enrollment_id: string; p_month: string }
+        Args: { p_enrollment_id: string; p_from?: string; p_month: string }
         Returns: {
           days: number
           hours: number
           weekday: number
         }[]
       }
+      afterschool_plan_mark_hours: {
+        Args: {
+          p_enrollment_id: string
+          p_hours: number[]
+          p_lesson_id: string
+          p_student_id: string
+          p_valid_from: string
+        }
+        Returns: number
+      }
       afterschool_plan_on: { Args: { p_date: string; p_enrollment_id: string }; Returns: number[] }
+      afterschool_plan_preview: {
+        Args: { p_enrollment_id: string; p_hours: number[]; p_valid_from: string }
+        Returns: {
+          balance_delta: number
+          hours_delta: number
+          marks: number
+          payroll_delta: number
+        }[]
+      }
+      afterschool_remap_plan: {
+        Args: { p_default: number; p_hours: number[]; p_new_days: number[]; p_old_days: number[] }
+        Returns: number[]
+      }
+      afterschool_reprice: { Args: { p_enrollment_id: string; p_from: string }; Returns: number }
+      afterschool_reschedule_plans: {
+        Args: {
+          p_group_id: string
+          p_new_days: number[]
+          p_old_days: number[]
+          p_valid_from: string
+        }
+        Returns: number
+      }
+      afterschool_unbilled_freezes: {
+        Args: {
+          p_except_lesson: string
+          p_lesson_id: string
+          p_student_id: string
+          p_with_presets: boolean
+        }
+        Returns: number
+      }
       apply_correction_request: { Args: { p_request_id: string }; Returns: number }
       archive_group: { Args: { p_group_id: string }; Returns: number }
       assert_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
@@ -1571,6 +1622,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      enrollment_on_hours: { Args: { p_enrollment_id: string }; Returns: boolean }
       enrollment_payroll_impact: {
         Args: { p_enrollment_id: string }
         Returns: {
@@ -1636,6 +1688,7 @@ export type Database = {
           p_discount_pct?: number
           p_discount_reason?: Database['public']['Enums']['discount_reason']
           p_enrollment_id: string
+          p_from?: string
           p_month: string
         }
         Returns: string
@@ -1691,7 +1744,12 @@ export type Database = {
       }
       server_now: { Args: Record<PropertyKey, never>; Returns: string }
       set_afterschool_plan: {
-        Args: { p_enrollment_id: string; p_hours: number[]; p_valid_from: string }
+        Args: {
+          p_enrollment_id: string
+          p_hours: number[]
+          p_reason?: string
+          p_valid_from: string
+        }
         Returns: string
       }
       set_attendance_preset: {

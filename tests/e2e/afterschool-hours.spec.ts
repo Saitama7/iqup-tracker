@@ -59,6 +59,23 @@ const addDays = (iso: string, n: number) => {
   d.setUTCDate(d.getUTCDate() + n)
   return d.toISOString().slice(0, 10)
 }
+const GEN = [
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря',
+]
+/** «12 октября» — formatDayMonth of the app (its module pulls in the Supabase client). */
+const formatDayMonth = (iso: string) =>
+  `${Number(iso.slice(8, 10))} ${GEN[Number(iso.slice(5, 7)) - 1]}`
 const ru = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`
 
 /** Everything the test made — as superuser with triggers off (payments are immutable, И41). */
@@ -103,10 +120,15 @@ test('продлёнка: график ПН 2 / СР 1 / ПТ 2 → счёт з�
   cleanup(groupName, pupil)
   const db = service()
   try {
-    // ─── fixtures: Нургуль's new after-school group from 3 weeks ago, Mon–Fri 13:00 ───
+    // ─── fixtures: Нургуль's new after-school group, Mon–Fri 13:00, from the 1st of the month of the
+    // Monday / Friday the teacher marks (a mark goes to the invoice of its month, #82 review) ───
     const { data: todayData } = await db.rpc('bishkek_today')
     const today = String(todayData)
-    const start = addDays(today, -21)
+    const markDay = [1, 2, 3, 4, 5, 6, 7]
+      .map((n) => addDays(today, -n))
+      .find((d) => [1, 5].includes(isoWeekday(d)))
+    if (!markDay) throw new Error('no Monday / Friday in the last week')
+    const start = monthStart(markDay)
     const { data: seedGroup, error: ge } = await db
       .from('groups')
       .select('teacher_id, subject_id')
@@ -227,16 +249,8 @@ test('продлёнка: график ПН 2 / СР 1 / ПТ 2 → счёт з�
     await slow(page.getByText(`Оплата записана: ${pupil}`)).toBeVisible()
 
     // ─── the teacher marks a past Monday / Friday «Был» (2 h) ───────────────
-    const lesson = (lessons ?? [])
-      .filter(
-        (l) =>
-          l.lesson_date < today &&
-          l.lesson_date >= addDays(today, -7) &&
-          [1, 5].includes(isoWeekday(l.lesson_date)),
-      )
-      .sort((a, b) => b.lesson_date.localeCompare(a.lesson_date))
-      .at(0)
-    if (!lesson) throw new Error('no past Monday / Friday lesson in the last week')
+    const lesson = (lessons ?? []).find((l) => l.lesson_date === markDay)
+    if (!lesson) throw new Error(`no lesson on ${markDay} (a holiday?)`)
     const before = await db
       .from('v_payroll_preview')
       .select('student_hours, base_amount')
@@ -290,6 +304,33 @@ test('продлёнка: график ПН 2 / СР 1 / ПТ 2 → счёт з�
       fullPage: true,
     })
     await teacherContext.close()
+
+    // ─── А6: the plan from that day, in the past — the warning with the money, a reason ─────
+    await page.goto(`/admin/students/${student.id}`)
+    await slow(page.getByLabel('Продлёнка по часам').first()).toContainText('ПН 2 · СР 1 · ПТ 2 ч')
+    await page.getByRole('button', { name: 'Изменить с даты' }).first().click()
+    const planForm = page.getByRole('form', { name: 'График продлёнки' })
+    await planForm.getByLabel('Действует с').fill(ru(markDay))
+    const dayLabel = isoWeekday(markDay) === 1 ? 'ПН' : 'ПТ'
+    await planForm.getByLabel(`${dayLabel}, часов`).selectOption('3')
+    const warning = planForm.getByRole('alert')
+    await slow(warning).toContainText(
+      `Изменятся часы проведённых занятий с ${formatDayMonth(markDay)}: 1 отметка, +1 ч`,
+    )
+    const payDelta = Math.round((price * 1 * 45) / (quote.hours * 100))
+    await expect(warning).toContainText(`ЗП учителя +${som(payDelta)} сом`)
+    await planForm.getByRole('button', { name: 'Сохранить график' }).click()
+    await expect(planForm.getByText('Дата в прошлом — укажите причину')).toBeVisible()
+    await planForm.getByLabel('Причина (в журнал)').fill('e2e: график внесён задним числом')
+    await page.screenshot({ path: shot(page, testInfo, 'afterschool-plan-past') })
+    await planForm.getByRole('button', { name: 'Сохранить график' }).click()
+    await slow(page.getByText(`График изменён с ${formatDayMonth(markDay)}`)).toBeVisible()
+    const { data: repriced } = await db
+      .from('attendance')
+      .select('hours')
+      .eq('lesson_id', lesson.id)
+      .single()
+    expect(repriced).toEqual({ hours: 3 })
   } finally {
     cleanup(groupName, pupil)
   }

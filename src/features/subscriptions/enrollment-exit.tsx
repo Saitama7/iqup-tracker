@@ -6,7 +6,7 @@ import { DateInput } from '@/components/ui/date-picker'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { PAYMENT_METHODS, type PaymentMethod } from '@/features/payments/api'
 import { METHOD_BUTTON } from '@/features/payments/model'
-import { groupLabel, type GroupBrief, type GroupType } from '@/features/students/model'
+import { groupLabel, type GroupBrief } from '@/features/students/model'
 import { FormDialog, NativeSelect } from '@/features/students/parts'
 import { formatSom } from '@/features/tariffs/model'
 import { ErrorText, Field, inputClass, labelClass, SubmitButton } from '@/features/tariffs/parts'
@@ -47,16 +47,14 @@ const ACTION_TITLE: Record<ExitAction, string> = {
 }
 
 /**
- * «⋯» next to an enrollment: the three ways out of a group. An after-school (hours) enrollment has no
- * transfer — the item is off with the way to do it (#82).
+ * «⋯» next to an enrollment: the three ways out of a group. An after-school enrollment billed by
+ * hours has no transfer — its dialog says so (#82); one still on the old 20-lesson packages moves.
  */
 export function EnrollmentMenu({
   label,
-  groupType,
   onAction,
 }: {
   label: string
-  groupType?: GroupType
   onAction: (action: ExitAction) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -69,29 +67,22 @@ export function EnrollmentMenu({
         <MoreHorizontal className="size-5" aria-hidden />
       </PopoverTrigger>
       <PopoverContent align="end" className="flex w-64 flex-col p-1.5">
-        {(Object.keys(ACTION_TITLE) as ExitAction[]).map((a) =>
-          a === 'transfer' && groupType === 'afterschool' ? (
-            <div key={a} className="flex flex-col gap-0.5 px-3 py-2">
-              <span className="text-sm font-bold text-ink-muted">{ACTION_TITLE[a]}</span>
-              <span className="text-xs font-bold text-ink-muted">{AFTERSCHOOL_NO_TRANSFER}</span>
-            </div>
-          ) : (
-            <button
-              key={a}
-              type="button"
-              onClick={() => {
-                setOpen(false)
-                onAction(a)
-              }}
-              className={cn(
-                'flex min-h-11 items-center rounded-xl px-3 text-left text-sm font-bold hover:bg-muted',
-                a === 'delete' && 'text-burned-strong',
-              )}
-            >
-              {ACTION_TITLE[a]}
-            </button>
-          ),
-        )}
+        {(Object.keys(ACTION_TITLE) as ExitAction[]).map((a) => (
+          <button
+            key={a}
+            type="button"
+            onClick={() => {
+              setOpen(false)
+              onAction(a)
+            }}
+            className={cn(
+              'flex min-h-11 items-center rounded-xl px-3 text-left text-sm font-bold hover:bg-muted',
+              a === 'delete' && 'text-burned-strong',
+            )}
+          >
+            {ACTION_TITLE[a]}
+          </button>
+        ))}
       </PopoverContent>
     </Popover>
   )
@@ -231,6 +222,9 @@ export function EnrollmentExitDialog({
     body = <div className="h-24 animate-pulse rounded-xl bg-muted" aria-label="Загрузка" />
   } else if (settlement.isError) {
     body = <ErrorText>{settlement.error.message}</ErrorText>
+  } else if (action === 'transfer' && settlement.data.unit === 'hour') {
+    // billed by hours (#82): the month invoices do not move; old 20-lesson packages do (0024)
+    body = <Note>{AFTERSCHOOL_NO_TRANSFER}</Note>
   } else if (action === 'transfer') {
     body = <TransferBody {...props} s={settlement.data} onDone={onDone} />
   } else if (action === 'withdraw') {
@@ -636,8 +630,9 @@ function DeleteBody({
 }: ExitProps & { s: Settlement }) {
   const ids = { choice: useId(), group: useId(), date: useId() }
   const impact = useQuery(payrollImpactQuery(enrollmentId))
-  // no money moves to an after-school (hours) group or out of one — as the transfer (#82)
-  const fromAfterschool = group?.group_type === 'afterschool'
+  // no money moves out of an enrollment billed by hours — as the transfer (#82); targets have no
+  // after-school groups (transferTargets)
+  const fromAfterschool = s.unit === 'hour'
   const targets = transferTargets(groups, group)
   const hasMoney = s.moneySom !== 0
   const [money, setMoney] = useState<'transfer' | 'refund' | null>(null)

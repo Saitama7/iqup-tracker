@@ -24,6 +24,8 @@ import {
   AFTERSCHOOL_KEY,
   enrollmentAfterschoolQuery,
   issueAfterschoolInvoice,
+  monthQuoteQuery,
+  planPreviewQuery,
   setAfterschoolPlan,
   type MonthBill,
 } from './api'
@@ -34,6 +36,7 @@ import {
   invoiceQuote,
   monthAccusative,
   monthStart,
+  nextMonth,
   planOn,
   tariffHourPrice,
   validPlan,
@@ -65,6 +68,15 @@ function useInvalidate() {
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
+/** Last day of the month of `month` (ISO). */
+function monthEnd(month: string): string {
+  const d = new Date(`${nextMonth(month)}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() - 1)
+  return d.toISOString().slice(0, 10)
+}
+
+const signedSom = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatSom(Math.abs(n))} сом`
+
 export function AfterschoolPanel({
   e,
   today,
@@ -88,6 +100,8 @@ export function AfterschoolPanel({
     )
   }
   const { plans, months, credit, earlier } = query.data
+  // the first hour invoice: billed from the day after the old package — the admin may move the date
+  const firstInvoice = earlier.length === 0 && months.every((m) => !m.invoice)
   const current = planOn(plans, today)
   const latest = plans.at(-1)
   const hourPrice = (month: string) => {
@@ -160,9 +174,17 @@ export function AfterschoolPanel({
             <p className="text-xs font-bold text-ink-muted">
               {formatQuote({ rows: m.rows, hours })}
             </p>
+            {!m.invoice && m.from >= nextMonth(m.month) && (
+              <p className="text-xs font-bold text-ink-muted">Месяц покрывает старый абонемент</p>
+            )}
+            {!m.invoice && m.from > m.month && m.from < nextMonth(m.month) && (
+              <p className="text-xs font-bold text-ink-muted">
+                С {formatDayMonth(m.from)} — до этого старый абонемент
+              </p>
+            )}
             {m.invoice && m.invoice.credit_hours > 0 && (
               <p className="text-xs font-bold text-teal">
-                − {formatHours(m.invoice.credit_hours)} ч заморозок прошлого месяца
+                − {formatHours(m.invoice.credit_hours)} ч неиспользованных прошлых счетов
               </p>
             )}
             {!m.invoice && hours > 0 && (
@@ -181,7 +203,7 @@ export function AfterschoolPanel({
       })}
       {credit > 0 && (
         <p className="text-xs font-bold text-teal">
-          Кредит {formatHours(credit)} ч (заморозки) — вычтется из следующего счёта
+          Кредит {formatHours(credit)} ч (неиспользованные часы) — вычтется из следующего счёта
         </p>
       )}
       {editing && (
@@ -198,6 +220,7 @@ export function AfterschoolPanel({
         <InvoiceDialog
           e={e}
           bill={invoicing}
+          first={firstInvoice}
           credit={credit}
           hourPrice={hourPrice(invoicing.month)}
           history={history}
@@ -224,10 +247,20 @@ function PlanDialog({
   const id = useId()
   const invalidate = useInvalidate()
   const [hours, setHours] = useState<number[]>([...initial])
+  const reasonId = useId()
   const [date, setDate] = useState(formatDateRu(today < e.startDate ? e.startDate : today))
+  const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const iso = parseDateRu(date)
+  // a date in the past (Каныкей enters a month afterwards): what changes in the marks already there
+  const past = iso !== null && iso < today
+  const preview = useQuery({
+    ...planPreviewQuery(e.enrollmentId, iso ?? today, hours),
+    enabled: iso !== null && iso <= today && iso >= e.startDate && validPlan(hours),
+  })
   const mutation = useMutation({
-    mutationFn: (validFrom: string) => setAfterschoolPlan(e.enrollmentId, validFrom, hours),
+    mutationFn: (validFrom: string) =>
+      setAfterschoolPlan(e.enrollmentId, validFrom, hours, past ? reason : undefined),
     onSuccess: async (_, validFrom) => {
       await invalidate()
       toast.success(`График изменён с ${formatDayMonth(validFrom)}`)
@@ -251,6 +284,10 @@ function PlanDialog({
     }
     if (!validPlan(hours)) {
       setError('Укажите часы хотя бы на один день')
+      return
+    }
+    if (iso < today && !reason.trim()) {
+      setError('Дата в прошлом — укажите причину')
       return
     }
     setError(null)
@@ -283,6 +320,41 @@ function PlanDialog({
           />
         </Field>
         <PlanEditor hours={hours} onChange={setHours} groupWeekdays={e.groupWeekdays} />
+        {preview.data && preview.data.marks > 0 && iso && (
+          <div
+            role="alert"
+            className="flex flex-col gap-0.5 rounded-[14px] bg-muted px-4 py-3 text-sm font-bold"
+          >
+            <p>
+              Изменятся часы проведённых занятий с {formatDayMonth(iso)}: {preview.data.marks}{' '}
+              {preview.data.marks === 1 ? 'отметка' : 'отметок'},{' '}
+              {preview.data.hoursDelta > 0 ? '+' : '−'}
+              {formatHours(Math.abs(preview.data.hoursDelta))} ч
+            </p>
+            <p className="text-ink-muted">
+              ЗП учителя {signedSom(preview.data.payrollDelta)}, баланс ученика{' '}
+              {signedSom(-preview.data.balanceDelta)}
+            </p>
+            <p className="text-ink-muted">
+              Выставленные счета не меняются — разница уйдёт в следующий
+            </p>
+          </div>
+        )}
+        {past && (
+          <Field id={reasonId} label="Причина (в журнал)">
+            <input
+              id={reasonId}
+              className={inputClass}
+              value={reason}
+              maxLength={500}
+              onChange={(ev) => {
+                setReason(ev.target.value)
+                setError(null)
+              }}
+              placeholder="например: график сентября внесён задним числом"
+            />
+          </Field>
+        )}
         {error && <ErrorText>{error}</ErrorText>}
         <SubmitButton pending={mutation.isPending}>Сохранить график</SubmitButton>
       </form>
@@ -293,6 +365,7 @@ function PlanDialog({
 function InvoiceDialog({
   e,
   bill,
+  first,
   credit,
   hourPrice,
   history,
@@ -300,18 +373,34 @@ function InvoiceDialog({
 }: {
   e: AfterschoolEnrollment
   bill: MonthBill
+  /** The first hour invoice: «Считать с» (the day after the old package by default). */
+  first: boolean
   credit: number
   hourPrice: number | null
   history: DiscountHistory
   onClose: () => void
 }) {
   const invalidate = useInvalidate()
+  const fromId = useId()
   const [discount, setDiscount] = useState<DiscountPct>(() => defaultDiscount(history))
   const [error, setError] = useState<string | null>(null)
-  const planned = bill.rows.reduce((n, r) => n + r.hours * r.days, 0)
+  const last = monthEnd(bill.month)
+  const [fromText, setFromText] = useState(() =>
+    formatDateRu(bill.from > last ? bill.month : bill.from),
+  )
+  const parsedFrom = parseDateRu(fromText)
+  const from =
+    first && parsedFrom && parsedFrom >= bill.month && parsedFrom <= last ? parsedFrom : bill.from
+  const fromQuote = useQuery({
+    ...monthQuoteQuery(e.enrollmentId, bill.month, from),
+    enabled: first && from !== bill.from,
+  })
+  const rows = from === bill.from ? bill.rows : (fromQuote.data ?? [])
+  const planned = rows.reduce((n, r) => n + r.hours * r.days, 0)
   const quote = hourPrice !== null ? invoiceQuote(planned, credit, hourPrice, discount) : null
   const mutation = useMutation({
-    mutationFn: () => issueAfterschoolInvoice(e.enrollmentId, bill.month, discount),
+    mutationFn: () =>
+      issueAfterschoolInvoice(e.enrollmentId, bill.month, discount, first ? from : undefined),
     onSuccess: async () => {
       await invalidate()
       toast.success(`Счёт за ${monthAccusative(bill.month)} выставлен`)
@@ -341,13 +430,25 @@ function InvoiceDialog({
         aria-label={`Счёт за ${monthAccusative(bill.month)}`}
         className="flex flex-col gap-3.5"
       >
+        {first && (
+          <Field id={fromId} label="Считать с (после старого абонемента)">
+            <DateInput
+              id={fromId}
+              className={inputClass}
+              value={fromText}
+              min={bill.month}
+              max={last}
+              onChange={setFromText}
+            />
+          </Field>
+        )}
         <div
           role="status"
           className="flex flex-col gap-1.5 rounded-[14px] bg-muted px-4 py-3 text-sm font-bold"
         >
-          <p>{formatQuote({ rows: bill.rows, hours: planned })}</p>
+          <p>{formatQuote({ rows, hours: planned })}</p>
           {quote && quote.credit > 0 && (
-            <p className="text-teal">− {formatHours(quote.credit)} ч заморозок (кредит)</p>
+            <p className="text-teal">− {formatHours(quote.credit)} ч неиспользованных (кредит)</p>
           )}
           {quote ? (
             <>

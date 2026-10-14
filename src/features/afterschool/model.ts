@@ -200,8 +200,9 @@ export interface InvoiceQuote {
 }
 
 /**
- * The invoice of a month (afterschool_invoice_insert): hours = planned − credit (frozen hours of
- * earlier months, И61), price = round(hours × hour price), discount В5 on top.
+ * The invoice of a month (afterschool_invoice_insert): hours = planned − credit (unused hours of
+ * earlier invoices, И61) — at least 0,5 h stays billed, the rest of the credit goes on; price =
+ * round(hours × hour price), discount В5 on top.
  */
 export function invoiceQuote(
   planned: number,
@@ -209,7 +210,7 @@ export function invoiceQuote(
   hourPrice: number,
   discountPct: number,
 ): InvoiceQuote {
-  const used = Math.min(Math.max(0, credit), planned)
+  const used = planned > 0 ? Math.min(Math.max(0, credit), planned - 0.5) : 0
   const hours = planned - used
   const full = Math.round(hours * hourPrice)
   return {

@@ -156,9 +156,9 @@ describe('invoice', () => {
     })
   })
 
-  it('credit of frozen hours comes off; never below 0 h', () => {
+  it('credit of unused hours comes off; at least 0,5 h stays billed', () => {
     expect(invoiceQuote(22, 1, 100, 0)).toMatchObject({ credit: 1, hours: 21, priceFull: 2100 })
-    expect(invoiceQuote(2, 5, 100, 0)).toMatchObject({ credit: 2, hours: 0, priceFull: 0 })
+    expect(invoiceQuote(2, 5, 100, 0)).toMatchObject({ credit: 1.5, hours: 0.5, priceFull: 50 })
   })
 
   it('discount В5 on the price for the parent', () => {

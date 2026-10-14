@@ -48,15 +48,21 @@ export interface SubscriptionSource {
   marks: readonly { lesson_id: string; status: Mark; hours?: number | null }[]
   /** After-school monthly subscription: billed hours (#82); null / absent — a lesson package. */
   hours_total?: number | null
+  /** Its month (first day) and the credit hours it holds on top of hours_total (И61). */
+  period_month?: string | null
+  credit_hours?: number | null
 }
 
 /** An after-school monthly subscription counts hours, a package — lessons (#82). */
 export const isHourSource = (s: Pick<SubscriptionSource, 'hours_total'>) =>
   s.hours_total != null && s.hours_total > 0
 
-/** Units of a subscription: hours_total or lessons_total. */
+/** Billed units of a subscription: hours_total or lessons_total. */
 const unitsTotal = (s: SubscriptionSource) =>
   isHourSource(s) ? (s.hours_total ?? 0) : s.lessons_total
+
+/** Credit hours an hour invoice holds on top of its billed hours. */
+const creditOf = (s: SubscriptionSource) => (isHourSource(s) ? (s.credit_hours ?? 0) : 0)
 
 /** Units a consuming mark takes: its hours on an hour subscription, else one lesson. */
 const unitsUsed = (s: SubscriptionSource, marks: SubscriptionSource['marks']) =>
@@ -98,7 +104,8 @@ export interface Balance {
 
 function balanceOf(s: SubscriptionSource, lessonId: string | null): Balance {
   const marks = s.marks.filter((m) => m.lesson_id !== lessonId)
-  const total = unitsTotal(s)
+  const billed = unitsTotal(s)
+  const total = billed + creditOf(s)
   return {
     subscriptionId: s.id,
     unit: isHourSource(s) ? 'hour' : 'lesson',
@@ -106,7 +113,7 @@ function balanceOf(s: SubscriptionSource, lessonId: string | null): Balance {
     left: Math.round((total - unitsUsed(s, marks)) * 10) / 10,
     freezes: marks.filter((m) => m.status === 'absent_frozen').length,
     freezeLimit: s.freeze_limit,
-    lessonPrice: total > 0 ? s.price_final / total : 0,
+    lessonPrice: billed > 0 ? s.price_final / billed : 0,
   }
 }
 
@@ -139,6 +146,7 @@ export function studentPay(
       started_at: s.started_at,
       created_at: s.created_at,
       lessons_total: unitsTotal(s),
+      credit: creditOf(s),
       price_final: s.price_final,
       paid: s.paid,
       used: unitsUsed(
@@ -166,15 +174,26 @@ const byStart = (a: SubscriptionSource, b: SubscriptionSource) =>
   a.id.localeCompare(b.id)
 
 /**
- * The subscription a mark on `lessonId` is charged to — the same rule as attendance_subscription()
- * in 0010: the oldest active one with lessons left, else the newest non-refunded one («в долг»).
- * `lessonId = null` — the subscription the next lesson goes to (У5 «осталось»).
+ * The subscription a mark on `lessonId` (on `date`) is charged to — the same rule as
+ * attendance_subscription() in 0025: packages — the oldest active one with lessons left, else the
+ * newest one («в долг»); after-school by hours, from the first billed day on — the invoice of the
+ * month of `date`, none while the month is not invoiced. `lessonId = null` — the subscription the
+ * next lesson goes to (У5 «осталось»).
  */
 export function pickSubscription(
   subscriptions: readonly SubscriptionSource[],
   lessonId: string | null,
+  date: string,
 ): Balance | null {
-  const subs = subscriptions.filter((s) => s.status !== 'refunded').sort(byStart)
+  const live = subscriptions.filter((s) => s.status !== 'refunded').sort(byStart)
+  const invoices = live.filter(isHourSource)
+  const hoursSince = invoices[0]?.started_at
+  if (hoursSince !== undefined && date >= hoursSince) {
+    const month = `${date.slice(0, 7)}-01`
+    const invoice = invoices.filter((s) => s.period_month === month && s.started_at <= date).at(-1)
+    return invoice ? balanceOf(invoice, lessonId) : null
+  }
+  const subs = live.filter((s) => !isHourSource(s))
   for (const s of subs) {
     const b = balanceOf(s, lessonId)
     if (s.status === 'active' && b.left > 0) return b
@@ -222,7 +241,7 @@ export function lessonRoster(
     const subs = enrollments
       .filter((x) => x.student.id === e.student.id)
       .flatMap((x) => x.subscriptions)
-    const balance = pickSubscription(subs, lesson.id)
+    const balance = pickSubscription(subs, lesson.id, lesson.lesson_date)
     const charged =
       subs.find((s) => s.marks.some((m) => m.lesson_id === lesson.id)) ??
       subs.find((s) => s.id === balance?.subscriptionId)
