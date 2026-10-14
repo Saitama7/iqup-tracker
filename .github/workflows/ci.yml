@@ -38,7 +38,7 @@ jobs:
       - run: cp .env.example .env
       # Auth e2e signs in seed users against the local stack (playwright.config reads `supabase status`)
       - uses: supabase/setup-cli@v1
-        with: { version: latest }
+        with: { version: 2.120.0 } # pinned: "latest" hits the GitHub API rate limit
       - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,supavisor
       - run: pnpm seed:users
       # admin-users e2e creates users through the Edge Function
@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
-        with: { version: latest }
+        with: { version: 2.120.0 } # pinned: "latest" hits the GitHub API rate limit
       # Auth + PostgREST + Kong are needed for seed:users and the Edge Function tests
       - run: supabase start -x studio,imgproxy,storage-api,logflare,vector,mailpit,postgres-meta,supavisor
       - run: supabase test db
