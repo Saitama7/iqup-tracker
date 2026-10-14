@@ -18,6 +18,9 @@ const subscriptionSchema = z.object({
   started_at: z.string(),
   status: z.enum(['active', 'exhausted', 'refunded']),
   created_at: z.string(),
+  /** After-school month in hours (#82); null — a lesson package. */
+  hours_total: z.number().nullable(),
+  period_month: z.string().nullable(),
 })
 
 const enrollmentSchema = z.object({
@@ -72,7 +75,7 @@ export const studentsQuery = () =>
         supabase
           .from('students')
           .select(
-            'id, full_name, grade, parent_name, parent_phone, is_returning, referred_by_student_id, notes, created_at, enrollments(id, group_id, start_date, end_date, status, subscriptions(id, lessons_total, price_full, price_final, discount_percent, discount_reason, started_at, status, created_at))',
+            'id, full_name, grade, parent_name, parent_phone, is_returning, referred_by_student_id, notes, created_at, enrollments(id, group_id, start_date, end_date, status, subscriptions(id, lessons_total, price_full, price_final, discount_percent, discount_reason, started_at, status, created_at, hours_total, period_month))',
           ),
         supabase
           .from('groups')

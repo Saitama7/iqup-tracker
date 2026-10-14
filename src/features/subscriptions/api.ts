@@ -13,6 +13,9 @@ const tariffTermsSchema = z.object({
   lessons_in_package: z.number().int(),
   package_price: z.number().int(),
   freeze_limit: z.number().int(),
+  lesson_duration_min: z.number().int(),
+  /** After-school price per hour (#82); null — package / (lessons × h). */
+  hour_price: z.number().int().nullable(),
 })
 
 export type TariffRow = z.infer<typeof tariffTermsSchema>
@@ -24,7 +27,9 @@ export const tariffsQuery = () =>
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tariffs')
-        .select('group_type, valid_from, lessons_in_package, package_price, freeze_limit')
+        .select(
+          'group_type, valid_from, lessons_in_package, package_price, freeze_limit, lesson_duration_min, hour_price',
+        )
         .order('valid_from')
       if (error) throw error
       return z.array(tariffTermsSchema).parse(data)
@@ -53,7 +58,10 @@ export const enrollForm = (groupStart: string | null) =>
     discount: z.union([z.literal(0), z.literal(5), z.literal(15)]),
   })
 
-export type EnrollInput = z.output<ReturnType<typeof enrollForm>>
+export type EnrollInput = z.output<ReturnType<typeof enrollForm>> & {
+  /** After-school: hours per ISO weekday (#82); absent — the default plan. */
+  plan?: number[]
+}
 
 // ─── RPC ────────────────────────────────────────────────────────────────────
 
@@ -77,6 +85,10 @@ export function enrollErrorMessage(error: { code?: string; message?: string }): 
     if (m.includes('15 %')) return '15 % — только на первый абонемент бывшего ученика'
     if (m.includes('5 %')) return '5 % — один абонемент за каждого приведённого друга'
     if (m.includes('no tariff')) return 'На эту дату нет тарифа для группы'
+    if (m.includes('no planned hours'))
+      return 'По графику нет часов ни в этом, ни в следующем месяце'
+    if (m.includes('no hours') || m.includes('hours must'))
+      return 'График: часы хотя бы на один день (0,5–4 ч)'
     return 'Проверьте дату и скидку'
   }
   return 'Не удалось зачислить. Проверьте интернет и попробуйте ещё раз.'
@@ -90,6 +102,7 @@ export async function enrollStudent(input: EnrollInput) {
     p_start_date: input.startDate,
     p_discount_pct: discount.pct,
     p_discount_reason: discount.reason,
+    ...(input.plan ? { p_plan: input.plan } : {}),
   })
   if (error) throw new EnrollError(enrollErrorMessage(error))
   const row = resultSchema.parse(data)[0]

@@ -21,19 +21,22 @@ const balanceSchema = z.object({
   student_id: z.uuid(),
   group_id: z.uuid(),
   status: z.enum(['active', 'exhausted', 'refunded']),
-  lessons_total: z.number().int(),
+  // units: lessons, or hours of an after-school month (#82) — halves possible
+  lessons_total: z.number(),
   price_final: z.number().int(),
   paid_som: z.number().int(),
-  paid_lessons: z.number().int(),
-  carried_in: z.number().int(),
-  lessons_used: z.number().int(),
-  lessons_left: z.number().int(),
-  debt_lessons: z.number().int(),
+  paid_lessons: z.number(),
+  carried_in: z.number(),
+  lessons_used: z.number(),
+  lessons_left: z.number(),
+  debt_lessons: z.number(),
   debt_som: z.number().int(),
   refund_suggested: z.number().int(),
   freezes_used: z.number().int(),
   freeze_limit: z.number().int(),
   is_current: z.boolean(),
+  unit: z.enum(['lesson', 'hour']),
+  period_month: z.string().nullable(),
 })
 
 export interface StudentBalance extends SubscriptionBalance {
@@ -41,10 +44,14 @@ export interface StudentBalance extends SubscriptionBalance {
   groupId: string
   freezesUsed: number
   freezeLimit: number
+  /** lesson — a package; hour — an after-school month, every count in hours (#82). */
+  unit: 'lesson' | 'hour'
+  /** After-school: the billed month (first day). */
+  periodMonth: string | null
 }
 
 const BALANCE_FIELDS =
-  'subscription_id, student_id, group_id, status, lessons_total, price_final, paid_som, paid_lessons, carried_in, lessons_used, lessons_left, debt_lessons, debt_som, refund_suggested, freezes_used, freeze_limit, is_current'
+  'subscription_id, student_id, group_id, status, lessons_total, price_final, paid_som, paid_lessons, carried_in, lessons_used, lessons_left, debt_lessons, debt_som, refund_suggested, freezes_used, freeze_limit, is_current, unit, period_month'
 
 const toBalance = (r: z.infer<typeof balanceSchema>): StudentBalance => ({
   subscriptionId: r.subscription_id,
@@ -64,6 +71,8 @@ const toBalance = (r: z.infer<typeof balanceSchema>): StudentBalance => ({
   isCurrent: r.is_current,
   freezesUsed: r.freezes_used,
   freezeLimit: r.freeze_limit,
+  unit: r.unit,
+  periodMonth: r.period_month,
 })
 
 /** Every visible subscription's balance (~100 rows) — А5 / А6 / А7 read the view, not the formula. */

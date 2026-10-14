@@ -37,6 +37,8 @@ import {
 } from './model'
 import { debtCaption } from './pay-view'
 import { EnrollmentCard, MobileEnrollment } from './student-card'
+import { AfterschoolPanel } from '@/features/afterschool/afterschool-panel'
+import type { ScheduleRule } from './model'
 import { StudentFormDialog } from './student-form-dialog'
 import { PaymentsSection } from './student-payments'
 
@@ -88,6 +90,32 @@ function buildView(
 
 // А6 Ученик (docs/design/AdminStudent.dc.html), phone — АМ2 (AdminMobileStudent.dc.html).
 // Money: balances from v_student_balance (features/payments), «Платежи» from payments.
+/** ISO weekdays the group meets on `today` (rules in effect, else all rules). */
+function groupWeekdays(rules: readonly ScheduleRule[], today: string): number[] {
+  const live = rules.filter(
+    (r) => r.valid_from <= today && (r.valid_to === null || r.valid_to >= today),
+  )
+  return [...new Set((live.length > 0 ? live : rules).map((r) => r.weekday))].sort((a, b) => a - b)
+}
+
+/** After-school enrollments get the plan and the month bills on their card (#82). */
+function afterschoolExtra(e: EnrollmentView, view: StudentView, today: string) {
+  if (e.group?.group_type !== 'afterschool') return undefined
+  return (
+    <AfterschoolPanel
+      e={{
+        enrollmentId: e.enrollmentId,
+        groupLabel: e.groupLabel,
+        startDate: e.startDate,
+        endDate: e.endDate,
+        groupWeekdays: groupWeekdays(e.group.schedule_rules, today),
+      }}
+      today={today}
+      history={view.enroll}
+    />
+  )
+}
+
 export function StudentPage({ studentId }: { studentId: string }) {
   const isDesktop = useIsDesktop()
   const now = useNow()
@@ -300,6 +328,7 @@ function DesktopStudent({
                 key={e.enrollmentId}
                 e={e}
                 today={today}
+                extra={afterschoolExtra(e, view, today)}
                 onEditStart={() => {
                   onEditStart(e)
                 }}
@@ -609,6 +638,7 @@ function MobileStudent({
             key={e.enrollmentId}
             e={e}
             today={today}
+            extra={afterschoolExtra(e, view, today)}
             onEditStart={() => {
               onEditStart(e)
             }}

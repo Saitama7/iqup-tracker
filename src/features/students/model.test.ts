@@ -73,6 +73,8 @@ const bal = (subscriptionId: string, over: Partial<Balance> = {}): Balance => ({
   studentId: 's',
   groupId: 'g8a',
   refunded: false,
+  unit: 'lesson',
+  periodMonth: null,
   lessonsTotal: 12,
   priceFinal: 3200,
   paidSom: 3200,

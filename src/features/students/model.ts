@@ -45,6 +45,9 @@ export interface SubscriptionRow {
   started_at: string
   status: 'active' | 'exhausted' | 'refunded'
   created_at: string
+  /** After-school month in hours (#82); null — a lesson package. */
+  hours_total?: number | null
+  period_month?: string | null
 }
 
 export interface EnrollmentRow {
@@ -314,7 +317,7 @@ export function studentListRow(
     remaining,
     status: active.length === 0 ? 'not_enrolled' : 'active',
     payState: state,
-    payLabel: state ? payChipLabel(state, detail?.paidLessons ?? 0) : null,
+    payLabel: state ? payChipLabel(state, detail?.paidLessons ?? 0, detail?.unit) : null,
     debtLessons: debt.lessons,
     debtSom: debt.som,
   }

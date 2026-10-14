@@ -67,6 +67,8 @@ const balance = (over: Partial<StudentBalance> = {}): StudentBalance => ({
   studentId: 's1',
   groupId: G8A,
   refunded: false,
+  unit: 'lesson',
+  periodMonth: null,
   lessonsTotal: 12,
   priceFinal: 3200,
   paidSom: 3200,
