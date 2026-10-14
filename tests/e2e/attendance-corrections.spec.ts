@@ -105,7 +105,9 @@ test('админ исправляет «был → не был» с причин
   await save.click()
 
   await expect(page.getByText('Отметки исправлены')).toBeVisible()
-  await expect(row.getByRole('button', { name: 'Не был' })).toHaveAttribute('aria-pressed', 'true')
+  // #89: back to the group on «Занятия», where the sheet was opened from
+  await expect(page).toHaveURL(new RegExp(`/admin/groups/${groupId}\\?tab=lessons$`))
+  await expect(page.getByRole('tab', { name: 'Занятия' })).toHaveAttribute('aria-selected', 'true')
   expect(await markOf(lessonId, studentId)).toBe('absent_burned')
 
   const { data: journal } = await service()

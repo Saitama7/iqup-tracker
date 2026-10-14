@@ -136,7 +136,7 @@ test('Гульзат проводит занятие: 8 отметок → «П�
       .getByRole('listitem')
       .filter({ hasText: '19:00' })
     await row.getByRole('link').first().click()
-    await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}$`))
+    await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}\\?from=today$`))
 
     await expect(page.getByText('Сейчас · 19:00–20:00')).toBeVisible()
     const students = page.getByRole('list', { name: 'Ученики' }).getByRole('listitem')
@@ -412,7 +412,7 @@ test('вчерашнее занятие: «Подтвердить занятие
   const db = service()
   const lessonId = await extraLesson(db, group, day)
   const menu = page.getByRole('navigation', { name: 'Основное меню' })
-  const attention = page.locator(`main a[href="/lessons/${lessonId}"]`)
+  const attention = page.locator(`main a[href="/lessons/${lessonId}?from=today"]`)
 
   try {
     await pinClock(page, '2026-10-08T14:24:00+06:00')
@@ -426,7 +426,7 @@ test('вчерашнее занятие: «Подтвердить занятие
     await expect(page).toHaveURL(/\/today$/)
     await expect(attention).toHaveCount(1)
     await attention.click()
-    await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}$`))
+    await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}\\?from=today$`))
     await expect(page.getByText('Не подтверждено · 19:00–20:00')).toBeVisible()
     await expect(page.getByText('Отметьте всех, чтобы подтвердить')).toBeVisible()
     await page.getByRole('button', { name: 'Все были' }).click()

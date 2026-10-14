@@ -131,7 +131,7 @@ test('Гульзат: 3 seed lessons, the current one on top (У2 / УД1)', asy
     await deck.getByRole('link').click()
   }
 
-  await expect(page).toHaveURL(/\/lessons\/[0-9a-f-]{36}$/)
+  await expect(page).toHaveURL(/\/lessons\/[0-9a-f-]{36}\?from=today$/)
   await expect(page.getByRole('list', { name: 'Ученики' }).getByRole('listitem')).toHaveCount(8)
 })
 
