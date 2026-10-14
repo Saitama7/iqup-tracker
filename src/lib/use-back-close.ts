@@ -32,11 +32,15 @@ export function useBackClose(open: boolean, onClose: () => void): void {
     if (!active) return
     const id = nextId++
     const base: unknown = window.history.state
-    window.history.pushState(
-      { ...(base && typeof base === 'object' ? base : {}), [KEY]: id },
-      '',
-      window.location.href,
-    )
+    const state = { ...(base && typeof base === 'object' ? base : {}), [KEY]: id }
+    // the entry of an overlay that just closed (its back() is still pending) — StrictMode's
+    // remount, or a dialog opened right after another: take it over instead of stacking (#68)
+    const orphan = overlayOf(base)
+    if (orphan !== null && !stack.includes(orphan)) {
+      window.history.replaceState(state, '', window.location.href)
+    } else {
+      window.history.pushState(state, '', window.location.href)
+    }
     stack.push(id)
     let leftByHistory = false
 

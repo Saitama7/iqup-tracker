@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
-import { useState } from 'react'
+import { StrictMode, useState } from 'react'
 import { useBackClose } from './use-back-close'
 
 // jsdom: history.back() is async and fires popstate, as in a browser.
@@ -65,6 +65,16 @@ describe('useBackClose (#57)', () => {
     expect(inner.result.current.open).toBe(false)
     expect(outer.result.current.open).toBe(true)
     outer.unmount()
+  })
+
+  it('StrictMode (dev build): one entry, not two — closing from the UI leaves the page (#68)', async () => {
+    const { result } = renderHook(() => useOverlay(true), { wrapper: StrictMode })
+    const pop = popped()
+    act(() => {
+      result.current.setOpen(false)
+    })
+    await act(() => pop)
+    expect(window.history.state).toEqual({ page: 1 })
   })
 
   it('desktop: no history entry', () => {
