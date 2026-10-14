@@ -1,5 +1,6 @@
 // #81: words and dates of the «⋯» dialogs of an enrollment (transfer / left / mistake). The numbers come
 // from the database (enrollment_settlement, transfer_preview, enrollment_payroll_impact, 0024).
+import { formatHours } from '@/features/afterschool/model'
 import { pluralRu } from '@/features/lessons/select'
 import { groupLabel, firstName, type GroupBrief } from '@/features/students/model'
 import { formatLessonPrice, formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
@@ -16,11 +17,25 @@ export function exitTargets(groups: readonly GroupBrief[], from: GroupBrief | nu
     .sort((a, b) => groupLabel(a).localeCompare(groupLabel(b), 'ru'))
 }
 
+/** Why an enrollment billed by hours has no transfer, and the way instead (#82). */
+export const AFTERSCHOOL_NO_TRANSFER =
+  'Продлёнка по часам не переводится — «Ушёл» с возвратом и новое зачисление'
+
+/** Transfer targets: no after-school (hours) groups — the month bill does not move (#82). */
+export const transferTargets = (groups: readonly GroupBrief[], from: GroupBrief | null) =>
+  exitTargets(groups, from).filter((g) => g.group_type !== 'afterschool')
+
 export const targetLabel = (g: GroupBrief) => `${groupLabel(g)} · ${GROUP_TYPE_LABEL[g.group_type]}`
 
-/** «учителю Гульзат −1 050 сом за 3 урока». */
-export const impactCaption = (i: PayrollImpact) =>
-  `учителю ${firstName(i.teacherName)} −${som(i.amount)} за ${i.lessons} ${pluralRu(i.lessons, LESSONS)}`
+/** «учителю Гульзат −1 050 сом за 3 урока»; продлёнка по часам — «за 2 дн. (3 ч)» (#82). */
+export function impactCaption(i: PayrollImpact): string {
+  const lessons = i.lessons - i.hourMarks
+  const parts = [
+    lessons > 0 ? `${lessons} ${pluralRu(lessons, LESSONS)}` : null,
+    i.hourMarks > 0 ? `${i.hourMarks} дн. (${formatHours(i.hours)} ч)` : null,
+  ].filter(Boolean)
+  return `учителю ${firstName(i.teacherName)} −${som(i.amount)} за ${parts.join(' и ')}`
+}
 
 export interface MoneyLine {
   label: string
@@ -31,12 +46,18 @@ export interface MoneyLine {
 /** Оплачено / Отучено N × цена / Остаток (или Долг) — the money of an enrollment. */
 export function settlementLines(s: Settlement): MoneyLine[] {
   const price = s.lessonPrice !== null ? ` × ${formatLessonPrice(s.lessonPrice, true)}` : ''
+  // the price is of the newest subscription's unit; old lessons beside hours — just counted (#82)
+  const lessons = (p: string) => `${s.lessonsUsed} ${pluralRu(s.lessonsUsed, LESSONS)}${p}`
+  const hours = (p: string) => `${formatHours(s.hoursUsed)} ч${p}`
+  const used =
+    s.unit === 'hour'
+      ? [s.lessonsUsed > 0 ? lessons('') : null, hours(price ? `${price}/ч` : '')]
+          .filter(Boolean)
+          .join(' + ')
+      : [lessons(price), s.hoursUsed > 0 ? hours('') : null].filter(Boolean).join(' + ')
   return [
     { label: 'Оплачено', value: som(s.paidSom) },
-    {
-      label: 'Отучено',
-      value: `${s.lessonsUsed} ${pluralRu(s.lessonsUsed, LESSONS)}${price} = ${som(s.usedSom)}`,
-    },
+    { label: s.unit === 'hour' ? 'Списано' : 'Отучено', value: `${used} = ${som(s.usedSom)}` },
     s.remainder < 0
       ? { label: 'Долг', value: som(-s.remainder), tone: 'debt' }
       : { label: 'Остаток', value: som(s.remainder), tone: 'left' },

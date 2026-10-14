@@ -21,6 +21,8 @@ import {
   type StudentsSource,
   type SubscriptionRow,
 } from './model'
+import { listDebtCaption } from './pay-view'
+import { formatSom } from '@/features/tariffs/model'
 
 const G8A: GroupBrief = {
   id: 'g8a',
@@ -73,7 +75,10 @@ const bal = (subscriptionId: string, over: Partial<Balance> = {}): Balance => ({
   studentId: 's',
   groupId: 'g8a',
   refunded: false,
+  unit: 'lesson',
+  periodMonth: null,
   lessonsTotal: 12,
+  pricedTotal: 12,
   priceFinal: 3200,
   paidSom: 3200,
   paidLessons: 12,
@@ -183,6 +188,31 @@ describe('studentListRows (А5)', () => {
   it('debt sums over all subscriptions, old ones too', () => {
     expect(by('elina')).toMatchObject({ debtLessons: 3, debtSom: 800 })
     expect(by('nurlan')).toMatchObject({ debtLessons: 0, debtSom: 0 })
+  })
+
+  it('after-school hours not invoiced yet are a debt too (И69)', () => {
+    const withUnbilled = studentListRows(source, balances, [
+      { studentId: 'nurlan', hours: 21, som: 2583 },
+    ])
+    expect(withUnbilled.find((r) => r.id === 'nurlan')).toMatchObject({
+      payState: 'debt',
+      debtLessons: 0,
+      debtHours: 21,
+      debtSom: 2583,
+    })
+  })
+
+  it('package lessons and after-school hours owed stay apart («долг 3 ур. + 21 ч»)', () => {
+    const withUnbilled = studentListRows(source, balances, [
+      { studentId: 'elina', hours: 21, som: 2583 },
+    ])
+    expect(withUnbilled.find((r) => r.id === 'elina')).toMatchObject({
+      debtLessons: 3,
+      debtHours: 21,
+      debtSom: 800 + 2583,
+    })
+    expect(listDebtCaption(3, 21, 3383)).toBe(`долг 3 ур. + 21 ч · ${formatSom(3383)} сом`)
+    expect(listDebtCaption(0, 6, 738)).toBe('долг 6 ч · 738 сом')
   })
 
   it('a fully paid student is «Оплачено» and needs no payment', () => {

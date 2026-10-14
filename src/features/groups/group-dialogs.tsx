@@ -586,6 +586,17 @@ export function EditGroupDialog({
                 : 'Укажите дату, с которой действует новое расписание.'}
             </p>
           )}
+          {scheduleChanged &&
+            group.group_type === 'afterschool' &&
+            !sameDays(weekdays, initialDays) && (
+              <p
+                role="status"
+                className="rounded-xl bg-accent px-3 py-2.5 text-xs font-bold text-warn-strong"
+              >
+                Графики учеников продлёнки сменятся с этой даты: оставшиеся дни — как были, новые —
+                по длительности занятия, убранные — 0 ч. Проверьте графики учеников.
+              </p>
+            )}
         </fieldset>
         {error && <ErrorText>{error}</ErrorText>}
         <SubmitButton pending={mutation.isPending}>Сохранить</SubmitButton>

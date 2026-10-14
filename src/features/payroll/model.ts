@@ -424,17 +424,25 @@ const STUDENTS = ['ученик', 'ученика', 'учеников'] as const
 
 export const studentLessonsWord = (n: number) => `${n} ${pluralRu(n, STUDENT_LESSONS)}`
 
+/** «16 ученико-часов продлёнки» (#82) — hours of after-school hour subscriptions. */
+export const studentHoursWord = (h: number) =>
+  `${String(Math.round(h * 10) / 10).replace('.', ',')} ученико-ч продлёнки`
+
 /** «4 занятия · 30 ученико-уроков · 8 учеников», «… · 1 не подтверждено — не в сумме» (У6). */
 export function groupCaption(g: MonthGroupLine): string {
   return [
     lessonsWord(g.lessonsHeld),
     studentLessonsWord(g.studentLessons),
+    // продлёнка по часам (#82): what the pay of the group is counted from
+    g.studentHours > 0 ? studentHoursWord(g.studentHours) : null,
     g.unconfirmed > 0
       ? `${g.unconfirmed} не подтверждено — не в сумме`
       : g.laterToday > 0
         ? `сегодня ещё ${g.laterToday === 1 ? 'одно' : g.laterToday}`
         : `${g.students} ${pluralRu(g.students, STUDENTS)}`,
-  ].join(' · ')
+  ]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /**
@@ -499,6 +507,7 @@ export function payrollView(source: PayrollSource, month: string, now: number): 
         hours: p?.hours ?? 0,
         studentLessons: p?.studentLessons ?? 0,
         noSubscription: p?.noSubscription ?? 0,
+        studentHours: p?.studentHours ?? 0,
         amount: p?.amount ?? 0,
         advances: p?.advances ?? 0,
         toPay: p?.toPay ?? 0,
@@ -514,6 +523,7 @@ export function payrollView(source: PayrollSource, month: string, now: number): 
       hours: Math.round(sum(rows.map((r) => r.hours)) * 100) / 100,
       studentLessons: rows.reduce((n, r) => n + r.studentLessons, 0),
       noSubscription: rows.reduce((n, r) => n + r.noSubscription, 0),
+      studentHours: Math.round(sum(rows.map((r) => r.studentHours)) * 10) / 10,
       amount: rows.reduce((n, r) => n + r.amount, 0),
       advances: rows.reduce((n, r) => n + r.advances, 0),
       toPay: rows.reduce((n, r) => n + Math.max(0, r.toPay), 0),

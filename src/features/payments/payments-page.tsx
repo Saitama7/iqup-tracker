@@ -3,6 +3,7 @@
 // teacher (Г4) on their own tabs, the panel «Записать оплату» (on the current subscription or a new
 // one — В5, В7.1, И37) and «Возврат» (В8). Desktop: the panel sits to the right of the journal;
 // phone: «Записать» is the first tab (the tab bar's «Оплата»).
+import { monthAccusative } from '@/features/afterschool/model'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useId, useMemo, useState, type ReactNode, type SubmitEvent } from 'react'
@@ -668,12 +669,34 @@ function choicesOf(
   if (!student || !source) return []
   return student.enrollments
     .filter((e) => e.status === 'active')
-    .flatMap((e) => {
+    .flatMap((e): EnrollmentChoice[] => {
       const g = source.groups.find((x) => x.id === e.group_id)
       if (!g) return []
       const current =
         balances.find((b) => b.studentId === student.id && b.groupId === g.id && b.isCurrent) ??
         null
+      if (g.group_type === 'afterschool') {
+        // продлёнка (#82): every month invoice still owing, and the newest one — no «новый абонемент»
+        // here, the invoice is issued on the student's card
+        const invoices = balances
+          .filter(
+            (b) =>
+              b.studentId === student.id &&
+              b.groupId === g.id &&
+              !b.refunded &&
+              b.unit === 'hour' &&
+              (b.isCurrent || b.paidSom < b.priceFinal || b.debtSom > 0),
+          )
+          .sort((a, b) => (a.periodMonth ?? '').localeCompare(b.periodMonth ?? ''))
+        const list = invoices.length > 0 ? invoices : current ? [current] : []
+        return list.map((b): EnrollmentChoice => ({
+          enrollmentId: e.id,
+          groupId: g.id,
+          label: `${groupLabel(g)}${b.periodMonth ? ` · счёт за ${monthAccusative(b.periodMonth)}` : ''}`,
+          groupType: g.group_type,
+          current: b,
+        }))
+      }
       return [
         {
           enrollmentId: e.id,
@@ -688,7 +711,7 @@ function choicesOf(
 
 /** Default: pay the rest of a partly paid current subscription, else a new one. */
 const defaultTarget = (c: EnrollmentChoice): Target =>
-  c.current && c.current.paidLessons < c.current.lessonsTotal
+  c.current && (c.current.paidLessons < c.current.lessonsTotal || c.groupType === 'afterschool')
     ? { kind: 'current', subscriptionId: c.current.subscriptionId }
     : { kind: 'new', enrollmentId: c.enrollmentId }
 
@@ -967,9 +990,11 @@ function RecordPanel({
                     : 'доплата по текущему'}
                 </option>
               ) : null,
-              <option key={`new:${c.enrollmentId}`} value={`new:${c.enrollmentId}`}>
-                {c.label} · новый абонемент
-              </option>,
+              c.groupType === 'afterschool' ? null : (
+                <option key={`new:${c.enrollmentId}`} value={`new:${c.enrollmentId}`}>
+                  {c.label} · новый абонемент
+                </option>
+              ),
             ])}
           </NativeSelect>
         </Field>

@@ -5,12 +5,14 @@
 import { createClient } from '@supabase/supabase-js'
 import {
   subscriptionBalances,
+  unbilledDebt,
   type BalanceSubscription,
   type SubscriptionBalance,
 } from '../../src/features/payments/balance'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { phoneToEmail } from '../../supabase/functions/_shared/phone'
 import { localSupabase } from '../../scripts/local-supabase'
+import { ensureAfterschoolFixture, FIXTURE } from './afterschool-fixture'
 
 const env = localSupabase()
 
@@ -35,6 +37,7 @@ async function viewRows(supabase: Client) {
     .select(
       'subscription_id, paid_som, paid_lessons, carried_in, lessons_used, lessons_left, debt_lessons, debt_som, refund_suggested, is_current',
     )
+    .not('subscription_id', 'is', null)
   if (error) throw error
   return new Map(data.map((r) => [r.subscription_id, r]))
 }
@@ -44,7 +47,7 @@ async function tsBalances(supabase: Client) {
   const { data, error } = await supabase
     .from('subscriptions')
     .select(
-      'id, status, started_at, created_at, lessons_total, price_final, enrollment:enrollments!inner(student_id, group_id), attendance(consumes_credit), payments(amount)',
+      'id, status, started_at, created_at, lessons_total, hours_total, credit_hours, credit_out_hours, price_final, enrollment:enrollments!inner(student_id, group_id), attendance(consumes_credit, hours), payments(amount)',
     )
   if (error) throw error
   const byStudentGroup = new Map<string, BalanceSubscription[]>()
@@ -56,15 +59,33 @@ async function tsBalances(supabase: Client) {
       status: s.status,
       started_at: s.started_at,
       created_at: s.created_at,
-      lessons_total: s.lessons_total,
+      // after-school months count hours (#82)
+      lessons_total: s.hours_total ?? s.lessons_total,
+      credit: s.credit_hours,
+      creditOut: s.credit_out_hours ?? 0,
       price_final: s.price_final,
-      used: s.attendance.filter((a) => a.consumes_credit).length,
+      used: s.attendance
+        .filter((a) => a.consumes_credit)
+        .reduce((n, a) => n + (s.hours_total ? (a.hours ?? 0) : 1), 0),
       paid: s.payments.reduce((n, p) => n + p.amount, 0),
+      unit: s.hours_total ? 'hour' : 'lesson',
     })
     byStudentGroup.set(key, list)
   }
   return [...byStudentGroup.values()].flatMap((subs) => subscriptionBalances(subs))
 }
+
+/** Subscription ids of the #82 fixture group — kept out of the seed's own numbers. */
+async function fixtureSubscriptions(supabase: Client) {
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select('id, enrollment:enrollments!inner(group_id)')
+    .eq('enrollment.group_id', FIXTURE.group)
+  if (error) throw error
+  return new Set(data.map((s) => s.id))
+}
+
+beforeAll(ensureAfterschoolFixture)
 
 const asView = (b: SubscriptionBalance) => ({
   subscription_id: b.subscriptionId,
@@ -88,7 +109,9 @@ describe('v_student_balance ↔ subscriptionBalances on the seed', () => {
     for (const b of ts) expect(view.get(b.subscriptionId)).toEqual(asView(b))
 
     // Seed (#47): one debt of 2 lessons (Азамат, 740 сом), partial payments, one refund.
-    expect(ts.filter((b) => b.debtLessons > 0).map((b) => [b.debtLessons, b.debtSom])).toEqual([
+    const fixture = await fixtureSubscriptions(supabase)
+    const seed = ts.filter((b) => !fixture.has(b.subscriptionId))
+    expect(seed.filter((b) => b.debtLessons > 0).map((b) => [b.debtLessons, b.debtSom])).toEqual([
       [2, 740],
     ])
     expect(
@@ -103,5 +126,65 @@ describe('v_student_balance ↔ subscriptionBalances on the seed', () => {
     expect(ts.length).toBeGreaterThan(0)
     expect(view.size).toBe(ts.length)
     for (const b of ts) expect(view.get(b.subscriptionId)).toEqual(asView(b))
+  })
+})
+
+describe('after-school by hours (#82 fixture)', () => {
+  it('credit hours, an unpaid invoice — the same in the view and in balance.ts', async () => {
+    const supabase = await signIn('0555 300 300')
+    const [view, ts, fixture] = await Promise.all([
+      viewRows(supabase),
+      tsBalances(supabase),
+      fixtureSubscriptions(supabase),
+    ])
+    const own = ts.filter((b) => fixture.has(b.subscriptionId))
+    expect(own).toHaveLength(3)
+    for (const b of own) expect(view.get(b.subscriptionId)).toEqual(asView(b))
+    // F1 November: 54 h billed + 6 h credit (paid on October) — the credit counts as paid
+    expect(own.some((b) => b.lessonsTotal === 60 && b.paidLessons === 6)).toBe(true)
+    // F2 October unpaid: 6 h used → debt 6 h × 117
+    expect(own.filter((b) => b.debtLessons > 0).map((b) => [b.debtLessons, b.debtSom])).toEqual([
+      [6, 702],
+    ])
+  })
+
+  it('a month not invoiced (И69): v_afterschool_unbilled ↔ unbilledDebt, and in v_student_balance', async () => {
+    const supabase = await signIn('0555 300 300')
+    const [{ data: view, error }, { data: marks, error: e2 }, { data: virtual, error: e3 }] =
+      await Promise.all([
+        supabase
+          .from('v_afterschool_unbilled')
+          .select('student_id, month, hours, amount')
+          .eq('group_id', FIXTURE.group),
+        supabase
+          .from('attendance')
+          .select(
+            'student_id, consumes_credit, hours, unbilled_hour_price, lesson:lessons!inner(lesson_date, group_id)',
+          )
+          .eq('lesson.group_id', FIXTURE.group)
+          .is('subscription_id', null),
+        supabase
+          .from('v_student_balance')
+          .select('student_id, debt_lessons, debt_som, unbilled')
+          .eq('group_id', FIXTURE.group)
+          .is('subscription_id', null),
+      ])
+    if (error) throw error
+    if (e2) throw e2
+    if (e3) throw e3
+    const ts = unbilledDebt(
+      marks
+        .filter((m) => m.consumes_credit && m.hours !== null && m.student_id === FIXTURE.f2)
+        .map((m) => ({
+          lesson_date: m.lesson.lesson_date,
+          hours: m.hours ?? 0,
+          hourPrice: m.unbilled_hour_price ?? 0,
+        })),
+    )
+    expect(ts).toEqual([{ month: '2025-11-01', hours: 6, som: 702 }])
+    expect(view).toEqual([{ student_id: FIXTURE.f2, month: '2025-11-01', hours: 6, amount: 702 }])
+    expect(virtual).toEqual([
+      { student_id: FIXTURE.f2, debt_lessons: 6, debt_som: 702, unbilled: true },
+    ])
   })
 })

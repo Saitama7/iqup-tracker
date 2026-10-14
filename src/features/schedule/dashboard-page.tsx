@@ -47,6 +47,7 @@ import {
 import { CHIP, DOT, Notice, R2_STUB } from './parts'
 import { PresetsWidget } from '@/features/presets/dashboard-presets'
 import { CorrectionItems, CorrectionsWidget } from './dashboard-corrections'
+import { UnbilledItems, UnbilledWidget, useUnbilled, type UnbilledItem } from './dashboard-unbilled'
 
 /** А1 shows this many of today's lessons, the rest behind «ещё N занятий». */
 const TODAY_SHOWN = 7
@@ -72,6 +73,7 @@ export function DashboardPage() {
   const pending = useQuery(adminUnconfirmedQuery(today))
   const trials = useDashboardTrials(today)
   const requests = usePendingRequests(true)
+  const unbilled = useUnbilled()
 
   let body: ReactNode
   if (day.isError || pending.isError) {
@@ -87,6 +89,7 @@ export function DashboardPage() {
       now,
       trials,
       requests: requests.data ?? [],
+      unbilled: unbilled.data ?? [],
     }
     body = isDesktop ? <DesktopDashboard {...data} /> : <MobileDashboard {...data} />
   }
@@ -140,6 +143,8 @@ interface DashboardData {
   trials: DashboardTrials
   /** Teachers' requests to correct marks (#74), oldest first. */
   requests: PendingRequest[]
+  /** After-school months with marks and no invoice (#82, И69). */
+  unbilled: UnbilledItem[]
 }
 
 // ─── А1 · desktop ───────────────────────────────────────────────────────────
@@ -157,6 +162,7 @@ function DesktopDashboard({
   now,
   trials,
   requests,
+  unbilled,
 }: DashboardData) {
   const [expanded, setExpanded] = useState(false)
   const spread = unconfirmedSpread(unconfirmed)
@@ -229,6 +235,7 @@ function DesktopDashboard({
 
         <aside className="flex flex-col gap-3.5">
           <CorrectionsWidget requests={requests} />
+          <UnbilledWidget items={unbilled} />
           <PresetsWidget today={today} />
           <UnconfirmedWidget unconfirmed={unconfirmed} today={today} />
           <section className="flex flex-col gap-2.5 rounded-[20px] border border-line bg-card px-5 py-4">
@@ -389,6 +396,7 @@ function MobileDashboard({
   now,
   trials,
   requests,
+  unbilled,
 }: DashboardData) {
   const spread = unconfirmedSpread(unconfirmed)
   const more = unconfirmed.length - WIDGET_SHOWN
@@ -446,11 +454,12 @@ function MobileDashboard({
         <TrialsWidget trials={trials} today={today} compact />
         <PresetsWidget today={today} compact />
 
-        {(unconfirmed.length > 0 || requests.length > 0) && (
+        {(unconfirmed.length > 0 || requests.length > 0 || unbilled.length > 0) && (
           <>
             <h2 className="pt-2 text-sm font-extrabold">Требует внимания</h2>
             <ul aria-label="Требует внимания" className="flex flex-col gap-2">
               <CorrectionItems requests={requests} />
+              <UnbilledItems items={unbilled} />
               {unconfirmed.slice(0, WIDGET_SHOWN).map((l) => (
                 <li key={l.id}>
                   <Link

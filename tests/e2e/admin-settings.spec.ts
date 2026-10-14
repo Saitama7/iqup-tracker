@@ -83,6 +83,9 @@ test('А9: current tariffs, rules, holidays; А9а history panel', async ({ page
     '7 400',
     '370,00',
     '167 / 185',
+    // продлёнка по часам (#82): 7 400 / (20 × 3 ч) → 123 сом/ч; учителю 45 % / 50 % за час
+    'час 123',
+    '55 / 62',
   ]) {
     await expect(tariffs.getByText(text, { exact: false }).first()).toBeVisible()
   }

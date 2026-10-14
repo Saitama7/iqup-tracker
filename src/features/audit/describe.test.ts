@@ -913,3 +913,30 @@ describe('admin undo (#73)', () => {
     ).toBe('Занятие 10.10: учитель Гульзат Асанова → Асель Нурова')
   })
 })
+
+describe('afterschool_plans (#82)', () => {
+  const plan = {
+    id: '30000000-0000-4000-8000-000000000001',
+    enrollment_id: ENROLLMENT,
+    valid_from: '2026-10-01',
+    hours: [2, 0, 1, 0, 2, 0, 0],
+  }
+
+  it('the plan of the student from a date, linked to А6', () => {
+    const r = row({ entity: 'afterschool_plans', action: 'insert', after: plan })
+    expect(text(r)).toBe('Алина Исакова — график продлёнки с 01.10.2026: ПН 2 · СР 1 · ПТ 2 ч')
+    expect(describeAuditRow(r, lookups).link?.label).toBeTruthy()
+  })
+
+  it('half hours with a comma', () => {
+    expect(
+      text(
+        row({
+          entity: 'afterschool_plans',
+          before: plan,
+          after: { ...plan, hours: [1.5, 0, 0, 0, 0, 0, 0] },
+        }),
+      ),
+    ).toBe('Алина Исакова — график продлёнки с 01.10.2026: ПН 1,5 ч')
+  })
+})

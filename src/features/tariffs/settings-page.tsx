@@ -10,6 +10,7 @@ import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import { SubjectsSection } from '@/features/subjects/subjects-section'
 import { addHoliday, deleteHolidays, holidayForm, settingsQuery } from './api'
+import { tariffHourPrice } from '@/features/afterschool/model'
 import { lessonPrice, teacherShare } from './current'
 import { HistorySheet, PlanTariffsDialog } from './history-sheet'
 import {
@@ -151,6 +152,11 @@ export function SettingsPage() {
 // ─── Tariffs ────────────────────────────────────────────────────────────────
 
 const share = (t: Tariff) => `${teacherShare(t, 45)} / ${teacherShare(t, 50)}`
+/** Продлёнка по часам: учителю за ученико-час — % × цена часа (И62). */
+const hourShare = (t: Tariff) => {
+  const h = tariffHourPrice(t)
+  return `${Math.round((h * 45) / 100)} / ${Math.round((h * 50) / 100)}`
+}
 
 function TariffTable({ tariffs }: { tariffs: Tariff[] }) {
   return (
@@ -176,10 +182,22 @@ function TariffTable({ tariffs }: { tariffs: Tariff[] }) {
             <td className={cn(tdClass, numClass, 'font-extrabold')}>
               {formatSom(t.package_price)}
             </td>
-            <td className={cn(tdClass, numClass)}>{formatLessonPrice(lessonPrice(t))}</td>
+            <td className={cn(tdClass, numClass)}>
+              {formatLessonPrice(lessonPrice(t))}
+              {t.group_type === 'afterschool' && (
+                <span className="block text-xs font-bold text-teal">
+                  час {formatSom(tariffHourPrice(t))}
+                </span>
+              )}
+            </td>
             <td className={cn(tdClass, numClass)}>{t.lesson_duration_min} мин</td>
             <td className={cn(tdClass, numClass)}>{t.freeze_limit}</td>
-            <td className={cn(tdClass, numClass, 'text-ink-muted')}>{share(t)}</td>
+            <td className={cn(tdClass, numClass, 'text-ink-muted')}>
+              {share(t)}
+              {t.group_type === 'afterschool' && (
+                <span className="block text-xs font-bold text-teal">час {hourShare(t)}</span>
+              )}
+            </td>
           </tr>
         ))}
       </tbody>
@@ -213,6 +231,14 @@ function TariffCards({ tariffs }: { tariffs: Tariff[] }) {
             <span>Заморозок {t.freeze_limit}</span>
             <span className="whitespace-nowrap">учителю 45 % / 50 %: {share(t)}</span>
           </div>
+          {t.group_type === 'afterschool' && (
+            <div className="flex items-baseline justify-between gap-3 text-[13px] font-bold text-teal">
+              <span className="whitespace-nowrap">
+                по часам: час {formatSom(tariffHourPrice(t))}
+              </span>
+              <span className="whitespace-nowrap">учителю {hourShare(t)} за час</span>
+            </div>
+          )}
         </li>
       ))}
     </ul>

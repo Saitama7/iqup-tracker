@@ -1,5 +1,6 @@
 // А7 «Оплаты» view model: pure functions of (rows, today) — no fetching, no clock.
 // Journal of a month (Г2: cash / Mbank apart), totals by group and teacher (Г4), the record panel.
+import { formatHours, monthAccusative } from '@/features/afterschool/model'
 import { pluralRu } from '@/features/lessons/select'
 import { formatLessonPrice, formatSom } from '@/features/tariffs/model'
 import { availableLessons, paidLessons, payState, type PayState } from './balance'
@@ -53,6 +54,13 @@ const MONTHS_PREP = [
 ]
 
 const LESSONS = ['урок', 'урока', 'уроков'] as const
+
+/** «3 урока» — or «2,5 ч» for an after-school month in hours (#82). */
+const unitCount = (b: Pick<StudentBalance, 'unit'>, n: number) =>
+  b.unit === 'hour' ? `${formatHours(n)} ч` : `${n} ${pluralRu(n, LESSONS)}`
+/** «4 из 12» / «4 из 21 ч». */
+const unitOf = (b: Pick<StudentBalance, 'unit'>, n: number, total: number) =>
+  b.unit === 'hour' ? `${formatHours(n)} из ${formatHours(total)} ч` : `${n} из ${total}`
 const PAYMENTS = ['платёж', 'платежа', 'платежей'] as const
 
 export const som = (n: number) => `${formatSom(n)} сом`
@@ -149,9 +157,13 @@ export function journalRow(p: PaymentRow, lookups: Lookups): JournalRow {
     ]
       .filter(Boolean)
       .join(' · '),
-    package: refund
-      ? `остаток ${refundLessons(p.amount, s.lessons_total, s.price_final)} ур`
-      : `${s.lessons_total} ур · ${formatSom(s.price_final)}`,
+    package: s.hours_total
+      ? refund
+        ? `остаток ${formatHours(refundLessons(p.amount, s.hours_total * 2, s.price_final) / 2)} ч`
+        : `${formatHours(s.hours_total)} ч${s.period_month ? ` за ${monthAccusative(s.period_month)}` : ''} · ${formatSom(s.price_final)}`
+      : refund
+        ? `остаток ${refundLessons(p.amount, s.lessons_total, s.price_final)} ур`
+        : `${s.lessons_total} ур · ${formatSom(s.price_final)}`,
     method: p.method ? METHOD_LABEL[p.method] : 'перенос',
     amount: p.amount,
     author: tags.join(' · '),
@@ -278,17 +290,19 @@ export function balanceLine(b: StudentBalance): { text: string; state: PayState;
   const state = payState(b)
   const left =
     b.lessonsLeft >= 0
-      ? `осталось ${b.lessonsLeft} из ${b.lessonsTotal}`
-      : `сверх абонемента ${-b.lessonsLeft} ${pluralRu(-b.lessonsLeft, LESSONS)}`
+      ? `осталось ${unitOf(b, b.lessonsLeft, b.lessonsTotal)}`
+      : `сверх абонемента ${unitCount(b, -b.lessonsLeft)}`
   const note =
     state === 'debt'
-      ? `долг ${b.debtLessons} ${pluralRu(b.debtLessons, LESSONS)} · ${som(b.debtSom)}`
+      ? `долг ${unitCount(b, b.debtLessons)} · ${som(b.debtSom)}`
       : state === 'soon'
         ? 'пора оплачивать'
         : state === 'partial'
-          ? `оплачено ${b.paidLessons} из ${b.lessonsTotal}`
+          ? `оплачено ${unitOf(b, b.paidLessons, b.lessonsTotal)}`
           : 'оплачен'
-  return { text: `Текущий: ${left}`, state, note }
+  const head =
+    b.unit === 'hour' && b.periodMonth ? `Счёт за ${monthAccusative(b.periodMonth)}` : 'Текущий'
+  return { text: `${head}: ${left}`, state, note }
 }
 
 /** Lessons «в долг» of the current subscription the next one takes over (И37). */
@@ -345,9 +359,16 @@ export function paymentHint(
     current.paidSom + (amount ?? 0),
     current.lessonsTotal,
     current.priceFinal,
+    current.unit,
   )
   const available = availableLessons({ paidLessons: paid, lessonsUsed: current.lessonsUsed })
   const debt = Math.max(0, -available)
+  if (current.unit === 'hour') {
+    const of = unitOf(current, Math.min(paid, current.lessonsTotal), current.lessonsTotal)
+    return debt > 0
+      ? `После записи: оплачено ${of}, долг ${unitCount(current, debt)}`
+      : `После записи: оплачено ${of}, доступно ${unitCount(current, available)}`
+  }
   return debt > 0
     ? `После записи: оплачено ${Math.min(paid, current.lessonsTotal)} из ${current.lessonsTotal}, долг ${debt} ${pluralRu(debt, LESSONS)}`
     : `После записи: оплачено ${Math.min(paid, current.lessonsTotal)} из ${current.lessonsTotal}, доступно ${available} ${pluralRu(available, LESSONS)}`
@@ -356,7 +377,8 @@ export function paymentHint(
 /** «остаток 5 ур × 266,67» under the refund amount (В8). */
 export function refundHint(b: StudentBalance): string {
   const lessons = Math.max(0, Math.min(b.paidLessons, b.lessonsTotal) - b.lessonsUsed)
-  return `Остаток ${lessons} ${pluralRu(lessons, LESSONS)} × ${formatLessonPrice(b.priceFinal / b.lessonsTotal, true)} сом = ${som(b.refundSuggested)}`
+  // the paid price of a unit: of a billed hour, not of the capacity with its credit (#82)
+  return `Остаток ${unitCount(b, lessons)} × ${formatLessonPrice(b.priceFinal / b.pricedTotal, true)} сом = ${som(b.refundSuggested)}`
 }
 
 /** Digits of the amount field: «3 200» → 3200; empty / junk → null. */

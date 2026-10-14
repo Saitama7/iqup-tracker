@@ -16,6 +16,7 @@ import {
 } from './attendance'
 
 const LESSON = 'lesson-now'
+const DAY = '2026-10-08'
 
 const sub = (
   id: string,
@@ -72,8 +73,8 @@ describe('pickSubscription (same rule as attendance_subscription, 0010)', () => 
       sub('second', { started_at: '2026-10-01' }),
       sub('first', {}, times(11, 'present')),
     ]
-    expect(pickSubscription(subs, LESSON)?.subscriptionId).toBe('first')
-    expect(pickSubscription(subs, LESSON)?.left).toBe(1)
+    expect(pickSubscription(subs, LESSON, DAY)?.subscriptionId).toBe('first')
+    expect(pickSubscription(subs, LESSON, DAY)?.left).toBe(1)
   })
 
   it('first used up → the next active one', () => {
@@ -81,7 +82,7 @@ describe('pickSubscription (same rule as attendance_subscription, 0010)', () => 
       sub('first', {}, times(12, 'present')),
       sub('second', { started_at: '2026-10-01' }),
     ]
-    expect(pickSubscription(subs, LESSON)?.subscriptionId).toBe('second')
+    expect(pickSubscription(subs, LESSON, DAY)?.subscriptionId).toBe('second')
   })
 
   it('nothing left → the newest non-refunded one, «в долг»', () => {
@@ -90,7 +91,7 @@ describe('pickSubscription (same rule as attendance_subscription, 0010)', () => 
       sub('new', { started_at: '2026-09-20', status: 'exhausted' }, times(13, 'absent_burned')),
       sub('refunded', { started_at: '2026-10-01', status: 'refunded' }),
     ]
-    const b = pickSubscription(subs, LESSON)
+    const b = pickSubscription(subs, LESSON, DAY)
     expect(b?.subscriptionId).toBe('new')
     expect(b?.left).toBe(-1)
   })
@@ -101,13 +102,13 @@ describe('pickSubscription (same rule as attendance_subscription, 0010)', () => 
       ...s,
       marks: [...s.marks, { lesson_id: LESSON, status: 'absent_frozen' as const }],
     }
-    const b = pickSubscription([own], LESSON)
+    const b = pickSubscription([own], LESSON, DAY)
     expect(b?.left).toBe(11)
     expect(b?.freezes).toBe(1)
   })
 
   it('no subscriptions → null', () => {
-    expect(pickSubscription([], LESSON)).toBeNull()
+    expect(pickSubscription([], LESSON, DAY)).toBeNull()
   })
 })
 
@@ -189,12 +190,16 @@ describe("lessonAccrual — «Начислится» by the students' subscripti
       { ...lesson, status: 'held' },
       new Map([['id-А', 'present' as const]]),
     )
-    expect(rows[0]?.paySubscription).toEqual({ price_full: 3000, lessons_total: 12 })
+    expect(rows[0]?.paySubscription).toEqual({
+      price_full: 3000,
+      lessons_total: 12,
+      hours_total: null,
+    })
   })
 })
 
 describe('freeze limit', () => {
-  const row = { balance: pickSubscription([sub('s', {}, times(2, 'absent_frozen'))], LESSON) }
+  const row = { balance: pickSubscription([sub('s', {}, times(2, 'absent_frozen'))], LESSON, DAY) }
 
   it('2 freezes used → «Заморозка» blocked', () => {
     expect(freezeBlocked(row, undefined)).toBe(true)
@@ -202,7 +207,7 @@ describe('freeze limit', () => {
   })
 
   it('one left → allowed', () => {
-    const one = { balance: pickSubscription([sub('s', {}, ['absent_frozen'])], LESSON) }
+    const one = { balance: pickSubscription([sub('s', {}, ['absent_frozen'])], LESSON, DAY) }
     expect(freezeBlocked(one, undefined)).toBe(false)
   })
 
@@ -214,7 +219,7 @@ describe('freeze limit', () => {
 describe('captions', () => {
   const meta = (marks: Mark[], over: Partial<SubscriptionSource> = {}) => {
     const subs = [sub('s', over, marks)]
-    return { balance: pickSubscription(subs, LESSON), pay: studentPay(subs, LESSON) }
+    return { balance: pickSubscription(subs, LESSON, DAY), pay: studentPay(subs, LESSON) }
   }
 
   it('mobile (У3)', () => {
@@ -330,5 +335,102 @@ describe('marks', () => {
     expect(marksPayload(rows, new Map<string, Mark>([['c', 'present']]))).toEqual([
       { student_id: 'c', status: 'present' },
     ])
+  })
+})
+
+describe('after-school by hours (#82)', () => {
+  // ПН 2 / СР 1 / ПТ 2 from 1 October; 8 October 2026 is a Thursday, 9th a Friday
+  const plans = [{ valid_from: '2026-10-01', hours: [2, 0, 1, 0, 2, 0, 0] }]
+  const hourSub = (marks: { lesson_id: string; status: Mark; hours: number }[], paid = 2000) =>
+    sub('h', {
+      started_at: '2026-10-01',
+      period_month: '2026-10-01',
+      lessons_total: 12,
+      hours_total: 20,
+      price_full: 2000,
+      price_final: 2000,
+      paid,
+      marks,
+    })
+
+  it('roster: a student with 0 h that day is not expected; no plan — as before', () => {
+    const list = [enrollment('Айпери', [hourSub([])], { plans }), enrollment('Бектур', [sub('b')])]
+    const thursday = lessonRoster(
+      list,
+      { id: LESSON, lesson_date: '2026-10-08', status: 'planned' },
+      new Map(),
+    )
+    expect(thursday.map((r) => r.fullName)).toEqual(['Бектур'])
+    const friday = lessonRoster(
+      list,
+      { id: LESSON, lesson_date: '2026-10-09', status: 'planned' },
+      new Map(),
+    )
+    expect(friday.map((r) => [r.fullName, r.hours])).toEqual([
+      ['Айпери', 2],
+      ['Бектур', null],
+    ])
+  })
+
+  it('balance in hours and «Осталось 16 ч», pay by the day hours', () => {
+    const marks = [
+      { lesson_id: 'm1', status: 'present' as const, hours: 2 },
+      { lesson_id: 'm2', status: 'absent_burned' as const, hours: 2 },
+      { lesson_id: 'm3', status: 'absent_frozen' as const, hours: 1 },
+    ]
+    const [row] = lessonRoster(
+      [enrollment('Айпери', [hourSub(marks)], { plans })],
+      { id: LESSON, lesson_date: '2026-10-09', status: 'planned' },
+      new Map(),
+    )
+    expect(row?.balance).toMatchObject({ unit: 'hour', total: 20, left: 16, freezes: 1 })
+    expect(row && mobileMeta(row).text).toBe('Осталось 16 ч · заморозок 1/2')
+    expect(row && desktopMeta(row).text).toBe('16 из 20 ч · заморозок 1/2')
+    // 2 h × 100 сом/ч × 45 %
+    expect(row && lessonAccrual([row], new Map([[row.studentId, 'present']]), 45)).toEqual({
+      pay: 90,
+      perStudentLesson: null,
+    })
+  })
+
+  it('debt in hours', () => {
+    const [row] = lessonRoster(
+      [
+        enrollment('Айпери', [hourSub([{ lesson_id: 'm1', status: 'present', hours: 2 }], 0)], {
+          plans,
+        }),
+      ],
+      { id: LESSON, lesson_date: '2026-10-09', status: 'planned' },
+      new Map(),
+    )
+    expect(row && mobileMeta(row).text).toBe('Долг 2 ч · 200 сом')
+  })
+
+  it('a mark goes to the invoice of its month; a month not invoiced — none; the package before', () => {
+    const pkg = sub('pkg', { started_at: '2026-09-01' }, times(12, 'present'))
+    const oct = hourSub([
+      { lesson_id: 'f1', status: 'absent_frozen', hours: 2 },
+      { lesson_id: 'f2', status: 'absent_frozen', hours: 2 },
+    ])
+    const nov = sub('nov', {
+      started_at: '2026-11-01',
+      created_at: '2026-10-25T10:00:00Z',
+      period_month: '2026-11-01',
+      lessons_total: 10,
+      hours_total: 18,
+      credit_hours: 4,
+      price_full: 1800,
+      price_final: 1800,
+      paid: 0,
+    })
+    // October has 16 h left and 2/2 freezes — a November day still goes to November
+    expect(pickSubscription([pkg, oct, nov], LESSON, '2026-11-02')).toMatchObject({
+      subscriptionId: 'nov',
+      total: 22,
+      freezes: 0,
+      lessonPrice: 100,
+    })
+    expect(pickSubscription([pkg, oct], LESSON, '2026-11-02')).toBeNull()
+    expect(pickSubscription([pkg, oct, nov], LESSON, '2026-09-30')?.subscriptionId).toBe('pkg')
   })
 })

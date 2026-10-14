@@ -23,12 +23,13 @@ import {
   type Settlement,
 } from './exit-api'
 import {
-  exitTargets,
+  AFTERSCHOOL_NO_TRANSFER,
   impactCaption,
   marksCaption,
   settlementLines,
   targetLabel,
   toPayCaption,
+  transferTargets,
   withdrawDefaultDate,
   withdrawMinDate,
 } from './exit-model'
@@ -45,7 +46,10 @@ const ACTION_TITLE: Record<ExitAction, string> = {
   delete: 'Записан по ошибке — удалить',
 }
 
-/** «⋯» next to an enrollment: the three ways out of a group. */
+/**
+ * «⋯» next to an enrollment: the three ways out of a group. An after-school enrollment billed by
+ * hours has no transfer — its dialog says so (#82); one still on the old 20-lesson packages moves.
+ */
 export function EnrollmentMenu({
   label,
   onAction,
@@ -218,6 +222,9 @@ export function EnrollmentExitDialog({
     body = <div className="h-24 animate-pulse rounded-xl bg-muted" aria-label="Загрузка" />
   } else if (settlement.isError) {
     body = <ErrorText>{settlement.error.message}</ErrorText>
+  } else if (action === 'transfer' && settlement.data.unit === 'hour') {
+    // billed by hours (#82): the month invoices do not move; old 20-lesson packages do (0024)
+    body = <Note>{AFTERSCHOOL_NO_TRANSFER}</Note>
   } else if (action === 'transfer') {
     body = <TransferBody {...props} s={settlement.data} onDone={onDone} />
   } else if (action === 'withdraw') {
@@ -249,7 +256,7 @@ function TransferBody({
   onDone,
 }: ExitProps & { s: Settlement }) {
   const ids = { group: useId(), date: useId(), surplus: useId() }
-  const targets = exitTargets(groups, group)
+  const targets = transferTargets(groups, group)
   const [groupId, setGroupId] = useState('')
   const [typed, setTyped] = useState<string | null>(null)
   const [refundSurplus, setRefundSurplus] = useState(false)
@@ -623,7 +630,10 @@ function DeleteBody({
 }: ExitProps & { s: Settlement }) {
   const ids = { choice: useId(), group: useId(), date: useId() }
   const impact = useQuery(payrollImpactQuery(enrollmentId))
-  const targets = exitTargets(groups, group)
+  // no money moves out of an enrollment billed by hours — as the transfer (#82); targets have no
+  // after-school groups (transferTargets)
+  const fromAfterschool = s.unit === 'hour'
+  const targets = transferTargets(groups, group)
   const hasMoney = s.moneySom !== 0
   const [money, setMoney] = useState<'transfer' | 'refund' | null>(null)
   const [groupId, setGroupId] = useState('')
@@ -714,17 +724,21 @@ function DeleteBody({
           <legend className={cn(labelClass, 'mb-1.5')}>
             Оплачено {som(s.moneySom)} — оплаты не удаляются. Что сделать с деньгами?
           </legend>
-          <Choice
-            name={ids.choice}
-            value="transfer"
-            checked={money === 'transfer'}
-            onChange={() => {
-              setMoney('transfer')
-              setError(null)
-            }}
-          >
-            Перевести в правильную группу
-          </Choice>
+          {fromAfterschool ? (
+            <p className="text-xs font-bold text-ink-muted">{AFTERSCHOOL_NO_TRANSFER}</p>
+          ) : (
+            <Choice
+              name={ids.choice}
+              value="transfer"
+              checked={money === 'transfer'}
+              onChange={() => {
+                setMoney('transfer')
+                setError(null)
+              }}
+            >
+              Перевести в правильную группу
+            </Choice>
+          )}
           {s.moneySom > 0 && (
             <Choice
               name={ids.choice}

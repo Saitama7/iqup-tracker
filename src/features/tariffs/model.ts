@@ -11,6 +11,8 @@ export interface Tariff {
   max_students: number
   lesson_duration_min: number
   freeze_limit: number
+  /** Продлёнка: цена часа (#82); null — package / (lessons × h). */
+  hour_price?: number | null
   valid_from: string
   created_at: string
   created_by: string | null

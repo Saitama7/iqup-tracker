@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { Search } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
 import { PageHeader, PageTitle } from '@/components/page'
-import { balancesQuery } from '@/features/payments/api'
+import { balancesQuery, unbilledQuery } from '@/features/payments/api'
 import { formatSom } from '@/features/tariffs/model'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -24,7 +24,7 @@ import {
   type StudentListRow,
 } from './model'
 import { NativeSelect, PayChip } from './parts'
-import { debtCaption, debtTone } from './pay-view'
+import { debtTone, listDebtCaption } from './pay-view'
 import { StudentFormDialog } from './student-form-dialog'
 
 const chipBase =
@@ -43,6 +43,8 @@ export function StudentsPage({
   const navigate = useNavigate()
   const studentsResult = useQuery(studentsQuery())
   const balancesResult = useQuery(balancesQuery())
+  // after-school hours not invoiced yet are a debt too (И69); the list does not wait for them
+  const unbilled = useQuery(unbilledQuery()).data
   const query = {
     isPending: studentsResult.isPending || balancesResult.isPending,
     isError: studentsResult.isError || balancesResult.isError,
@@ -52,8 +54,8 @@ export function StudentsPage({
   const [creating, setCreating] = useState(false)
 
   const rows = useMemo(
-    () => (data && balances ? studentListRows(data, balances) : []),
-    [data, balances],
+    () => (data && balances ? studentListRows(data, balances, unbilled) : []),
+    [data, balances, unbilled],
   )
   const counts = useMemo(() => payCounts(rows), [rows])
   const groups = useMemo(() => (data ? enrollableGroups(data.groups) : []), [data])
@@ -242,7 +244,7 @@ function PayChips({
 }
 
 function DebtCell({ row }: { row: StudentListRow }) {
-  if (row.debtLessons === 0) return <span className="text-ink-muted">—</span>
+  if (row.debtLessons === 0 && row.debtHours === 0) return <span className="text-ink-muted">—</span>
   return (
     <span
       className={cn(
@@ -390,14 +392,14 @@ function StudentCards({ rows }: { rows: StudentListRow[] }) {
                 <span className="whitespace-nowrap tabular-nums">осталось {r.remaining}</span>
               )}
             </div>
-            {r.debtLessons > 0 && (
+            {(r.debtLessons > 0 || r.debtHours > 0) && (
               <div
                 className={cn(
                   'text-[13px] font-extrabold',
                   debtTone(r.debtLessons) === 'burned' ? 'text-burned' : 'text-warn',
                 )}
               >
-                {debtCaption(r.debtLessons, r.debtSom)}
+                {listDebtCaption(r.debtLessons, r.debtHours, r.debtSom)}
               </div>
             )}
           </Link>

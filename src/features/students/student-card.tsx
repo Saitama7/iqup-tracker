@@ -1,5 +1,6 @@
 // А6 subscription card of one enrollment: desktop tiles and the phone block (АМ2).
 import type { ReactNode } from 'react'
+import { formatHours, monthAccusative } from '@/features/afterschool/model'
 import { availableLessons, debtOverLimit, payState } from '@/features/payments/balance'
 import { formatSom } from '@/features/tariffs/model'
 import { cardClass, chipClass } from '@/features/tariffs/parts'
@@ -32,10 +33,17 @@ export function enrollmentCaption(e: EnrollmentView, today: string): string {
     .join(' · ')
 }
 
+/** Lessons, or hours of an after-school month (#82): «12», «20,5 ч». */
+const units = (b: Pick<Balance, 'unit'>, n: number) =>
+  b.unit === 'hour' ? `${formatHours(n)} ч` : String(n)
+
 /** «Оплачено 6 из 12 · долг 2 ур. · 533 сом» — the one-line summary of the subscription. */
 export function paySummary(b: Balance): string {
-  const paid = `Оплачено ${b.paidLessons} из ${b.lessonsTotal}`
-  return b.debtLessons > 0 ? `${paid} · ${debtCaption(b.debtLessons, b.debtSom)}` : paid
+  const paid =
+    b.unit === 'hour'
+      ? `Оплачено ${formatHours(b.paidLessons)} из ${formatHours(b.lessonsTotal)} ч`
+      : `Оплачено ${b.paidLessons} из ${b.lessonsTotal}`
+  return b.debtLessons > 0 ? `${paid} · ${debtCaption(b.debtLessons, b.debtSom, b.unit)}` : paid
 }
 
 /** Colour + text: «Оплачено» / «Частично · 6 ур» / «Пора оплачивать» / «Долг». */
@@ -43,7 +51,7 @@ export function BalanceChip({ b, className }: { b: Balance; className?: string }
   const state = payState(b)
   return (
     <span className={cn(chipClass, TONE_CLASS[chipTone(state, b.debtLessons)], className)}>
-      {payChipLabel(state, b.paidLessons)}
+      {payChipLabel(state, b.paidLessons, b.unit)}
     </span>
   )
 }
@@ -74,9 +82,9 @@ function UsageBar({ b, thin }: { b: Balance; thin?: boolean }) {
     <div
       className={cn('flex gap-[3px]', thin ? 'h-2' : 'h-2.5')}
       role="img"
-      aria-label={`Использовано ${b.lessonsUsed} из ${b.lessonsTotal}, оплачено ${b.paidLessons}`}
+      aria-label={`Использовано ${units(b, b.lessonsUsed)} из ${units(b, b.lessonsTotal)}, оплачено ${units(b, b.paidLessons)}`}
     >
-      {Array.from({ length: b.lessonsTotal }, (_, i) => {
+      {Array.from({ length: Math.ceil(b.lessonsTotal) }, (_, i) => {
         const used = i < b.lessonsUsed
         const paid = i < b.paidLessons
         return (
@@ -147,12 +155,15 @@ export function EnrollmentCard({
   today,
   onEditStart,
   onAction,
+  extra,
 }: {
   e: EnrollmentView
   today: string
   onEditStart?: () => void
   /** «⋯»: перевести / ушёл / по ошибке (#81). */
   onAction?: (action: ExitAction) => void
+  /** After-school: the plan and the month bills (#82). */
+  extra?: ReactNode
 }) {
   const sub = e.subscription
   const b = e.balance
@@ -174,7 +185,44 @@ export function EnrollmentCard({
           {onAction && <EnrollmentMenu label={e.groupLabel} onAction={onAction} />}
         </div>
       </div>
-      {sub && b ? (
+      {extra}
+      {sub && b && b.unit === 'hour' ? (
+        <>
+          <div className="grid grid-cols-2 gap-2.5 min-[1200px]:grid-cols-4">
+            <Tile
+              label="Абонемент"
+              value={`${formatHours(b.lessonsTotal)} ч`}
+              caption={`${b.periodMonth ? `за ${monthAccusative(b.periodMonth)} · ` : ''}${priceCaption(sub)}`}
+            />
+            <Tile
+              label="Списано"
+              value={`${formatHours(b.lessonsUsed)} из ${formatHours(b.lessonsTotal)} ч`}
+              caption={`заморозок ${b.freezesUsed} / ${b.freezeLimit}`}
+            />
+            <Tile
+              label="Оплачено"
+              value={`${formatSom(b.paidSom)} · ${formatHours(b.paidLessons)} ч`}
+              caption={rest > 0 ? `остаток ${formatSom(rest)} сом` : 'оплачено полностью'}
+            />
+            <Tile
+              label="Доступно часов"
+              value={formatHours(Math.max(0, availableLessons(b)))}
+              caption={
+                b.debtLessons > 0 ? (
+                  <span className={cn('font-extrabold', debtTextClass(b.debtLessons))}>
+                    {debtCaption(b.debtLessons, b.debtSom, b.unit)}
+                  </span>
+                ) : (
+                  'по графику'
+                )
+              }
+            />
+          </div>
+          <UsageBar b={b} />
+          <p className="text-[13px] font-extrabold">{paySummary(b)}</p>
+          <Legend b={b} extra={discountCaption(sub)} />
+        </>
+      ) : sub && b ? (
         <>
           <div className="grid grid-cols-2 gap-2.5 min-[1200px]:grid-cols-4">
             <Tile
@@ -224,12 +272,15 @@ export function MobileEnrollment({
   today,
   onEditStart,
   onAction,
+  extra,
 }: {
   e: EnrollmentView
   today: string
   onEditStart?: () => void
   /** «⋯»: перевести / ушёл / по ошибке (#81). */
   onAction?: (action: ExitAction) => void
+  /** After-school: the plan and the month bills (#82). */
+  extra?: ReactNode
 }) {
   const sub = e.subscription
   const b = e.balance
@@ -251,21 +302,22 @@ export function MobileEnrollment({
       </div>
       <p className="text-xs font-bold text-ink-muted">
         {sub
-          ? `${sub.lessons_total} уроков · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
+          ? `${b?.unit === 'hour' ? `${formatHours(b.lessonsTotal)} ч${b.periodMonth ? ` за ${monthAccusative(b.periodMonth)}` : ''}` : `${sub.lessons_total} уроков`} · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
           : enrollmentCaption(e, today)}
       </p>
       {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
+      {extra}
       {sub && b ? (
         <>
           <UsageBar b={b} thin />
           <p className="text-xs font-extrabold">
-            Использовано {b.lessonsUsed} из {sub.lessons_total} · заморозок {b.freezesUsed} /{' '}
-            {b.freezeLimit}
+            {b.unit === 'hour' ? 'Списано' : 'Использовано'} {units(b, b.lessonsUsed)} из{' '}
+            {units(b, b.lessonsTotal)} · заморозок {b.freezesUsed} / {b.freezeLimit}
           </p>
           <p className="text-xs font-extrabold">{paySummary(b)}</p>
           <p className="text-xs font-bold text-ink-muted">
             Оплачено {formatSom(b.paidSom)} из {formatSom(sub.price_final)} сом · доступно{' '}
-            {Math.max(0, availableLessons(b))}
+            {units(b, Math.max(0, availableLessons(b)))}
           </p>
         </>
       ) : !sub && e.refunded ? (

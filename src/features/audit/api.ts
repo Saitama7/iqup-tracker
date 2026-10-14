@@ -142,7 +142,9 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
       .map((r) => field(r, 'lesson_id')),
   )
   const enrollmentIds = ids(
-    rows.filter((r) => r.entity === 'subscriptions').map((r) => field(r, 'enrollment_id')),
+    rows
+      .filter((r) => r.entity === 'subscriptions' || r.entity === 'afterschool_plans')
+      .map((r) => field(r, 'enrollment_id')),
   )
   const subscriptionIds = ids(
     rows.filter((r) => r.entity === 'payments').map((r) => field(r, 'subscription_id')),

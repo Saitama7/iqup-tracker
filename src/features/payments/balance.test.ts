@@ -6,6 +6,7 @@ import {
   payState,
   subscriptionBalances,
   totalDebt,
+  unbilledDebt,
   type BalanceSubscription,
 } from './balance'
 
@@ -264,5 +265,114 @@ describe('payState', () => {
   it('the 4th lesson «в долг» is over the limit (В7)', () => {
     expect(debtOverLimit(3)).toBe(false)
     expect(debtOverLimit(4)).toBe(true)
+  })
+})
+
+describe('after-school hours (#82)', () => {
+  const hours = (over: Partial<BalanceSubscription> = {}) =>
+    sub({ unit: 'hour', lessons_total: 20, price_final: 2000, paid: 2000, ...over })
+
+  it('paid hours open by 0,5 h', () => {
+    expect(paidLessons(1000, 20, 2000, 'hour')).toBe(10)
+    expect(paidLessons(1060, 20, 2000, 'hour')).toBe(10.5)
+    expect(paidLessons(1040, 20, 2000, 'hour')).toBe(10)
+  })
+
+  it('balance in hours: used 4 of 20, debt in hours and som', () => {
+    const [b] = subscriptionBalances([hours({ used: 4 })])
+    expect(b).toMatchObject({ lessonsUsed: 4, lessonsLeft: 16, debtLessons: 0, isCurrent: true })
+    const [d] = subscriptionBalances([hours({ paid: 500, used: 6.5 })])
+    // 500 сом → 5 h paid; 6,5 used → 1,5 h × 100 = 150
+    expect(d).toMatchObject({ paidLessons: 5, debtLessons: 1.5, debtSom: 150 })
+  })
+
+  it('hours over a month carry into the next month (И37), never from an old lesson package', () => {
+    const old = sub({ id: 'pkg', used: 14, started_at: '2026-09-01' })
+    const oct = hours({ id: 'oct', used: 22, started_at: '2026-10-01' })
+    const nov = hours({ id: 'nov', used: 0, started_at: '2026-11-01', created_at: '2026-10-25' })
+    const [p, o, n] = subscriptionBalances([old, oct, nov])
+    expect(p).toMatchObject({ lessonsUsed: 14, debtLessons: 2, isCurrent: false })
+    expect(o).toMatchObject({ lessonsUsed: 20, debtLessons: 0, isCurrent: false })
+    expect(n).toMatchObject({ carriedIn: 2, lessonsUsed: 2, isCurrent: true })
+  })
+
+  it('an invoice holds its credit hours: they count as paid, money is per billed hour (И61)', () => {
+    // November: 63 planned − 6 h credit = 57 billed × 100 = 5 700
+    const nov = (over: Partial<BalanceSubscription>) =>
+      hours({ lessons_total: 57, credit: 6, price_final: 5700, ...over })
+    const [unpaid] = subscriptionBalances([nov({ paid: 0, used: 6 })])
+    expect(unpaid).toMatchObject({
+      lessonsTotal: 63,
+      paidLessons: 6,
+      debtLessons: 0,
+      lessonsLeft: 57,
+    })
+    const [all] = subscriptionBalances([nov({ paid: 5700, used: 63 })])
+    expect(all).toMatchObject({ paidLessons: 63, debtLessons: 0, lessonsLeft: 0 })
+    // 2 h beyond the paid ones: 2 × 100 = 200
+    const [debt] = subscriptionBalances([nov({ paid: 1000, used: 18 })])
+    expect(debt).toMatchObject({ paidLessons: 16, debtLessons: 2, debtSom: 200 })
+  })
+
+  it('credit hours gone on are spent on the old invoice, paid on the new one — counted once (И72)', () => {
+    // October 12 h × 123 = 1 476 paid, 6 h used, 6 h went into November's credit
+    const oct = hours({
+      id: 'oct',
+      lessons_total: 12,
+      price_final: 1476,
+      paid: 1476,
+      used: 6,
+      creditOut: 6,
+    })
+    // November 15 h − 6 h credit = 9 h billed, unpaid, 9 h used
+    const nov = hours({
+      id: 'nov',
+      lessons_total: 9,
+      credit: 6,
+      price_final: 1107,
+      paid: 0,
+      used: 9,
+      started_at: '2026-11-01',
+      created_at: '2026-10-25',
+    })
+    const [o, n] = subscriptionBalances([oct, nov])
+    expect(o).toMatchObject({ debtSom: 0, refundSuggested: 0, lessonsLeft: 0 })
+    expect(n).toMatchObject({ debtLessons: 3, debtSom: 369, refundSuggested: 0 })
+    // nothing used on November yet: its 6 paid credit hours are the refund, not October's
+    const [, idle] = subscriptionBalances([oct, { ...nov, used: 0 }])
+    expect(idle).toMatchObject({ debtSom: 0, refundSuggested: 738 })
+  })
+
+  it('an hour refund is the money beyond the spent hours: 1 000 − 8 h × 123 = 16 (И72)', () => {
+    const [o] = subscriptionBalances([
+      hours({ lessons_total: 12, price_final: 1476, paid: 1000, used: 6, creditOut: 2 }),
+    ])
+    expect(o).toMatchObject({ paidLessons: 8, debtLessons: 0, refundSuggested: 16 })
+  })
+})
+
+describe('unbilledDebt (И69)', () => {
+  it('a month not invoiced: Σ hours × the hour price on the date, rounded up once', () => {
+    const marks = [
+      '2026-11-02',
+      '2026-11-03',
+      '2026-11-04',
+      '2026-11-05',
+      '2026-11-06',
+      '2026-11-09',
+      '2026-11-10',
+    ].map((d) => ({ lesson_date: d, hours: 3, hourPrice: 123 }))
+    expect(unbilledDebt(marks)).toEqual([{ month: '2026-11-01', hours: 21, som: 2583 }])
+  })
+  it('by month, half hours, ceil on the month', () => {
+    expect(
+      unbilledDebt([
+        { lesson_date: '2026-12-01', hours: 0.5, hourPrice: 123 },
+        { lesson_date: '2026-11-30', hours: 1.5, hourPrice: 123 },
+      ]),
+    ).toEqual([
+      { month: '2026-11-01', hours: 1.5, som: 185 },
+      { month: '2026-12-01', hours: 0.5, som: 62 },
+    ])
   })
 })

@@ -166,10 +166,16 @@ const subscriptionSchema = z.object({
   started_at: z.string(),
   created_at: z.string(),
   lessons_total: z.number().int(),
+  hours_total: z.number().nullable(),
+  period_month: z.string().nullable(),
+  credit_hours: z.number(),
+  credit_out_hours: z.number(),
   price_full: z.number(),
   price_final: z.number(),
   tariff: z.object({ freeze_limit: z.number().int() }),
-  attendance: z.array(z.object({ lesson_id: z.uuid(), status: markSchema })),
+  attendance: z.array(
+    z.object({ lesson_id: z.uuid(), status: markSchema, hours: z.number().nullable() }),
+  ),
   payments: z.array(z.object({ amount: z.number().int() })),
 })
 
@@ -179,15 +185,20 @@ export const enrollmentSchema = z.object({
   status: z.enum(['active', 'finished']),
   student: z.object({ id: z.uuid(), full_name: z.string(), parent_phone: z.string().nullable() }),
   subscriptions: z.array(subscriptionSchema),
+  afterschool_plans: z.array(z.object({ valid_from: z.string(), hours: z.array(z.number()) })),
 })
 
 /** subscriptions(…) of an enrollment, with every mark charged to them and their payments (teacher RLS: own students, Д3). */
 export const ENROLLMENT_FIELDS =
-  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status), payments(amount))'
+  'start_date, end_date, status, student:students(id, full_name, parent_phone), subscriptions(id, status, started_at, created_at, lessons_total, hours_total, period_month, credit_hours, credit_out_hours, price_full, price_final, tariff:tariffs(freeze_limit), attendance(lesson_id, status, hours), payments(amount)), afterschool_plans(valid_from, hours)'
 
-export function toEnrollment(row: z.infer<typeof enrollmentSchema>): EnrollmentSource {
+export function toEnrollment({
+  afterschool_plans,
+  ...row
+}: z.infer<typeof enrollmentSchema>): EnrollmentSource {
   return {
     ...row,
+    plans: afterschool_plans,
     subscriptions: row.subscriptions.map(({ tariff, attendance, payments, ...s }) => ({
       ...s,
       freeze_limit: tariff.freeze_limit,
@@ -207,6 +218,7 @@ const sheetSchema = z.object({
   confirmed_at: z.string().nullable(),
   confirmed_late: z.boolean(),
   is_locked: z.boolean(),
+  hour_price: z.number().nullable(),
   teacher: z.object({
     rates: z.array(z.object({ percent: z.number(), valid_from: z.string() })),
   }),
@@ -233,6 +245,8 @@ export interface LessonSheet {
   confirmed_late: boolean
   /** In a closed period — nobody changes the marks (invariant 2). */
   is_locked: boolean
+  /** After-school: the hour price on the lesson date (lessons.hour_price, И69); else null. */
+  hour_price?: number | null
   group: { id: string; name: string; subject: string; group_type: GroupType; room: string | null }
   /** Rates of the lesson's teacher — payroll goes to lessons.teacher_id (invariant 6, 0020). */
   rates: { percent: number; valid_from: string }[]
@@ -253,7 +267,7 @@ export const lessonSheetQuery = (lessonId: string) =>
       const lesson = await supabase
         .from('lessons')
         .select(
-          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, is_locked, teacher:teachers!lessons_teacher_id_fkey(rates:teacher_rates(percent, valid_from)), group:groups!inner(id, name, subject:subjects(name), group_type, room, enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status), attendance_presets(student_id, comment)`,
+          `id, lesson_date, planned_start, duration_min, status, is_extra, confirmed_at, confirmed_late, is_locked, hour_price, teacher:teachers!lessons_teacher_id_fkey(rates:teacher_rates(percent, valid_from)), group:groups!inner(id, name, subject:subjects(name), group_type, room, enrollments(${ENROLLMENT_FIELDS})), attendance(student_id, status), attendance_presets(student_id, comment)`,
         )
         .eq('id', lessonId)
         .maybeSingle()
@@ -298,7 +312,10 @@ export function confirmErrorReason(error: { code?: string; message?: string }): 
   if (error.code === 'PGRST202' || error.code === '42883')
     return 'сервер не обновлён — сообщите администратору'
   if (m.includes('already confirmed')) return 'занятие уже проведено'
-  if (m.includes('freeze limit')) return 'лимит заморозок 2 на абонемент — отметьте «Не был»'
+  if (m.includes('freeze limit'))
+    return m.includes('month')
+      ? 'лимит заморозок 2 на месяц — отметьте «Не был»'
+      : 'лимит заморозок 2 на абонемент — отметьте «Не был»'
   if (m.includes('not started')) return 'занятие ещё не началось'
   if (m.includes('closed period')) return 'период закрыт — исправления через администратора'
   if (m.includes('cancelled')) return 'занятие отменено'

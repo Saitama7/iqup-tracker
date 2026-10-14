@@ -1,6 +1,8 @@
 // #84 · А6 student card: «Предупредил о пропуске» — the student's freezes set in advance + the button.
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
+import { enrollmentPlansQuery } from '@/features/afterschool/api'
+import { dayHours } from '@/features/afterschool/model'
 import { cardClass } from '@/features/tariffs/parts'
 import { lessonStartMs } from '@/features/lessons/select'
 import { useNow } from '@/lib/now'
@@ -12,24 +14,36 @@ export function StudentPresets({
   studentId,
   studentName,
   groupIds,
+  afterschool = [],
   today,
 }: {
   studentId: string
   studentName: string
   /** Groups the student is active in now. */
   groupIds: readonly string[]
+  /** Active after-school enrollments: a day with 0 h by the plan is not offered (И63). */
+  afterschool?: readonly { enrollmentId: string; groupId: string }[]
   today: string
 }) {
   usePresetsRealtime()
   const now = useNow()
   const presets = useQuery(studentPresetsQuery(studentId, today))
   const lessons = useQuery(upcomingLessonsQuery(groupIds, today))
+  const plans = useQuery(enrollmentPlansQuery(afterschool.map((a) => a.enrollmentId)))
   const clear = useClearPreset()
   const [open, setOpen] = useState(false)
   const rows = presets.data ?? []
   const taken = new Set(rows.map((r) => r.lesson.id))
   // a lesson that has started is not «in advance» anymore (И56)
-  const free = (lessons.data ?? []).filter((l) => !taken.has(l.id) && lessonStartMs(l) > now)
+  const noHours = (l: { lesson_date: string; group: { id: string } }) =>
+    afterschool.some(
+      (a) =>
+        a.groupId === l.group.id &&
+        dayHours(plans.data?.get(a.enrollmentId) ?? [], l.lesson_date) === 0,
+    )
+  const free = (lessons.data ?? []).filter(
+    (l) => !taken.has(l.id) && lessonStartMs(l) > now && !noHours(l),
+  )
 
   return (
     <section
@@ -40,7 +54,7 @@ export function StudentPresets({
         <h2 className="text-[15px] font-extrabold">Предупредил о пропуске</h2>
         <button
           type="button"
-          disabled={!lessons.data}
+          disabled={!lessons.data || (afterschool.length > 0 && !plans.data)}
           onClick={() => {
             setOpen(true)
           }}

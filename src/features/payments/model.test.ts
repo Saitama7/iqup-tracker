@@ -56,6 +56,8 @@ const pay = (
       lessons_total: 12,
       price_final: price,
       discount_percent: 0,
+      hours_total: null,
+      period_month: null,
       enrollment: { student_id: student, group_id: group },
     },
     ...rest,
@@ -67,7 +69,10 @@ const balance = (over: Partial<StudentBalance> = {}): StudentBalance => ({
   studentId: 's1',
   groupId: G8A,
   refunded: false,
+  unit: 'lesson',
+  periodMonth: null,
   lessonsTotal: 12,
+  pricedTotal: 12,
   priceFinal: 3200,
   paidSom: 3200,
   paidLessons: 12,
@@ -277,5 +282,84 @@ describe('record panel', () => {
     expect(parseAmount('3 200')).toBe(3200)
     expect(parseAmount('')).toBeNull()
     expect(parseAmount('12a')).toBeNull()
+  })
+})
+
+describe('продлёнка: счёт за месяц в часах (#82)', () => {
+  const hours = (over: Partial<StudentBalance> = {}) =>
+    balance({
+      unit: 'hour',
+      periodMonth: '2026-10-01',
+      lessonsTotal: 21,
+      pricedTotal: 21,
+      priceFinal: 2583,
+      paidSom: 2583,
+      paidLessons: 21,
+      lessonsUsed: 4,
+      lessonsLeft: 17,
+      ...over,
+    })
+
+  it('balanceLine names the month and counts hours', () => {
+    expect(balanceLine(hours())).toMatchObject({
+      text: 'Счёт за октябрь: осталось 17 из 21 ч',
+      note: 'оплачен',
+    })
+    expect(
+      balanceLine(
+        hours({
+          paidSom: 1230,
+          paidLessons: 10,
+          lessonsUsed: 12,
+          lessonsLeft: 9,
+          debtLessons: 2,
+          debtSom: 246,
+        }),
+      ).note,
+    ).toBe('долг 2 ч · 246 сом')
+  })
+
+  it('refund hint of an invoice with credit: the price of a billed hour (7 011 / 57, not / 63)', () => {
+    const b = hours({
+      lessonsTotal: 63,
+      pricedTotal: 57,
+      priceFinal: 7011,
+      paidSom: 7011,
+      paidLessons: 63,
+      lessonsUsed: 60,
+      lessonsLeft: 3,
+      refundSuggested: 369,
+    })
+    expect(refundHint(b)).toBe('Остаток 3 ч × 123 сом = 369 сом')
+  })
+
+  it('paymentHint after a part payment — in hours', () => {
+    expect(
+      paymentHint(
+        'current',
+        1230,
+        { lessonsTotal: 21, priceFinal: 2583, priceFull: 2583 },
+        hours({ paidSom: 0, paidLessons: 0 }),
+      ),
+    ).toBe('После записи: оплачено 10 из 21 ч, доступно 6 ч')
+  })
+
+  it('journal: «21 ч за октябрь · 2 583»', () => {
+    const row = journalRow(
+      pay({
+        price: 2583,
+        subscription: {
+          id: 'h',
+          lessons_total: 12,
+          price_final: 2583,
+          discount_percent: 0,
+          hours_total: 21,
+          period_month: '2026-10-01',
+          enrollment: { student_id: 's1', group_id: G8A },
+        },
+      }),
+      lookups,
+    )
+    expect(row.package).toBe('21 ч за октябрь · 2\u00a0583')
   })
 })

@@ -87,7 +87,10 @@ export function correctionErrorReason(error: { code?: string; message?: string }
     return 'сервер не обновлён — сообщите администратору'
   if (error.code === '23505') return 'запрос по этому занятию уже ждёт решения'
   if (m.includes('closed period')) return 'период закрыт — исправления только корректировкой ЗП'
-  if (m.includes('freeze limit')) return 'лимит заморозок 2 на абонемент — отметьте «Не был»'
+  if (m.includes('freeze limit'))
+    return m.includes('month')
+      ? 'лимит заморозок 2 на месяц — отметьте «Не был»'
+      : 'лимит заморозок 2 на абонемент — отметьте «Не был»'
   if (m.includes('reason is required')) return 'укажите причину'
   if (m.includes('not held')) return 'занятие не проведено'
   if (m.includes('is rejected')) return 'запрос уже отклонён'

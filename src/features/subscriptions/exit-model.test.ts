@@ -8,6 +8,7 @@ import {
   settlementLines,
   targetLabel,
   toPayCaption,
+  transferTargets,
   withdrawDefaultDate,
   withdrawMinDate,
 } from './exit-model'
@@ -40,10 +41,12 @@ const settlement = (extra: Partial<Settlement> = {}): Settlement => ({
   moneySom: 7200,
   paidSom: 7200,
   lessonsUsed: 9,
+  hoursUsed: 0,
   usedSom: 5400,
   remainder: 1800,
   lessonPrice: 600,
   hasTrial: false,
+  unit: 'lesson',
   ...extra,
 })
 
@@ -100,6 +103,52 @@ describe('money captions', () => {
     expect(lines[2]).toEqual({ label: 'Долг', value: '600 сом', tone: 'debt' })
   })
 
+  it('an after-school bill in hours (#82)', () => {
+    const lines = spLines(
+      settlementLines(
+        settlement({
+          paidSom: 2000,
+          lessonsUsed: 0,
+          hoursUsed: 5.5,
+          usedSom: 550,
+          remainder: 1450,
+          lessonPrice: 100,
+          unit: 'hour',
+        }),
+      ),
+    )
+    expect(lines[1]).toEqual({ label: 'Списано', value: '5,5 ч × 100/ч = 550 сом' })
+    expect(lines[2]).toEqual({ label: 'Остаток', value: '1 450 сом', tone: 'left' })
+  })
+
+  it('old lessons and hours are not summed into one number (#82)', () => {
+    const lines = spLines(
+      settlementLines(
+        settlement({
+          paidSom: 9400,
+          lessonsUsed: 20,
+          hoursUsed: 6,
+          usedSom: 8138,
+          remainder: 1262,
+          lessonPrice: 123,
+          unit: 'hour',
+        }),
+      ),
+    )
+    expect(lines[1]).toEqual({ label: 'Списано', value: '20 уроков + 6 ч × 123/ч = 8 138 сом' })
+  })
+
+  it('no transfer to an after-school group (#82)', () => {
+    const from = group('g1', '8 класс А')
+    const groups = [
+      from,
+      group('g2', '8 класс Б'),
+      group('g3', 'Продлёнка', { group_type: 'afterschool' }),
+    ]
+    expect(transferTargets(groups, from).map((g) => g.id)).toEqual(['g2'])
+    expect(exitTargets(groups, from).map((g) => g.id)).toContain('g3')
+  })
+
   it('to pay in the new group', () => {
     expect(sp(toPayCaption(preview()))).toBe('3 800 − 1 800 = 2 000 сом')
     expect(sp(toPayCaption(preview({ remainder: -600, toPay: 4400 })))).toBe(
@@ -115,9 +164,25 @@ describe('money captions', () => {
   it('payroll impact', () => {
     expect(
       sp(
-        impactCaption({ teacherId: 't', teacherName: 'Гульзат Асанова', lessons: 3, amount: 1050 }),
+        impactCaption({
+          teacherId: 't',
+          teacherName: 'Гульзат Асанова',
+          lessons: 3,
+          amount: 1050,
+          hourMarks: 0,
+          hours: 0,
+        }),
       ),
     ).toBe('учителю Гульзат −1 050 сом за 3 урока')
+  })
+
+  it('payroll impact by hours: days and hours, not lessons (#82)', () => {
+    const i = { teacherId: 't', teacherName: 'Айжан Бекова', amount: 150, hourMarks: 2, hours: 3 }
+    expect(sp(impactCaption({ ...i, lessons: 2 }))).toBe('учителю Айжан −150 сом за 2 дн. (3 ч)')
+    // a migrated student: old 20-lesson package marks + hour-bill days
+    expect(sp(impactCaption({ ...i, lessons: 3, hours: 4.5 }))).toBe(
+      'учителю Айжан −150 сом за 1 урок и 2 дн. (4,5 ч)',
+    )
   })
 
   it('marks to delete', () => {

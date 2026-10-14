@@ -192,7 +192,8 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   const counts = tally(roster, marks)
 
   const percent = rateOn(sheet.rates, sheet.lesson_date)
-  const accrual = percent !== null ? lessonAccrual(roster, marks, percent) : null
+  const accrual =
+    percent !== null ? lessonAccrual(roster, marks, percent, sheet.hour_price ?? null) : null
 
   const model: SheetModel = {
     sheet,
