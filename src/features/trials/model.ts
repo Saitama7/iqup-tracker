@@ -316,7 +316,18 @@ export function enrollStartDefault(
 
 // ─── «Оплатил → зачислить»: who the trial becomes ───────────────────────────
 
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+/**
+ * Name as compared for «the same person»: any run of whitespace (NBSP and tabs too) → one space,
+ * trimmed, lower case, ё → е. Mirrors person_name_key in 0018.
+ */
+export const nameKey = (name: string) =>
+  name
+    .replace(/[\s\u00a0]+/gu, ' ')
+    .trim()
+    .toLowerCase()
+    .replaceAll('ё', 'е')
+
+const sameName = (a: string, b: string) => nameKey(a) === nameKey(b)
 
 /**
  * The student the trial is enrolled as: its own student_id, or — for a lead — the one existing student
@@ -341,6 +352,20 @@ export function studentsByPhone<T extends { parent_phone: string | null }>(
   phone: string | null,
 ): T[] {
   return phone ? students.filter((s) => s.parent_phone === phone) : []
+}
+
+/**
+ * «Оплатил → зачислить» for a lead whose parent phone is already a student's but no name matches:
+ * enroll_trial creates a new student — warn, the admin may have meant the existing one.
+ */
+export function enrollPhoneWarning(
+  trial: Pick<Trial, 'student_id' | 'full_name' | 'parent_phone'>,
+  students: readonly { id: string; full_name: string; parent_phone: string | null }[],
+): string | null {
+  if (trial.student_id) return null
+  const taken = studentsByPhone(students, trial.parent_phone)
+  if (taken.length === 0 || taken.some((s) => sameName(s.full_name, trial.full_name))) return null
+  return `Телефон есть у: ${taken.map((s) => s.full_name).join(', ')} — будет создан новый ученик. Если это он(а) — выберите «Уже учится»`
 }
 
 /** Discounts of the student a trial is enrolled as (В5: 15 % returning, 5 % for a friend); a new lead has none. */

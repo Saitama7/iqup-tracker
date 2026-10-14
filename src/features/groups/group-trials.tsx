@@ -5,6 +5,7 @@ import type { StudentsSource } from '@/features/students/model'
 import {
   dayShort,
   phoneCaption,
+  enrollPhoneWarning,
   trialDiscountHistory,
   trialWhen,
   type Trial,
@@ -65,6 +66,7 @@ export function useTrialActions(
         trial={action}
         group={group}
         history={trialDiscountHistory(students, action)}
+        warning={enrollPhoneWarning(action, students?.students ?? [])}
         today={today}
         onOpenChange={close}
       />

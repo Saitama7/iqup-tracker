@@ -1,9 +1,10 @@
 -- #54 · trials booked after the fact (0018): the admin books a lead on today's / a past not cancelled
 -- lesson right away as attended / no_show, a teacher cannot; the journal files it as 'retro'; Ж2/Ж6 —
--- still no attendance / payroll. enroll_trial reuses an existing student with the same name and phone.
+-- still no attendance / payroll. enroll_trial reuses an existing student with the same name and phone
+-- (person_name_key) and keeps the lead's «привёл» / class on them.
 -- Self-contained fixtures, rolled back.
 begin;
-select plan(25);
+select plan(33);
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
 -- a…1 teacher of the group, a…2 admin
@@ -19,12 +20,16 @@ insert into public.teacher_rates (teacher_id, percent, valid_from) values
   ('b5400000-0000-4000-8000-000000000001', 45, '2000-01-01');
 
 insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status) values
-  ('d5400000-0000-4000-8000-000000000001', 'Group 54', (select id from public.subjects where name = 'Математика'), 8, 'group', 'b5400000-0000-4000-8000-000000000001', '2000-01-01', 'active');
+  ('d5400000-0000-4000-8000-000000000001', 'Group 54', (select id from public.subjects where name = 'Математика'), 8, 'group', 'b5400000-0000-4000-8000-000000000001', '2000-01-01', 'active'),
+  ('d5400000-0000-4000-8000-000000000002', 'Group 54 old', (select id from public.subjects where name = 'Математика'), 8, 'group', 'b5400000-0000-4000-8000-000000000001', '2000-01-01', 'active');
 
--- a former student (finished enrollment) and a sibling with the same parent phone
+-- …01 a former student (no enrollment left in the system, marked «бывший»), …02 enrolled in the group,
+-- …03 a former student already «привёл» by …02 (the sibling of …01 comes later as a lead)
 insert into public.students (id, full_name, grade, parent_phone, is_returning) values
   ('e5400000-0000-4000-8000-000000000001', 'Нурай Жумабаева', 8, '996555005401', true),
   ('e5400000-0000-4000-8000-000000000002', 'S enrolled', 8, '996555005402', false);
+insert into public.students (id, full_name, grade, parent_phone, is_returning, referred_by_student_id) values
+  ('e5400000-0000-4000-8000-000000000003', 'Алёна Ким', 7, '996555005430', true, 'e5400000-0000-4000-8000-000000000002');
 insert into public.enrollments (id, student_id, group_id, start_date) values
   ('f5400000-0000-4000-8000-000000000002', 'e5400000-0000-4000-8000-000000000002', 'd5400000-0000-4000-8000-000000000001', '2000-01-01');
 insert into public.subscriptions (enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at)
@@ -41,6 +46,19 @@ insert into public.lessons (id, group_id, lesson_date, planned_start, duration_m
   ('25400000-0000-4000-8000-000000000005', 'd5400000-0000-4000-8000-000000000001', public.bishkek_today() + 7, '09:00', 60);
 update public.lessons set status = 'cancelled', cancel_reason = 'center'
 where id = '25400000-0000-4000-8000-000000000002';
+-- …06 yesterday in a group archived since
+insert into public.lessons (id, group_id, lesson_date, planned_start, duration_min) values
+  ('25400000-0000-4000-8000-000000000006', 'd5400000-0000-4000-8000-000000000002', public.bishkek_today() - 1, '09:00', 60);
+update public.groups set status = 'archived' where id = 'd5400000-0000-4000-8000-000000000002';
+
+-- ─── person_name_key: what «the same name» means (= nameKey in model.ts) ───
+select results_eq(
+  $$ select public.person_name_key(n) from (values
+       ('  Нурай   Жумабаева '), (E'Нурай\u00a0Жумабаева'), (E'НУРАЙ\t \u00a0жумабаева'), ('АЛЁНА Ким')
+     ) v(n) $$,
+  $$ values ('нурай жумабаева'), ('нурай жумабаева'), ('нурай жумабаева'), ('алена ким') $$,
+  'whitespace runs (NBSP, tabs) → one space, trimmed, lower case, ё = е'
+);
 
 -- ─── Teacher cannot book, not even after the fact ──────────────────────────
 set local role authenticated;
@@ -97,6 +115,24 @@ select throws_ok(
 );
 select throws_ok(
   $$ insert into public.trials (full_name, lesson_id, group_id, status)
+     values ('Архивный', '25400000-0000-4000-8000-000000000006', 'd5400000-0000-4000-8000-000000000002', 'attended') $$,
+  '23514', 'group d5400000-0000-4000-8000-000000000002 is archived', 'not in an archived group'
+);
+select lives_ok(
+  $$ insert into public.trials (id, full_name, parent_phone, lesson_id, group_id, status, came, marked_at, marked_by)
+     values ('75400000-0000-4000-8000-000000000008', 'Подделка', '996555005413',
+             '25400000-0000-4000-8000-000000000004', 'd5400000-0000-4000-8000-000000000001', 'attended',
+             false, '2000-01-01', 'a5400000-0000-4000-8000-000000000001') $$,
+  'admin books after the fact with a forged mark'
+);
+select results_eq(
+  $$ select came, marked_by, marked_at > '2000-01-02'
+     from public.trials where id = '75400000-0000-4000-8000-000000000008' $$,
+  $$ values (true, 'a5400000-0000-4000-8000-000000000002'::uuid, true) $$,
+  'came / marked_at / marked_by from the client are ignored — the database sets them'
+);
+select throws_ok(
+  $$ insert into public.trials (full_name, lesson_id, group_id, status)
      values ('Закрытый', '25400000-0000-4000-8000-000000000001', 'd5400000-0000-4000-8000-000000000001', 'closed') $$,
   '23514', 'a trial starts as scheduled', 'a trial starts as scheduled, attended or no_show only'
 );
@@ -137,6 +173,13 @@ select is(
 );
 set local request.jwt.claims = '{"sub":"a5400000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"roles":["admin"]}}';
 
+select lives_ok(
+  $$ insert into public.trials (id, full_name, parent_phone, lesson_id, group_id, status)
+     values ('75400000-0000-4000-8000-000000000009', 'На проведённое', '996555005414',
+             '25400000-0000-4000-8000-000000000001', 'd5400000-0000-4000-8000-000000000001', 'attended') $$,
+  'after the fact on a held (confirmed) lesson too'
+);
+
 -- ─── Journal: 'retro' ───────────────────────────────────────────────────────
 select is(
   (select kind from public.v_audit_feed
@@ -157,11 +200,16 @@ select is(
 
 -- ─── enroll_trial: the same name and phone → the existing student ─────────
 select lives_ok(
-  $$ insert into public.trials (id, full_name, parent_phone, lesson_id, group_id, status)
+  $$ insert into public.trials (id, full_name, parent_phone, lesson_id, group_id, status, grade, referred_by_student_id)
      values ('75400000-0000-4000-8000-000000000004', ' нурай жумабаева ', '996555005401',
-             '25400000-0000-4000-8000-000000000001', 'd5400000-0000-4000-8000-000000000001', 'attended'),
+             '25400000-0000-4000-8000-000000000001', 'd5400000-0000-4000-8000-000000000001', 'attended',
+             9, 'e5400000-0000-4000-8000-000000000002'),
             ('75400000-0000-4000-8000-000000000005', 'Айбек Жумабаев', '996555005401',
-             '25400000-0000-4000-8000-000000000001', 'd5400000-0000-4000-8000-000000000001', 'attended') $$,
+             '25400000-0000-4000-8000-000000000001', 'd5400000-0000-4000-8000-000000000001', 'attended',
+             null, null),
+            ('75400000-0000-4000-8000-000000000007', E'АЛЕНА\u00a0\t КИМ', '996555005430',
+             '25400000-0000-4000-8000-000000000001', 'd5400000-0000-4000-8000-000000000001', 'attended',
+             null, 'e5400000-0000-4000-8000-000000000001') $$,
   'a former student and a sibling (same phone, another name) come as leads'
 );
 select is(
@@ -172,6 +220,12 @@ select is(
 select is(
   (select count(*)::integer from public.students where parent_phone = '996555005401'),
   1, 'no duplicate students row for the former student'
+);
+select results_eq(
+  $$ select grade, referred_by_student_id from public.students
+     where id = 'e5400000-0000-4000-8000-000000000001' $$,
+  $$ values (9, 'e5400000-0000-4000-8000-000000000002'::uuid) $$,
+  'the lead''s «привёл друг» (И40) and class move to the existing student'
 );
 select is(
   (select s.discount_percent from public.subscriptions s
@@ -187,6 +241,18 @@ select isnt(
 select is(
   (select count(*)::integer from public.students where parent_phone = '996555005401'),
   2, 'the sibling is a new students row'
+);
+
+select is(
+  (select student_id from public.enroll_trial('75400000-0000-4000-8000-000000000007', public.bishkek_today() + 7)),
+  'e5400000-0000-4000-8000-000000000003'::uuid,
+  'NBSP / tab / double space / Ё vs е in the name still match the existing student'
+);
+select results_eq(
+  $$ select grade, referred_by_student_id from public.students
+     where id = 'e5400000-0000-4000-8000-000000000003' $$,
+  $$ values (7, 'e5400000-0000-4000-8000-000000000002'::uuid) $$,
+  'a lead without a class keeps the student''s, an existing «привёл» is not overwritten'
 );
 
 -- several students with the same name and phone → refused

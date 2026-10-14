@@ -7,8 +7,10 @@
 -- 2. v_audit_feed: such an insert is a correction after the fact — kind 'retro' (И32).
 -- 3. enroll_trial: a lead whose name and parent phone match an existing student is that student
 --    (a former pupil came back through a trial) — no duplicate students row; the discounts follow the
---    existing student (В5, 15 % to a returning one). Same phone with another name (a sibling) is a new
---    student, as before.
+--    existing student (В5, 15 % to a returning one); the lead's «привёл» (И40) and class fill the
+--    student's. Same phone with another name (a sibling) is a new student, as before. Names compare by
+--    person_name_key (whitespace incl. NBSP / tabs collapsed, trimmed, lower case, ё = е) — the same
+--    as nameKey in src/features/trials/model.ts.
 -- Trials still never touch attendance, subscriptions or payroll (Ж2/Ж6).
 
 -- ─── 1. trials_guard ────────────────────────────────────────────────────────
@@ -208,9 +210,23 @@ grant select on public.v_audit_feed to authenticated;
 
 -- ─── 3. enroll_trial: no duplicate student ──────────────────────────────────
 
--- Same as 0016, plus: a lead whose name (trimmed, case-insensitive) and parent phone match exactly one
--- existing student is enrolled as that student (no second students row; is_returning / В5 follow the
--- existing one). Several matches → refused, the admin books the trial as «Уже учится» instead.
+-- Name as compared for «the same person»: any run of whitespace (NBSP and tabs too) → one space,
+-- trimmed, lower case, ё → е. Mirrors nameKey in src/features/trials/model.ts.
+create or replace function public.person_name_key(p_name text)
+returns text
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $$
+  select translate(lower(btrim(regexp_replace(p_name, '[[:space:]\u00a0]+', ' ', 'g'))), 'ё', 'е')
+$$;
+
+-- Same as 0016, plus: a lead whose name (person_name_key) and parent phone match exactly one existing
+-- student is enrolled as that student (no second students row; is_returning / В5 follow the existing
+-- one; the trial's «привёл» and class fill the student's if empty / newer). Several matches → refused,
+-- the admin books the trial as «Уже учится» instead. A lock on the phone serialises two enrolments of
+-- the same family, so both cannot miss each other and create two rows.
 create or replace function public.enroll_trial(
   p_trial_id uuid,
   p_start_date date,
@@ -247,14 +263,23 @@ begin
 
   v_student_id := v_trial.student_id;
   if v_student_id is null and v_trial.parent_phone is not null then
+    perform pg_advisory_xact_lock(hashtext(v_trial.parent_phone));
     select array_agg(s.id) into v_matches
     from public.students s
     where s.parent_phone = v_trial.parent_phone
-      and lower(btrim(s.full_name)) = lower(btrim(v_trial.full_name));
+      and public.person_name_key(s.full_name) = public.person_name_key(v_trial.full_name);
     if cardinality(v_matches) > 1 then
       raise exception 'several students match the trial name and phone' using errcode = 'unique_violation';
     end if;
     v_student_id := v_matches[1];
+    if v_student_id is not null then
+      -- the lead's «привёл друг» (И40, 5 % to the friend) and class are not lost on the existing student
+      update public.students s
+      set referred_by_student_id = coalesce(s.referred_by_student_id,
+                                            nullif(v_trial.referred_by_student_id, s.id)),
+          grade = coalesce(v_trial.grade, s.grade)
+      where s.id = v_student_id;
+    end if;
   end if;
   if v_student_id is null then
     insert into public.students (full_name, grade, parent_phone, notes, referred_by_student_id)

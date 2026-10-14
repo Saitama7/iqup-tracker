@@ -3,6 +3,7 @@ import { calcMonth } from '@/features/payroll/calc'
 import type { StudentRow } from '@/features/students/model'
 import {
   conversionBySource,
+  enrollPhoneWarning,
   enrollStartDefault,
   fillCaption,
   isUpcoming,
@@ -11,6 +12,7 @@ import {
   lessonTrials,
   markLabel,
   monthConversion,
+  nameKey,
   plusTrials,
   pupilsWord,
   shortPerson,
@@ -282,6 +284,34 @@ describe('the student a trial becomes (#54)', () => {
     })
     expect(trialDiscountHistory(source, { ...lead, full_name: 'Новый' })).toBeUndefined()
     expect(trialDiscountHistory(undefined, lead)).toBeUndefined()
+  })
+
+  it('names compare like person_name_key in 0018: whitespace, NBSP, tabs, case, ё', () => {
+    expect(nameKey('  Нурай   Жумабаева ')).toBe('нурай жумабаева')
+    expect(nameKey('Нурай\u00a0Жумабаева')).toBe('нурай жумабаева')
+    expect(nameKey('Нурай\t \u00a0Жумабаева')).toBe('нурай жумабаева')
+    expect(nameKey('АЛЁНА Ким')).toBe('алена ким')
+    expect(trialStudentId({ ...lead, full_name: 'НУРАЙ\u00a0\u00a0жумабаева' }, students)).toBe(
+      'former',
+    )
+    const alyona = student({ id: 'alyona', full_name: 'Алёна Ким', parent_phone: '996555005430' })
+    expect(
+      trialStudentId({ student_id: null, full_name: 'Алена  Ким', parent_phone: '996555005430' }, [
+        alyona,
+      ]),
+    ).toBe('alyona')
+  })
+
+  it("warns when the phone is another student's and no name matches", () => {
+    expect(enrollPhoneWarning({ ...lead, full_name: 'Айсулуу' }, students)).toBe(
+      'Телефон есть у: Нурай Жумабаева, Айбек Жумабаев, Друг — будет создан новый ученик. Если это он(а) — выберите «Уже учится»',
+    )
+    expect(enrollPhoneWarning(lead, students)).toBeNull()
+    expect(enrollPhoneWarning({ ...lead, parent_phone: '996555000000' }, students)).toBeNull()
+    expect(enrollPhoneWarning({ ...lead, parent_phone: null }, students)).toBeNull()
+    expect(
+      enrollPhoneWarning({ ...lead, full_name: 'Айсулуу', student_id: 'sibling' }, students),
+    ).toBeNull()
   })
 
   it('students by parent phone for the booking hint', () => {

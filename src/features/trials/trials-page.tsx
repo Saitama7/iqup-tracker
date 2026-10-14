@@ -49,6 +49,7 @@ import {
   pupilsWord,
   shortPerson,
   SOURCE_LABEL,
+  enrollPhoneWarning,
   studentsByPhone,
   TRIAL_SOURCES,
   trialGroupLabel,
@@ -244,6 +245,7 @@ export function TrialsPage({
           trial={enroll}
           group={enrollGroup}
           history={trialDiscountHistory(students.data, enroll)}
+          warning={enrollPhoneWarning(enroll, students.data?.students ?? [])}
           today={today}
           onOpenChange={(o) => {
             if (!o) setEnroll(null)
@@ -1335,8 +1337,9 @@ function PhoneTaken({ students, phone }: { students: StudentsSource['students'];
   if (taken.length === 0) return null
   return (
     <p className="text-xs font-bold text-ink-muted">
-      Этот телефон уже есть в учениках: {taken.map((t) => t.full_name).join(', ')}. Если это он(а) —
-      выберите «Уже учится».
+      Этот телефон уже есть в учениках: {taken.map((t) => t.full_name).join(', ')}. Если пробное у
+      кого-то из них (и у бывшего ученика) — впишите имя как в карточке: при зачислении не будет
+      дубля и сохранятся его скидки. Брат или сестра — новый ученик.
     </p>
   )
 }

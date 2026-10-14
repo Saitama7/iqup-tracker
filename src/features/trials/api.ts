@@ -127,6 +127,9 @@ export class TrialError extends Error {
 export function trialErrorMessage(error: { code?: string; message?: string }): string {
   const m = error.message ?? ''
   if (m.includes('already enrolled')) return 'Ученик уже зачислен в эту группу'
+  // 23505 too — before the generic «уже записан» below
+  if (m.includes('several students match'))
+    return 'В учениках несколько человек с этим именем и телефоном — запишите пробное через «Уже учится»'
   if (error.code === '23505') return 'Этот ученик уже записан на это занятие'
   if (m.includes('planned lesson today or later')) return 'Выберите занятие сегодня или позже'
   if (m.includes('not today yet')) return 'Отметить можно в день занятия'
@@ -137,8 +140,6 @@ export function trialErrorMessage(error: { code?: string; message?: string }): s
     return 'Абонемент начинается после пробного занятия — выберите дату позже'
   if (m.includes('only an attended trial')) return 'Зачислить можно после отметки «был»'
   if (m.includes('archived')) return 'Группа в архиве'
-  if (m.includes('several students match'))
-    return 'В учениках несколько человек с этим именем и телефоном — запишите пробное через «Уже учится»'
   if (m.includes('outside the group dates')) return 'Дата начала — вне дат группы'
   if (m.includes('no tariff')) return 'На эту дату нет тарифа для группы'
   if (error.code === '42501') return 'Недостаточно прав'

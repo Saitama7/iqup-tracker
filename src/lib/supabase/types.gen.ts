@@ -1190,6 +1190,7 @@ export type Database = {
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean }
       lesson_starts_at: { Args: { p_date: string; p_start: string }; Returns: string }
       payment_time: { Args: { p_paid_on: string }; Returns: string }
+      person_name_key: { Args: { p_name: string }; Returns: string }
       record_payment: {
         Args: {
           p_amount: number
