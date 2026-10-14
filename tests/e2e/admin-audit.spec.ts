@@ -235,6 +235,7 @@ test('А10: server search «Ученик, группа, учитель…», a c
       .from('lessons')
       .insert({
         group_id: GROUP_6,
+        teacher_id: await groupTeacher(db, GROUP_6),
         lesson_date: day,
         planned_start: '20:00',
         duration_min: 60,
