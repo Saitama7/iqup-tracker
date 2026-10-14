@@ -45,10 +45,12 @@ async function markOf(lessonId: string, studentId: string) {
   return data?.status
 }
 
+// eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
 test.beforeEach(async ({}, testInfo) => {
   const n = names(testInfo)
   await cleanup([n.group], [n.warned, n.missed])
 })
+// eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
 test.afterEach(async ({}, testInfo) => {
   const n = names(testInfo)
   await cleanup([n.group], [n.warned, n.missed])
