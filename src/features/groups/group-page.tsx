@@ -18,6 +18,7 @@ import {
 } from '@/features/students/model'
 import { fillCaption } from '@/features/trials/model'
 import { EnrollDialog, type EnrollStudent } from '@/features/subscriptions/enroll-dialog'
+import { RemoveEnrollmentDialog } from '@/features/subscriptions/remove-enrollment-dialog'
 import { tariffFor } from '@/features/tariffs/current'
 import { GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
@@ -26,6 +27,7 @@ import { bishkekDate } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import { GROUPS_KEY, groupsQuery, lessonsQuery, type GroupsSource } from './api'
+import { DeleteGroupDialog } from './delete-group-dialog'
 import {
   ArchiveGroupDialog,
   CancelLessonDialog,
@@ -50,6 +52,7 @@ import { TrialCards, TrialTableRows, useGroupTrials, useTrialActions } from './g
 import { GroupStatusChip } from './parts'
 
 interface MemberRow {
+  enrollmentId: string
   studentId: string
   fullName: string
   caption: string | null
@@ -80,6 +83,7 @@ function members(
         (referrer ? `привёл ${shortName(referrer.full_name)}` : null)
       return [
         {
+          enrollmentId: e.id,
           studentId: s.id,
           fullName: s.full_name,
           caption,
@@ -109,7 +113,9 @@ function enrollCandidates(data: StudentsSource, groupId: string): EnrollStudent[
 type Dialog =
   | { kind: 'edit' }
   | { kind: 'archive' }
+  | { kind: 'delete' }
   | { kind: 'enroll' }
+  | { kind: 'remove'; row: MemberRow }
   | { kind: 'extra'; makesUpFor?: string }
   | { kind: 'cancel'; lesson: LessonRow }
   | { kind: 'substitute'; lesson: LessonRow }
@@ -172,6 +178,9 @@ export function GroupPage({ groupId }: { groupId: string }) {
   const lessonById = new Map((lessons.data ?? []).map((l) => [l.id, l]))
   const close = () => {
     setDialog(null)
+  }
+  const onRemove = (row: MemberRow) => {
+    setDialog({ kind: 'remove', row })
   }
   const onLessonAction = (action: 'cancel' | 'substitute' | 'extra', id: string) => {
     if (action === 'extra') {
@@ -251,7 +260,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
       ) : roster.length === 0 && trials.length === 0 ? (
         <p className="p-5 font-bold text-ink-muted">В группе пока нет учеников</p>
       ) : isDesktop ? (
-        <MembersTable rows={roster}>
+        <MembersTable rows={roster} onRemove={onRemove}>
           <TrialTableRows
             trials={trials}
             today={today}
@@ -261,7 +270,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
         </MembersTable>
       ) : (
         <>
-          <MembersList rows={roster} />
+          <MembersList rows={roster} onRemove={onRemove} />
           <TrialCards
             trials={trials}
             today={today}
@@ -344,6 +353,19 @@ export function GroupPage({ groupId }: { groupId: string }) {
           group={group}
           holidays={data.holidays}
           today={today}
+          teachers={data.teachers}
+          onDelete={() => {
+            setDialog({ kind: 'delete' })
+          }}
+        />
+      )}
+      {dialog?.kind === 'delete' && (
+        <DeleteGroupDialog
+          open
+          onOpenChange={close}
+          groupId={group.id}
+          groupName={group.name}
+          lessonsCount={lessons.data?.length ?? 0}
         />
       )}
       {dialog?.kind === 'archive' && (
@@ -369,6 +391,17 @@ export function GroupPage({ groupId }: { groupId: string }) {
           group={group}
           lesson={dialog.lesson}
           teachers={data.teachers}
+        />
+      )}
+      {dialog?.kind === 'remove' && students.data && (
+        <RemoveEnrollmentDialog
+          open
+          onOpenChange={close}
+          enrollmentId={dialog.row.enrollmentId}
+          studentName={dialog.row.fullName}
+          group={students.data.groups.find((g) => g.id === groupId) ?? null}
+          startDate={dialog.row.startDate}
+          groups={students.data.groups}
         />
       )}
       {dialog?.kind === 'enroll' && students.data && (
@@ -458,7 +491,30 @@ const leftClass = (r: MemberRow) =>
 const leftText = (r: MemberRow) =>
   r.left === null ? '—' : r.left < 0 ? `−${-r.left}` : `${r.left} / ${r.total ?? ''}`
 
-function MembersTable({ rows, children }: { rows: MemberRow[]; children?: ReactNode }) {
+function RemoveButton({ row, onRemove }: { row: MemberRow; onRemove: (row: MemberRow) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onRemove(row)
+      }}
+      aria-label={`Убрать из группы: ${row.fullName}`}
+      className="flex min-h-11 items-center text-xs font-extrabold whitespace-nowrap text-burned-strong"
+    >
+      Убрать из группы
+    </button>
+  )
+}
+
+function MembersTable({
+  rows,
+  children,
+  onRemove,
+}: {
+  rows: MemberRow[]
+  children?: ReactNode
+  onRemove: (row: MemberRow) => void
+}) {
   return (
     <table className="w-full min-w-[560px] border-collapse" aria-label="Ученики группы">
       <thead>
@@ -503,6 +559,7 @@ function MembersTable({ rows, children }: { rows: MemberRow[]; children?: ReactN
               >
                 Открыть
               </Link>
+              <RemoveButton row={r} onRemove={onRemove} />
             </td>
           </tr>
         ))}
@@ -512,7 +569,13 @@ function MembersTable({ rows, children }: { rows: MemberRow[]; children?: ReactN
   )
 }
 
-function MembersList({ rows }: { rows: MemberRow[] }) {
+function MembersList({
+  rows,
+  onRemove,
+}: {
+  rows: MemberRow[]
+  onRemove: (row: MemberRow) => void
+}) {
   return (
     <ul aria-label="Ученики группы">
       {rows.map((r) => (
@@ -537,6 +600,9 @@ function MembersList({ rows }: { rows: MemberRow[] }) {
               {leftText(r)}
             </span>
           </Link>
+          <div className="px-4 pb-1">
+            <RemoveButton row={r} onRemove={onRemove} />
+          </div>
         </li>
       ))}
     </ul>

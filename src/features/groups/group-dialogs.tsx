@@ -34,8 +34,10 @@ import {
   type LessonRow,
   type TeacherRow,
 } from './model'
+import { GroupTeacherSection } from './group-teacher-section'
 import { Segmented, WeekdayPicker } from './parts'
 import { TEACHER_GROUPS_KEY } from './teacher-api'
+import { changeGroupTeacher } from './undo-api'
 
 // А4 actions. Every write is an RPC / RLS-checked update; the dialogs only collect input.
 
@@ -375,12 +377,17 @@ export function EditGroupDialog({
   group,
   holidays,
   today,
+  teachers,
+  onDelete,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   group: GroupRow
   holidays: readonly string[]
   today: string
+  teachers: readonly TeacherRow[]
+  /** «Удалить группу» (#73) — the page closes this dialog and opens the confirmation. */
+  onDelete: () => void
 }) {
   const ids = {
     start: useId(),
@@ -403,6 +410,8 @@ export function EditGroupDialog({
   const [from, setFrom] = useState(
     formatDateRu(group.start_date > today ? group.start_date : today),
   )
+  const [teacherId, setTeacherId] = useState(group.teacher_id)
+  const [teacherFrom, setTeacherFrom] = useState(formatDateRu(group.start_date))
   const [error, setError] = useState<string | null>(null)
 
   const holidaySet = new Set(holidays)
@@ -419,6 +428,12 @@ export function EditGroupDialog({
   const mutation = useMutation({
     mutationFn: async () => {
       if (!startIso) throw new Error('Старт группы — дата в формате ДД.ММ.ГГГГ')
+      // the teacher goes first: «с даты» is counted against the start as it is now
+      if (teacherId !== group.teacher_id) {
+        const from = parseDateRu(teacherFrom)
+        if (!from) throw new Error('«С какой даты» — дата в формате ДД.ММ.ГГГГ')
+        await changeGroupTeacher(group.id, teacherId, from)
+      }
       const moved = startIso !== group.start_date ? await setGroupStart(group.id, startIso) : null
       if (status !== group.status) await setGroupStatus(group.id, status)
       if (!scheduleChanged) return { moved, rescheduled: null }
@@ -428,16 +443,20 @@ export function EditGroupDialog({
     },
     onSettled: async () => {
       // the start may be saved even if the schedule step fails — show what is in the database
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: lessonsKey(group.id) }),
-        queryClient.invalidateQueries({ queryKey: GROUPS_KEY }),
-        queryClient.invalidateQueries({ queryKey: STUDENTS_KEY }),
-        queryClient.invalidateQueries({ queryKey: [TEACHER_GROUPS_KEY] }),
-      ])
+      // a new teacher changes payroll, «Сегодня» and «Мой месяц» — refresh everything on screen
+      if (teacherId !== group.teacher_id) await queryClient.invalidateQueries()
+      else
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: lessonsKey(group.id) }),
+          queryClient.invalidateQueries({ queryKey: GROUPS_KEY }),
+          queryClient.invalidateQueries({ queryKey: STUDENTS_KEY }),
+          queryClient.invalidateQueries({ queryKey: [TEACHER_GROUPS_KEY] }),
+        ])
     },
     onSuccess: ({ moved, rescheduled }) => {
       toast.success(
         [
+          teacherId !== group.teacher_id ? 'Учитель группы изменён' : null,
           moved && startIso
             ? `Старт группы — ${formatDayMonth(startIso)}` +
               (moved.created > 0 ? ` · добавлено занятий: ${moved.created}` : '') +
@@ -510,6 +529,20 @@ export function EditGroupDialog({
             {startNote}
           </p>
         )}
+        <GroupTeacherSection
+          group={group}
+          teachers={teachers}
+          teacherId={teacherId}
+          from={teacherFrom}
+          onTeacherId={(id) => {
+            setTeacherId(id)
+            setError(null)
+          }}
+          onFrom={(v) => {
+            setTeacherFrom(v)
+            setError(null)
+          }}
+        />
         <fieldset className="flex min-w-0 flex-col gap-3.5 rounded-2xl border-[1.5px] border-line-strong p-3.5">
           <legend className="px-1.5 text-[13px] font-extrabold">Новое расписание</legend>
           <WeekdayPicker id={ids.days} value={weekdays} onChange={setWeekdays} />
@@ -556,6 +589,9 @@ export function EditGroupDialog({
         </fieldset>
         {error && <ErrorText>{error}</ErrorText>}
         <SubmitButton pending={mutation.isPending}>Сохранить</SubmitButton>
+        <SubmitButton variant="danger" onClick={onDelete}>
+          Удалить группу
+        </SubmitButton>
       </form>
     </FormDialog>
   )

@@ -8,6 +8,7 @@ import { balancesQuery, studentPaymentsQuery, type PaymentRow } from '@/features
 import { availableLessons, totalDebt } from '@/features/payments/balance'
 import { EnrollDialog, type EnrollStudent } from '@/features/subscriptions/enroll-dialog'
 import { EnrollmentStartDialog } from '@/features/subscriptions/enrollment-start-dialog'
+import { RemoveEnrollmentDialog } from '@/features/subscriptions/remove-enrollment-dialog'
 import { formatSom } from '@/features/tariffs/model'
 import { cardClass, numClass, tdClass, thClass } from '@/features/tariffs/parts'
 import { useNow } from '@/lib/now'
@@ -107,6 +108,7 @@ export function StudentPage({ studentId }: { studentId: string }) {
   const [editing, setEditing] = useState(false)
   const [enrolling, setEnrolling] = useState(false)
   const [editingStart, setEditingStart] = useState<EnrollmentView | null>(null)
+  const [removing, setRemoving] = useState<EnrollmentView | null>(null)
 
   if (query.isPending) {
     return <div className={cn(cardClass, 'h-64 animate-pulse')} aria-label="Загрузка" />
@@ -135,6 +137,7 @@ export function StudentPage({ studentId }: { studentId: string }) {
       setEnrolling(true)
     },
     onEditStart: setEditingStart,
+    onRemove: setRemoving,
   }
   const records = attendance.data ?? []
   const payments = {
@@ -175,6 +178,19 @@ export function StudentPage({ studentId }: { studentId: string }) {
           enrollmentEnd={editingStart.endDate}
         />
       )}
+      {removing && (
+        <RemoveEnrollmentDialog
+          open
+          onOpenChange={() => {
+            setRemoving(null)
+          }}
+          enrollmentId={removing.enrollmentId}
+          studentName={view.student.full_name}
+          group={removing.group}
+          startDate={removing.startDate}
+          groups={students.data?.groups ?? []}
+        />
+      )}
       {enrolling && (
         <EnrollDialog
           open={enrolling}
@@ -197,6 +213,7 @@ interface ScreenProps {
   onEdit: () => void
   onEnroll: () => void
   onEditStart: (e: EnrollmentView) => void
+  onRemove: (e: EnrollmentView) => void
 }
 
 function headerCaption(view: StudentView): string {
@@ -235,6 +252,7 @@ function DesktopStudent({
   onEdit,
   onEnroll,
   onEditStart,
+  onRemove,
 }: ScreenProps) {
   const s = view.student
   return (
@@ -280,6 +298,9 @@ function DesktopStudent({
                 today={today}
                 onEditStart={() => {
                   onEditStart(e)
+                }}
+                onRemove={() => {
+                  onRemove(e)
                 }}
               />
             ))
@@ -450,6 +471,7 @@ function MobileStudent({
   onEdit,
   onEnroll,
   onEditStart,
+  onRemove,
 }: ScreenProps) {
   const s = view.student
   const navigate = useNavigate()
@@ -570,6 +592,9 @@ function MobileStudent({
             today={today}
             onEditStart={() => {
               onEditStart(e)
+            }}
+            onRemove={() => {
+              onRemove(e)
             }}
           />
         ))

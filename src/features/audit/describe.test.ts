@@ -610,3 +610,85 @@ describe('dates moved after the fact (#60)', () => {
     )
   })
 })
+
+describe('admin undo (#73)', () => {
+  const OTHER_GROUP = 'b0000000-0000-4000-8000-000000000004'
+  const ASEL = 'f0000000-0000-4000-8000-000000000002'
+  const undo: AuditLookups = {
+    ...lookups,
+    teachers: { [GULZAT]: 'Гульзат Асанова', [ASEL]: 'Асель Нурова' },
+    groups: { ...lookups.groups, [OTHER_GROUP]: { name: '9 класс А', subject: 'Физика' } },
+  }
+  const e = { id: ENROLLMENT, student_id: ALINA, group_id: GROUP, start_date: '2026-09-01' }
+
+  it('removed enrollment is marked as a mistake, without a service reason note', () => {
+    const r = row({
+      entity: 'enrollments',
+      entityId: ENROLLMENT,
+      action: 'delete',
+      before: e,
+      reason: 'remove_enrollment',
+    })
+    expect(text(r, undo)).toBe(
+      'Алина Исакова — зачисление в Математика · 8 класс Б удалено (ошибочное)',
+    )
+    expect(describeAuditRow(r, undo).note).toBeNull()
+  })
+
+  it('transferred enrollment names both groups', () => {
+    expect(
+      text(
+        row({
+          entity: 'enrollments',
+          entityId: ENROLLMENT,
+          before: e,
+          after: { ...e, group_id: OTHER_GROUP },
+          reason: 'transfer_enrollment',
+        }),
+        undo,
+      ),
+    ).toBe('Алина Исакова — переведён(а) из Математика · 8 класс Б в Физика · 9 класс А')
+  })
+
+  it('group teacher change carries the date from the reason', () => {
+    const g = { id: GROUP, name: '8 класс Б', teacher_id: GULZAT }
+    const r = row({
+      entity: 'groups',
+      entityId: GROUP,
+      before: g,
+      after: { ...g, teacher_id: ASEL },
+      reason: 'change_group_teacher:2026-09-01',
+    })
+    expect(text(r, undo)).toBe(
+      'учитель группы Математика · 8 класс Б сменён с Гульзат Асанова на Асель Нурова с 01.09',
+    )
+    expect(describeAuditRow(r, undo).note).toBeNull()
+  })
+
+  it('deleted group', () => {
+    expect(
+      text(
+        row({
+          entity: 'groups',
+          entityId: 'b0000000-0000-4000-8000-0000000000ff',
+          action: 'delete',
+          before: { name: 'Ошибочная группа' },
+          reason: 'delete_group',
+        }),
+        undo,
+      ),
+    ).toBe('группа Ошибочная группа удалена')
+  })
+
+  it('lesson teacher moved', () => {
+    expect(
+      text(
+        row({
+          before: { ...lesson, teacher_id: GULZAT },
+          after: { ...lesson, teacher_id: ASEL },
+        }),
+        undo,
+      ),
+    ).toBe('Занятие 10.10: учитель Гульзат Асанова → Асель Нурова')
+  })
+})
