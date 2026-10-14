@@ -142,13 +142,26 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   const roster = useMemo(() => lessonRoster(sheet.enrollments, sheet, sheet.marks), [sheet])
   const isAdmin = roles.includes('admin')
   // Back to the screen the sheet was opened from, with its tab / month / filters (#72, #76, #89).
-  // Replace: system «назад» never reopens the sheet just confirmed or corrected.
+  // With an in-app history — history.back(), like «назад»: no second entry of the source, the
+  // next system «назад» leaves it. The entry it lands on is replaced by the exact source when
+  // they differ (the anchor of the next unconfirmed lesson, another screen before the sheet).
+  // Without history (reload, a direct link) — replace the sheet by the source.
   const source = lessonSource(search)
   const returnToSource = () => {
-    // no source: a teacher — «Сегодня»; an admin without the teacher role has none — back to the list
-    if (source || roles.includes('teacher'))
-      void navigate({ ...lessonReturn(search), replace: true })
-    else router.history.back()
+    // no source: a teacher — «Сегодня»; an admin without the teacher role — the dashboard
+    const target = source ?? (roles.includes('teacher') ? lessonReturn(search) : { to: '/admin' })
+    if (!router.history.canGoBack()) {
+      void navigate({ ...target, replace: true })
+      return
+    }
+    const sheetPath = router.history.location.pathname
+    const { href } = router.buildLocation(target)
+    const unsubscribe = router.history.subscribe(({ location }) => {
+      if (location.pathname === sheetPath) return
+      unsubscribe()
+      if (location.href !== href) void navigate({ ...target, replace: true })
+    })
+    router.history.back()
   }
   const corrections = useCorrections(sheet, roster, isAdmin, source ? returnToSource : undefined)
   usePresetsRealtime(sheet.status === 'planned')

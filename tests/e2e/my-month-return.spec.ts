@@ -177,6 +177,7 @@ test('>7 проведённых новее + старые неподтвержд
   try {
     await pinClock(page, '2026-10-08T14:24:00+06:00')
     await login(page, GULZAT)
+    await expect(page).toHaveURL(/\/today$/)
     await page.goto('/my-month?month=2026-09')
     // not behind «ещё N занятий»
     await expect(confirmOf(olderId)).toBeVisible()
@@ -198,8 +199,9 @@ test('>7 проведённых новее + старые неподтвержд
     })
 
     // replace: system «назад» does not reopen the confirmed lesson
+    // history.back(): no second entry of «Мой месяц» — system «назад» leaves to «Сегодня»
     await page.goBack()
-    await expect(page).not.toHaveURL(new RegExp(`/lessons/${olderId}`))
+    await expect(page).toHaveURL(/\/today$/)
   } finally {
     await removeLesson(db, group, older)
     await removeLesson(db, group, newer)
@@ -216,6 +218,7 @@ test('Занятие, открытое со страницы группы, по�
   try {
     await pinClock(page, '2026-10-08T14:24:00+06:00')
     await login(page, GULZAT)
+    await expect(page).toHaveURL(/\/today$/)
     await page.goto(`/groups/${GROUP_8A}`)
     await page.getByRole('tab', { name: 'Занятия' }).click()
     await page.locator(`main a[href^="/lessons/${lessonId}"]`).click()
@@ -227,8 +230,9 @@ test('Занятие, открытое со страницы группы, по�
     // #89: the same «Занятия» tab
     await expect(page).toHaveURL(new RegExp(`/groups/${GROUP_8A}\\?tab=lessons$`))
 
+    // history.back(): no second entry of the group — system «назад» leaves to «Сегодня»
     await page.goBack()
-    await expect(page).not.toHaveURL(new RegExp(`/lessons/${lessonId}`))
+    await expect(page).toHaveURL(/\/today$/)
   } finally {
     await removeLesson(db, GROUP_8A, '2026-10-07')
   }

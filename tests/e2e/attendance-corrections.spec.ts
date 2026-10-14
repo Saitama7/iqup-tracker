@@ -81,6 +81,7 @@ test('админ исправляет «был → не был» с причин
   const { groupId, studentId, lessonId } = await heldLesson(testInfo)
 
   await login(page, KANYKEI)
+  await expect(page).toHaveURL(/\/admin$/)
   await page.goto(`/admin/groups/${groupId}`)
   await page.getByRole('tab', { name: 'Занятия' }).click()
   await page.getByRole('link', { name: /^Отметки: / }).click()
@@ -109,6 +110,10 @@ test('админ исправляет «был → не был» с причин
   await expect(page).toHaveURL(new RegExp(`/admin/groups/${groupId}\\?tab=lessons$`))
   await expect(page.getByRole('tab', { name: 'Занятия' })).toHaveAttribute('aria-selected', 'true')
   expect(await markOf(lessonId, studentId)).toBe('absent_burned')
+  // history.back(), not a second entry of the group: system «назад» leaves it — to the dashboard
+  // the group was opened from
+  await page.goBack()
+  await expect(page).toHaveURL(/\/admin$/)
 
   const { data: journal } = await service()
     .from('audit_log')
