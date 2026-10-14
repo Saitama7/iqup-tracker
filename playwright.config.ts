@@ -37,7 +37,8 @@ export default defineConfig({
   webServer: {
     command: `pnpm build && pnpm preview --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
-    env: supabaseEnv(),
+    // a shell NODE_ENV=test (for vitest) would build dev React with StrictMode — not what CI tests (#68)
+    env: { ...supabaseEnv(), NODE_ENV: 'production' },
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },
