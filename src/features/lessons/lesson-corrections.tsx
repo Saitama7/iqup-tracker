@@ -1,6 +1,7 @@
 // #74 · A held lesson on У3 / УД2: the admin corrects its marks («Исправить отметки», reason
 // required) and decides the teacher's request («Применить» / «Отклонить»); the teacher asks to
-// correct them («Попросить исправить») and sees the request's status. Closed period — nothing.
+// correct them («Попросить исправить») and sees the request's status. Closed period — no changes;
+// a request left open there can only be rejected (reject_correction_request works on it).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId, useState } from 'react'
 import { toast } from 'sonner'
@@ -88,8 +89,12 @@ export function useCorrections(
   })
   const apply = useMutation({
     mutationFn: applyRequest,
-    onSuccess: () => {
-      done('Запрос применён — отметки исправлены')
+    onSuccess: (changed) => {
+      done(
+        changed > 0
+          ? 'Запрос применён — отметки исправлены'
+          : 'Запрос закрыт — отметки уже исправлены',
+      )
     },
     onError: failed('Не удалось применить запрос'),
   })
@@ -168,9 +173,12 @@ export function HeldPanel({ c }: { c: Corrections }) {
   const noteId = useId()
   if (c.locked) {
     return (
-      <p className="rounded-2xl bg-line px-4 py-3 text-center text-sm font-extrabold text-ink-muted">
-        Период закрыт — отметки не меняются. Исправления — корректировкой ЗП
-      </p>
+      <div className="flex flex-col gap-2.5">
+        {c.isAdmin && c.pending && <RequestReview c={c} pending={c.pending} />}
+        <p className="rounded-2xl bg-line px-4 py-3 text-center text-sm font-extrabold text-ink-muted">
+          Период закрыт — отметки не меняются. Исправления — корректировкой ЗП
+        </p>
+      </div>
     )
   }
 
@@ -254,14 +262,19 @@ function RequestReview({
   const [reason, setReason] = useState('')
   const reasonId = useId()
   const { request } = pending
+  // Fixed by hand meanwhile: nothing left to change — «Закрыть запрос» = apply → 0 (И52).
+  const fixed = pending.changes.length === 0
   return (
     <section
       aria-label="Запрос учителя"
       className="flex flex-col gap-2 rounded-2xl bg-warn-soft p-3.5 text-warn-strong"
     >
       <h3 className="text-sm font-extrabold">Учитель просит исправить отметки</h3>
-      <Changes changes={pending.changes} />
+      <Changes changes={pending.changes} empty="Уже исправлено — отметки совпадают с запросом" />
       <p className="text-[13px] font-bold">«{request.comment}»</p>
+      {c.locked && (
+        <p className="text-[13px] font-extrabold">Период закрыт — можно только отклонить</p>
+      )}
       {rejecting ? (
         <>
           <label htmlFor={reasonId} className="text-xs font-extrabold">
@@ -301,7 +314,7 @@ function RequestReview({
           </div>
         </>
       ) : (
-        <div className="grid grid-cols-2 gap-2">
+        <div className={cn('grid gap-2', !c.locked && 'grid-cols-2')}>
           <button
             type="button"
             className={cn(outline, 'text-burned-strong')}
@@ -312,16 +325,18 @@ function RequestReview({
           >
             Отклонить
           </button>
-          <button
-            type="button"
-            className={primary}
-            disabled={c.deciding}
-            onClick={() => {
-              c.apply(request.id)
-            }}
-          >
-            Применить
-          </button>
+          {!c.locked && (
+            <button
+              type="button"
+              className={primary}
+              disabled={c.deciding}
+              onClick={() => {
+                c.apply(request.id)
+              }}
+            >
+              {fixed ? 'Закрыть запрос' : 'Применить'}
+            </button>
+          )}
         </div>
       )}
     </section>

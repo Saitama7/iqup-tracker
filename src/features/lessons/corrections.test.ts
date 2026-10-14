@@ -58,6 +58,27 @@ describe('requests', () => {
     ])
   })
 
+  it('drops marks already fixed by hand; all fixed → empty («Уже исправлено»)', () => {
+    const request = {
+      marks: [
+        { student_id: 's1', status: 'absent_burned' as const },
+        { student_id: 's2', status: 'absent_frozen' as const },
+      ],
+    }
+    const partly = new Map<string, Mark>([
+      ['s1', 'absent_burned'],
+      ['s2', 'absent_burned'],
+    ])
+    expect(requestChanges(request, roster, partly)).toEqual([
+      { studentId: 's2', fullName: 'Тимур А.', from: 'absent_burned', to: 'absent_frozen' },
+    ])
+    const fixed = new Map<string, Mark>([
+      ['s1', 'absent_burned'],
+      ['s2', 'absent_frozen'],
+    ])
+    expect(requestChanges(request, roster, fixed)).toEqual([])
+  })
+
   it('the newest request and its status for the teacher', () => {
     const old = { ...base, status: 'rejected' as const, created_at: '2026-10-14T05:00:00Z' }
     const fresh = { ...base, status: 'pending' as const, created_at: '2026-10-14T06:00:00Z' }

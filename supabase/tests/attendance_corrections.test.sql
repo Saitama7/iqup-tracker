@@ -2,7 +2,7 @@
 -- correct them (attendance_correction_requests), the admin applies / rejects (0021).
 -- Self-contained fixtures in September 2004 (no seed holidays), rolled back.
 begin;
-select plan(46);
+select plan(56);
 
 -- ─── Seed payroll is untouched ──────────────────────────────────────────────
 select results_eq(
@@ -312,6 +312,93 @@ select results_eq(
   $$ select status, decision_comment from public.attendance_correction_requests order by created_at, status $$,
   $$ values ('approved'::text, null::text), ('rejected'::text, 'Не предупреждала'::text) $$,
   'teacher: sees own requests with the decision'
+);
+
+-- ─── Frozen → present on an exhausted subscription; a new mark ─────────────
+-- Student three in G1: subscription A (1 lesson) used on 2 Sep, frozen on 9 Sep, no mark on 7 Sep;
+-- subscription B (12 lessons) bought later.
+reset role;
+reset request.jwt.claims;
+insert into public.students (id, full_name) values ('e7400000-0000-4000-8000-000000000004', 'Student 74 three');
+insert into public.enrollments (id, student_id, group_id, start_date) values
+  ('f7400000-0000-4000-8000-000000000004', 'e7400000-0000-4000-8000-000000000004', 'd7400000-0000-4000-8000-000000000001', '2004-09-02');
+insert into public.subscriptions (id, enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at) values
+  ('c7400000-0000-4000-8000-0000000000a4', 'f7400000-0000-4000-8000-000000000004',
+   (select id from public.tariffs where group_type = 'mini' and valid_from = '1991-01-01'), 1, 300, 300, '2004-09-02'),
+  ('c7400000-0000-4000-8000-0000000000b4', 'f7400000-0000-4000-8000-000000000004',
+   (select id from public.tariffs where group_type = 'mini' and valid_from = '1991-01-01'), 12, 3600, 3600, '2004-09-08');
+insert into public.attendance (lesson_id, student_id, subscription_id, status)
+select l.id, 'e7400000-0000-4000-8000-000000000004', 'c7400000-0000-4000-8000-0000000000a4', s.status::public.attendance_status
+from l74 l join (values ('2004-09-02'::date, 'present'), ('2004-09-09'::date, 'absent_frozen')) as s(d, status)
+  on l.lesson_date = s.d
+where l.grp = 'S74 G1';
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"a7400000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"roles":["admin"]}}';
+select is(
+  public.correct_attendance((select id from l74 where grp = 'S74 G1' and lesson_date = '2004-09-09'),
+    '[{"student_id":"e7400000-0000-4000-8000-000000000004","status":"present"}]', 'пришёл'),
+  1, 'admin: frozen → present on an exhausted subscription'
+);
+select is(
+  (select subscription_id from public.attendance
+   where lesson_id = (select id from l74 where grp = 'S74 G1' and lesson_date = '2004-09-09')
+     and student_id = 'e7400000-0000-4000-8000-000000000004'),
+  'c7400000-0000-4000-8000-0000000000b4'::uuid, 'frozen → present: charged to the next subscription'
+);
+select results_eq(
+  $$ select subscription_id, lessons_left from public.v_subscription_balances
+     where subscription_id in ('c7400000-0000-4000-8000-0000000000a4', 'c7400000-0000-4000-8000-0000000000b4')
+     order by lessons_total $$,
+  $$ values ('c7400000-0000-4000-8000-0000000000a4'::uuid, 0), ('c7400000-0000-4000-8000-0000000000b4'::uuid, 11) $$,
+  'balance: the used-up subscription is not overdrawn, the next one is charged'
+);
+select is(
+  public.correct_attendance((select id from l74 where grp = 'S74 G1' and lesson_date = '2004-09-07'),
+    '[{"student_id":"e7400000-0000-4000-8000-000000000004","status":"present"}]', 'забыли отметить'),
+  1, 'admin: a mark for an enrolled student without one is inserted'
+);
+select results_eq(
+  $$ select a.status::text, a.subscription_id, a.consumes_credit from public.attendance a
+     where a.lesson_id = (select id from l74 where grp = 'S74 G1' and lesson_date = '2004-09-07')
+       and a.student_id = 'e7400000-0000-4000-8000-000000000004' $$,
+  $$ values ('present'::text, 'c7400000-0000-4000-8000-0000000000b4'::uuid, true) $$,
+  'new mark: present, charged to the active subscription'
+);
+select ok(
+  exists (select 1 from public.audit_log where entity = 'attendance' and action = 'insert'
+          and reason = 'забыли отметить' and kind = 'retro'),
+  'new mark: journal insert row with the reason'
+);
+
+-- ─── Apply after the period is closed ──────────────────────────────────────
+set local request.jwt.claims = '{"sub":"a7400000-0000-4000-8000-000000000002","role":"authenticated","app_metadata":{"roles":["teacher"]}}';
+insert into public.attendance_correction_requests (lesson_id, marks, comment)
+values ((select id from l74 where grp = 'S74 G1' and lesson_date = '2004-09-07'),
+        '[{"student_id":"e7400000-0000-4000-8000-000000000002","status":"absent_burned"}]', 'не пришёл');
+reset role;
+reset request.jwt.claims;
+update public.lessons set is_locked = true where id = (select id from l74 where grp = 'S74 G1' and lesson_date = '2004-09-07');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"a7400000-0000-4000-8000-000000000001","role":"authenticated","app_metadata":{"roles":["admin"]}}';
+select throws_ok(
+  $$ select public.apply_correction_request((select id from public.attendance_correction_requests where status = 'pending')) $$,
+  '23514', null, 'apply: refused once the period is closed'
+);
+select results_eq(
+  $$ select r.status, a.status::text from public.attendance_correction_requests r
+     join public.attendance a on a.lesson_id = r.lesson_id and a.student_id = 'e7400000-0000-4000-8000-000000000002'
+     where r.comment = 'не пришёл' $$,
+  $$ values ('pending'::text, 'present'::text) $$,
+  'apply refused: the request stays pending, the mark stays'
+);
+select lives_ok(
+  $$ select public.reject_correction_request((select id from public.attendance_correction_requests where status = 'pending'), 'Период закрыт') $$,
+  'reject: works in a closed period'
+);
+select is(
+  (select count(*)::integer from public.attendance_correction_requests where status = 'pending'),
+  0, 'closed period: no request is left hanging'
 );
 
 reset role;

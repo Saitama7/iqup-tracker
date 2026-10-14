@@ -45,18 +45,22 @@ export interface CorrectionRequest {
   decision_comment: string | null
 }
 
-/** A request's proposed marks against the saved ones («было → стало»); students gone from the roster by id. */
+/**
+ * A request's proposed marks against the saved ones («было → стало»); students gone from the roster
+ * by id. Marks already equal to the saved ones (the admin fixed them by hand meanwhile) are dropped —
+ * empty → «Уже исправлено».
+ */
 export function requestChanges(
   request: Pick<CorrectionRequest, 'marks'>,
   roster: readonly Pick<RosterRow, 'studentId' | 'fullName'>[],
   saved: ReadonlyMap<string, Mark>,
 ): MarkChange[] {
-  return request.marks.map((m) => ({
-    studentId: m.student_id,
-    fullName: roster.find((r) => r.studentId === m.student_id)?.fullName ?? 'Ученик',
-    from: saved.get(m.student_id) ?? null,
-    to: m.status,
-  }))
+  return request.marks.flatMap((m) => {
+    const from = saved.get(m.student_id) ?? null
+    if (from === m.status) return []
+    const fullName = roster.find((r) => r.studentId === m.student_id)?.fullName ?? 'Ученик'
+    return [{ studentId: m.student_id, fullName, from, to: m.status }]
+  })
 }
 
 /** The newest request of the lesson (requests come newest first). */

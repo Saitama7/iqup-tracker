@@ -4,10 +4,13 @@ import { Link } from '@tanstack/react-router'
 import { firstName } from '@/components/shell/shell-parts'
 import type { PendingRequest } from '@/features/lessons/corrections-api'
 
-/** «Гульзат просит исправить отметки: Математика · 8 класс А, 03.10 в 09:00». */
+const LOCKED_NOTE = 'период закрыт — можно только отклонить'
+
+/** «Гульзат просит исправить отметки: Математика · 8 класс А, 03.10 в 09:00[ · период закрыт — …]». */
 export function requestLine(r: PendingRequest): string {
   const day = `${r.lessonDate.slice(8, 10)}.${r.lessonDate.slice(5, 7)}`
-  return `${firstName(r.teacher)} просит исправить отметки: ${r.subject} · ${r.group}, ${day} в ${r.start.slice(0, 5)}`
+  const line = `${firstName(r.teacher)} просит исправить отметки: ${r.subject} · ${r.group}, ${day} в ${r.start.slice(0, 5)}`
+  return r.locked ? `${line} · ${LOCKED_NOTE}` : line
 }
 
 /** АМ1: items of the «Требует внимания» list. */

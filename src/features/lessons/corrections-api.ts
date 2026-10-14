@@ -63,6 +63,8 @@ export interface PendingRequest {
   start: string
   group: string
   subject: string
+  /** The lesson's period is closed: only «Отклонить» is possible. */
+  locked: boolean
 }
 
 const pendingSchema = z.object({
@@ -73,6 +75,7 @@ const pendingSchema = z.object({
   lesson: z.object({
     lesson_date: z.string(),
     planned_start: z.string(),
+    is_locked: z.boolean(),
     group: z.object({ name: z.string(), subject: subjectName }),
   }),
 })
@@ -85,7 +88,7 @@ export const pendingRequestsQuery = () =>
       const { data, error } = await supabase
         .from('attendance_correction_requests')
         .select(
-          'id, lesson_id, created_at, teacher:teachers(full_name), lesson:lessons(lesson_date, planned_start, group:groups(name, subject:subjects(name)))',
+          'id, lesson_id, created_at, teacher:teachers(full_name), lesson:lessons(lesson_date, planned_start, is_locked, group:groups(name, subject:subjects(name)))',
         )
         .eq('status', 'pending')
         .order('created_at')
@@ -102,6 +105,7 @@ export const pendingRequestsQuery = () =>
           start: r.lesson.planned_start,
           group: r.lesson.group.name,
           subject: r.lesson.group.subject,
+          locked: r.lesson.is_locked,
         }))
     },
     refetchInterval: POLL_MS,

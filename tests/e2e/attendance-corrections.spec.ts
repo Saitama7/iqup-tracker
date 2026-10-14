@@ -74,7 +74,9 @@ test.afterEach(async ({}, testInfo) => {
   await cleanup([n.group], [n.student])
 })
 
-test('админ исправляет «был → не был» с причиной из страницы группы', async ({ page }, testInfo) => {
+test('админ исправляет «был → не был» с причиной из страницы группы', async ({
+  page,
+}, testInfo) => {
   const n = names(testInfo)
   const { groupId, studentId, lessonId } = await heldLesson(testInfo)
 
@@ -85,7 +87,10 @@ test('админ исправляет «был → не был» с причин
   await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}`))
 
   const row = page.getByRole('listitem', { name: n.student })
-  await expect(row.getByRole('button', { name: 'Был', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(row.getByRole('button', { name: 'Был', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
   await expect(row.getByRole('button', { name: 'Не был' })).toBeDisabled()
 
   await page.getByRole('button', { name: 'Исправить отметки' }).click()
