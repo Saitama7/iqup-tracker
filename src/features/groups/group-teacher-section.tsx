@@ -4,7 +4,8 @@ import { DateInput } from '@/components/ui/date-picker'
 import { firstName } from '@/features/students/model'
 import { NativeSelect } from '@/features/students/parts'
 import { Field, inputClass } from '@/features/tariffs/parts'
-import { parseDateRu } from '@/lib/time'
+import { useNow } from '@/lib/now'
+import { bishkekDate, parseDateRu } from '@/lib/time'
 import { teacherPreviewQuery } from './undo-api'
 import type { GroupRow, TeacherRow } from './model'
 
@@ -34,6 +35,7 @@ export function GroupTeacherSection({
   onTeacherId: (id: string) => void
   onFrom: (value: string) => void
 }) {
+  const today = bishkekDate(useNow())
   const ids = { teacher: useId(), from: useId(), hint: useId() }
   const fromIso = parseDateRu(from)
   const differs = teacherId !== group.teacher_id
@@ -68,6 +70,7 @@ export function GroupTeacherSection({
               id={ids.from}
               className={inputClass}
               value={from}
+              max={today}
               aria-invalid={!fromIso || undefined}
               aria-describedby={ids.hint}
               onChange={onFrom}
@@ -75,7 +78,7 @@ export function GroupTeacherSection({
           </Field>
           <p id={ids.hint} className="-mt-2 text-xs font-bold text-ink-muted">
             По умолчанию — старт группы: ошибочное назначение исправится целиком. Занятия до этой
-            даты остаются у прежнего учителя.
+            даты остаются у прежнего учителя. Дата — не позже сегодня.
           </p>
           {!fromIso ? (
             <p role="status" className={noteClass}>

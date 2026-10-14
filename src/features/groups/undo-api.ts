@@ -10,6 +10,8 @@ export function teacherChangeErrorMessage(error: { code?: string; message?: stri
   if (error.code === '42501') return 'Учителя группы меняет администратор'
   if (error.code === '23514' && m.includes('closed period'))
     return 'С этой даты есть занятия в закрытом периоде — выберите дату позже'
+  if (error.code === '23514' && m.includes('in the future'))
+    return 'Дата смены учителя — не позже сегодня'
   if (error.code === '23503') return 'Группа или учитель не найдены'
   return 'Не удалось сменить учителя. Проверьте интернет и попробуйте ещё раз.'
 }

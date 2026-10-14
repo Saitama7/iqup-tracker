@@ -698,6 +698,7 @@ begin
   with gone as (
     delete from public.attendance a
     where a.id in (select m.id from public.enrollment_attendance(p_enrollment_id) m)
+      and a.status = 'absent_frozen' -- a «был» committed meanwhile (confirm_lesson) is never deleted
     returning 1
   )
   select count(*) into v_marks from gone;
@@ -784,7 +785,8 @@ begin
   perform set_config('iqup.audit_reason', 'transfer_enrollment', true);
 
   delete from public.attendance a
-  where a.id in (select m.id from public.enrollment_attendance(p_enrollment_id) m);
+  where a.id in (select m.id from public.enrollment_attendance(p_enrollment_id) m)
+    and a.status = 'absent_frozen'; -- a «был» committed meanwhile (confirm_lesson) is never deleted
 
   update public.enrollments set group_id = p_group_id, start_date = v_start where id = p_enrollment_id;
   update public.subscriptions s
@@ -861,6 +863,12 @@ begin
     raise exception 'teacher % not found', p_teacher_id using errcode = 'foreign_key_violation';
   end if;
   v_from := coalesce(p_from, v_group.start_date);
+
+  -- groups.teacher_id switches at once, so a future date would hand lessons regenerated before it
+  -- (reschedule / extra lesson / earlier start) to the new teacher — only today or earlier.
+  if v_from > public.bishkek_today() then
+    raise exception 'teacher change date % is in the future', v_from using errcode = 'check_violation';
+  end if;
 
   if exists (
     select 1 from public.lessons l

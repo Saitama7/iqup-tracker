@@ -2,7 +2,7 @@
 -- change a group's teacher from a date, delete a group; refusals, closed periods, journal, access.
 -- Self-contained fixtures in September 2003 (no seed holidays), rolled back.
 begin;
-select plan(74);
+select plan(75);
 
 -- ─── Seed payroll before anything (lessons.teacher_id backfill keeps the sums) ──
 select results_eq(
@@ -359,6 +359,10 @@ select results_eq(
 select lives_ok(
   $$ select public.change_group_teacher('d7300000-0000-4000-8000-000000000007', 'b7300000-0000-4000-8000-000000000002', '2003-09-24') $$,
   'G7 is B''s again from 24 Sep'
+);
+select throws_ok(
+  $$ select public.change_group_teacher('d7300000-0000-4000-8000-000000000007', 'b7300000-0000-4000-8000-000000000001', public.bishkek_today() + 1) $$,
+  '23514', null, 'a future change date is refused (regenerated lessons would go to the new teacher)'
 );
 
 -- ─── Teacher access by lessons.teacher_id ───────────────────────────────────
