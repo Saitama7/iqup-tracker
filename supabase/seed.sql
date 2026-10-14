@@ -368,3 +368,10 @@ cross join lateral (
 ) l;
 
 set session_replication_role = origin;
+
+-- After-school plans (#82): the prod migration (0099) gives every current after-school student the
+-- default plan — group weekdays × 3 h from the enrollment start; the seed mirrors it (triggers off, no
+-- journal rows). Their September marks stay on the 20-lesson packages — payroll sums do not move.
+set session_replication_role = replica;
+select public.afterschool_backfill_plans();
+set session_replication_role = origin;

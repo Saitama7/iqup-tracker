@@ -195,7 +195,8 @@ select lives_ok(
   'admin buys a new subscription with its payment'
 );
 select results_eq(
-  $$ select b.paid_lessons, b.carried_in, b.lessons_used, b.debt_lessons, b.lessons_left, b.is_current
+  $$ select b.paid_lessons::integer, b.carried_in::integer, b.lessons_used::integer, b.debt_lessons::integer,
+            b.lessons_left::integer, b.is_current
      from public.v_student_balance b
      join public.subscriptions s on s.id = b.subscription_id
      where s.enrollment_id = 'c4700000-0000-4000-8000-000000000002'

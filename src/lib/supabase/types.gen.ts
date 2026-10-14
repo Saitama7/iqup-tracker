@@ -23,9 +23,43 @@ export type Database = {
   }
   public: {
     Tables: {
+      afterschool_plans: {
+        Row: {
+          created_at: string
+          enrollment_id: string
+          hours: number[]
+          id: string
+          valid_from: string
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          enrollment_id: string
+          hours: number[]
+          id?: string
+          valid_from: string
+        }
+        Update: {
+          created_at?: string
+          enrollment_id?: string
+          hours?: number[]
+          id?: string
+          valid_from?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'afterschool_plans_enrollment_id_fkey'
+            columns: ['enrollment_id']
+            isOneToOne: false
+            referencedRelation: 'enrollments'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       attendance: {
         Row: {
           consumes_credit: boolean | null
+          hours: number | null
           id: string
           lesson_id: string
           marked_at: string
@@ -37,6 +71,7 @@ export type Database = {
         ComputedFields: never
         Insert: {
           consumes_credit?: never
+          hours?: number | null
           id?: string
           lesson_id: string
           marked_at?: string
@@ -47,6 +82,7 @@ export type Database = {
         }
         Update: {
           consumes_credit?: never
+          hours?: number | null
           id?: string
           lesson_id?: string
           marked_at?: string
@@ -182,66 +218,6 @@ export type Database = {
             columns: ['teacher_id']
             isOneToOne: false
             referencedRelation: 'teachers'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      attendance_presets: {
-        Row: {
-          comment: string | null
-          created_at: string
-          created_by: string | null
-          id: string
-          lesson_id: string
-          status: Database['public']['Enums']['attendance_status']
-          student_id: string
-        }
-        ComputedFields: never
-        Insert: {
-          comment?: string | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          lesson_id: string
-          status?: Database['public']['Enums']['attendance_status']
-          student_id: string
-        }
-        Update: {
-          comment?: string | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          lesson_id?: string
-          status?: Database['public']['Enums']['attendance_status']
-          student_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'attendance_presets_created_by_fkey'
-            columns: ['created_by']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'attendance_presets_lesson_id_fkey'
-            columns: ['lesson_id']
-            isOneToOne: false
-            referencedRelation: 'lessons'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'attendance_presets_lesson_id_fkey'
-            columns: ['lesson_id']
-            isOneToOne: false
-            referencedRelation: 'v_lesson_status'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'attendance_presets_student_id_fkey'
-            columns: ['student_id']
-            isOneToOne: false
-            referencedRelation: 'students'
             referencedColumns: ['id']
           },
         ]
@@ -582,58 +558,6 @@ export type Database = {
           },
         ]
       }
-      payroll_adjustments: {
-        Row: {
-          amount: number
-          comment: string | null
-          created_at: string
-          created_by: string | null
-          id: string
-          issued_on: string
-          kind: Database['public']['Enums']['payroll_adjustment_kind']
-          month: string
-          teacher_id: string
-        }
-        ComputedFields: never
-        Insert: {
-          amount: number
-          comment?: string | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          issued_on: string
-          kind?: Database['public']['Enums']['payroll_adjustment_kind']
-          month: string
-          teacher_id: string
-        }
-        Update: {
-          amount?: number
-          comment?: string | null
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          issued_on?: string
-          kind?: Database['public']['Enums']['payroll_adjustment_kind']
-          month?: string
-          teacher_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'payroll_adjustments_created_by_fkey'
-            columns: ['created_by']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'payroll_adjustments_teacher_id_fkey'
-            columns: ['teacher_id']
-            isOneToOne: false
-            referencedRelation: 'teachers'
-            referencedColumns: ['id']
-          },
-        ]
-      }
       profiles: {
         Row: {
           created_at: string
@@ -774,11 +698,14 @@ export type Database = {
       subscriptions: {
         Row: {
           created_at: string
+          credit_hours: number
           discount_percent: number
           discount_reason: Database['public']['Enums']['discount_reason']
           enrollment_id: string
+          hours_total: number | null
           id: string
           lessons_total: number
+          period_month: string | null
           price_final: number
           price_full: number
           started_at: string
@@ -788,11 +715,14 @@ export type Database = {
         ComputedFields: never
         Insert: {
           created_at?: string
+          credit_hours?: number
           discount_percent?: number
           discount_reason?: Database['public']['Enums']['discount_reason']
           enrollment_id: string
+          hours_total?: number | null
           id?: string
           lessons_total: number
+          period_month?: string | null
           price_final: number
           price_full: number
           started_at: string
@@ -801,11 +731,14 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          credit_hours?: number
           discount_percent?: number
           discount_reason?: Database['public']['Enums']['discount_reason']
           enrollment_id?: string
+          hours_total?: number | null
           id?: string
           lessons_total?: number
+          period_month?: string | null
           price_final?: number
           price_full?: number
           started_at?: string
@@ -835,6 +768,7 @@ export type Database = {
           created_by: string | null
           freeze_limit: number
           group_type: Database['public']['Enums']['group_type']
+          hour_price: number | null
           id: string
           lesson_duration_min: number
           lessons_in_package: number
@@ -848,6 +782,7 @@ export type Database = {
           created_by?: string | null
           freeze_limit?: number
           group_type: Database['public']['Enums']['group_type']
+          hour_price?: number | null
           id?: string
           lesson_duration_min: number
           lessons_in_package: number
@@ -860,6 +795,7 @@ export type Database = {
           created_by?: string | null
           freeze_limit?: number
           group_type?: Database['public']['Enums']['group_type']
+          hour_price?: number | null
           id?: string
           lesson_duration_min?: number
           lessons_in_package?: number
@@ -1210,34 +1146,44 @@ export type Database = {
       }
       v_payroll_preview: {
         Row: {
-          advances: number | null
           base_amount: number | null
           hours: number | null
           lessons_held: number | null
           month: string | null
           no_subscription: number | null
+          student_hours: number | null
           student_lessons: number | null
           teacher_id: string | null
-          to_pay: number | null
         }
         ComputedFields: never
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: 'lessons_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'teachers'
+            referencedColumns: ['id']
+          },
+        ]
       }
       v_student_balance: {
         Row: {
           carried_in: number | null
+          credit_hours: number | null
           debt_lessons: number | null
           debt_som: number | null
           enrollment_id: string | null
           freeze_limit: number | null
           freezes_used: number | null
           group_id: string | null
+          hours_total: number | null
           is_current: boolean | null
           lessons_left: number | null
           lessons_total: number | null
           lessons_used: number | null
           paid_lessons: number | null
           paid_som: number | null
+          period_month: string | null
           price_final: number | null
           price_full: number | null
           refund_suggested: number | null
@@ -1245,6 +1191,7 @@ export type Database = {
           status: Database['public']['Enums']['subscription_status'] | null
           student_id: string | null
           subscription_id: string | null
+          unit: string | null
           used_own: number | null
         }
         ComputedFields: never
@@ -1312,13 +1259,47 @@ export type Database = {
       }
     }
     Functions: {
+      afterschool_backfill_plans: { Args: Record<PropertyKey, never>; Returns: number }
+      afterschool_credit_hours: { Args: { p_enrollment_id: string }; Returns: number }
+      afterschool_day_hours: {
+        Args: { p_date: string; p_group_id: string; p_student_id: string }
+        Returns: number
+      }
+      afterschool_default_plan: { Args: { p_date: string; p_group_id: string }; Returns: number[] }
+      afterschool_hours_valid: { Args: { p_hours: number[] }; Returns: boolean }
+      afterschool_invoice_insert: {
+        Args: {
+          p_discount_pct: number
+          p_discount_reason: Database['public']['Enums']['discount_reason']
+          p_enrollment_id: string
+          p_month: string
+          p_strict?: boolean
+        }
+        Returns: string
+      }
+      afterschool_month_quote: {
+        Args: { p_enrollment_id: string; p_month: string }
+        Returns: {
+          days: number
+          hours: number
+          weekday: number
+        }[]
+      }
+      afterschool_plan_on: { Args: { p_date: string; p_enrollment_id: string }; Returns: number[] }
       apply_correction_request: { Args: { p_request_id: string }; Returns: number }
       archive_group: { Args: { p_group_id: string }; Returns: number }
       assert_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
       assert_correction_marks: { Args: { p_lesson_id: string; p_marks: Json }; Returns: undefined }
+      assert_discount: {
+        Args: {
+          p_discount_pct: number
+          p_discount_reason: Database['public']['Enums']['discount_reason']
+          p_student_id: string
+        }
+        Returns: undefined
+      }
       assert_enrollment_undoable: { Args: { p_enrollment_id: string }; Returns: undefined }
       assert_payment_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
-      assert_payroll_staff: { Args: Record<PropertyKey, never>; Returns: undefined }
       attendance_subscription: {
         Args: { p_lesson_id: string; p_student_id: string }
         Returns: string
@@ -1383,10 +1364,6 @@ export type Database = {
           lessons_total: number
         }[]
       }
-      clear_attendance_preset: {
-        Args: { p_lesson_id: string; p_student_id: string }
-        Returns: boolean
-      }
       confirm_lesson: { Args: { p_lesson_id: string; p_marks: Json }; Returns: string }
       correct_attendance: {
         Args: { p_lesson_id: string; p_marks: Json; p_reason: string }
@@ -1435,12 +1412,12 @@ export type Database = {
         }[]
       }
       delete_group: { Args: { p_group_id: string }; Returns: number }
-      delete_payroll_adjustment: { Args: { p_id: string; p_reason: string }; Returns: undefined }
       enroll_student: {
         Args: {
           p_discount_pct?: number
           p_discount_reason?: Database['public']['Enums']['discount_reason']
           p_group_id: string
+          p_plan?: number[]
           p_start_date: string
           p_student_id: string
         }
@@ -1466,6 +1443,7 @@ export type Database = {
         Args: { p_enrollment_id: string }
         Returns: {
           consumes_credit: boolean | null
+          hours: number | null
           id: string
           lesson_id: string
           marked_at: string
@@ -1528,20 +1506,18 @@ export type Database = {
       is_accountant: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_admin: { Args: Record<PropertyKey, never>; Returns: boolean }
       is_staff: { Args: Record<PropertyKey, never>; Returns: boolean }
-      issue_advance: {
+      issue_afterschool_invoice: {
         Args: {
-          p_amount: number
-          p_comment?: string
-          p_issued_on?: string
-          p_month?: string
-          p_teacher_id: string
+          p_discount_pct?: number
+          p_discount_reason?: Database['public']['Enums']['discount_reason']
+          p_enrollment_id: string
+          p_month: string
         }
         Returns: string
       }
       leads_group: { Args: { p_group_id: string }; Returns: boolean }
       lesson_starts_at: { Args: { p_date: string; p_start: string }; Returns: string }
       payment_time: { Args: { p_paid_on: string }; Returns: string }
-      payroll_month_locked: { Args: { p_month: string; p_teacher_id: string }; Returns: boolean }
       person_name_key: { Args: { p_name: string }; Returns: string }
       record_payment: {
         Args: {
@@ -1588,8 +1564,8 @@ export type Database = {
         }[]
       }
       server_now: { Args: Record<PropertyKey, never>; Returns: string }
-      set_attendance_preset: {
-        Args: { p_comment?: string; p_lesson_id: string; p_student_id: string }
+      set_afterschool_plan: {
+        Args: { p_enrollment_id: string; p_hours: number[]; p_valid_from: string }
         Returns: string
       }
       set_enrollment_start: {
@@ -1619,6 +1595,7 @@ export type Database = {
         Args: { p_date: string; p_group_type: Database['public']['Enums']['group_type'] }
         Returns: number
       }
+      tariff_hour_price: { Args: { p_tariff_id: string }; Returns: number }
       tariff_min_valid_from: {
         Args: { p_group_type: Database['public']['Enums']['group_type'] }
         Returns: string
@@ -1700,7 +1677,6 @@ export type Database = {
       lesson_status: 'planned' | 'held' | 'cancelled'
       payment_kind: 'payment' | 'refund' | 'transfer'
       payment_method: 'cash' | 'mbank'
-      payroll_adjustment_kind: 'advance' | 'bonus' | 'correction'
       role: 'teacher' | 'admin' | 'accountant'
       subscription_status: 'active' | 'exhausted' | 'refunded'
       trial_source: 'instagram' | 'referral' | '2gis' | 'other'
@@ -1828,7 +1804,6 @@ export const Constants = {
       lesson_status: ['planned', 'held', 'cancelled'],
       payment_kind: ['payment', 'refund', 'transfer'],
       payment_method: ['cash', 'mbank'],
-      payroll_adjustment_kind: ['advance', 'bonus', 'correction'],
       role: ['teacher', 'admin', 'accountant'],
       subscription_status: ['active', 'exhausted', 'refunded'],
       trial_source: ['instagram', 'referral', '2gis', 'other'],
