@@ -1,6 +1,6 @@
-// Продлёнка по часам (#82) — 05-decisions И52–И56, 01-domain-model §5.2.
+// Продлёнка по часам (#82) — 05-decisions И54–И58, 01-domain-model §5.2.
 // The student's plan (hours per weekday from a date), hours of a month, the invoice price. The same
-// rules are SQL in 0099 (afterschool_plan_on, afterschool_month_quote, afterschool_invoice_insert) —
+// rules are SQL in 0023 (afterschool_plan_on, afterschool_month_quote, afterschool_invoice_insert) —
 // the database is the authority; this is for previews («≈ 20 ч в марте · 2 000 сом») and labels.
 //
 // Pure: callers pass the rows they already have, nothing here reads the database.
@@ -14,7 +14,7 @@ export interface PlanVersion {
   hours: PlanHours
 }
 
-/** One day: 0 (does not come) or 0,5 … 4 h, step 0,5 (И53). */
+/** One day: 0 (does not come) or 0,5 … 4 h, step 0,5 (И55). */
 export const HOUR_OPTIONS: readonly number[] = [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4]
 export const MAX_DAY_HOURS = 4
 
@@ -81,7 +81,7 @@ export function validPlan(hours: PlanHours): boolean {
   return hours.length === 7 && hours.every(validDayHours) && hours.some((h) => h > 0)
 }
 
-/** Default plan (И53): the group's weekdays × the tariff duration (3 h); no schedule — Mon–Fri. */
+/** Default plan (И55): the group's weekdays × the tariff duration (3 h); no schedule — Mon–Fri. */
 export function defaultPlan(weekdays: readonly number[], durationMin = 180): number[] {
   const h = Math.min(durationMin / 60, MAX_DAY_HOURS)
   const days = weekdays.length > 0 ? new Set(weekdays) : new Set([1, 2, 3, 4, 5])
@@ -201,7 +201,7 @@ export interface InvoiceQuote {
 
 /**
  * The invoice of a month (afterschool_invoice_insert): hours = planned − credit (frozen hours of
- * earlier months, И55), price = round(hours × hour price), discount В5 on top.
+ * earlier months, И57), price = round(hours × hour price), discount В5 on top.
  */
 export function invoiceQuote(
   planned: number,

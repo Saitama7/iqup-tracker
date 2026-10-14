@@ -1,5 +1,5 @@
 // Продлёнка по часам (#82) — data for А6 (plan, invoices) and the enrollment form. Writes go through
-// the RPCs of 0099 (admin only, one transaction each): set_afterschool_plan,
+// the RPCs of 0023 (admin only, one transaction each): set_afterschool_plan,
 // issue_afterschool_invoice; enroll_student takes the plan (p_plan).
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
@@ -43,7 +43,7 @@ export interface EnrollmentAfterschool {
   months: [MonthBill, MonthBill]
   /** Live invoices of earlier months (oldest first). */
   earlier: Invoice[]
-  /** Frozen hours not yet taken off an invoice (И55). */
+  /** Frozen hours not yet taken off an invoice (И57). */
   credit: number
 }
 
@@ -124,7 +124,7 @@ export class AfterschoolError extends Error {
   }
 }
 
-/** Postgres error of the 0099 RPCs → admin-facing text. */
+/** Postgres error of the 0023 RPCs → admin-facing text. */
 export function afterschoolErrorMessage(error: { code?: string; message?: string }): string {
   const m = error.message ?? ''
   if (error.code === '42501') return 'Это делает администратор'

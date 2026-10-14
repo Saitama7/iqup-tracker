@@ -289,7 +289,7 @@ describe('advances (А8, #83)', () => {
   })
 })
 
-describe('after-school hour subscriptions (#82, И56)', () => {
+describe('after-school hour subscriptions (#82, И58)', () => {
   // 20 h invoiced for 2 000 сом → 100 сом/ч
   const HOURS: PaySubscription = { price_full: 2000, lessons_total: 12, hours_total: 20 }
 

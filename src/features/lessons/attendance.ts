@@ -202,7 +202,7 @@ export interface RosterRow {
 
 /**
  * Students of a lesson: a planned one — enrolled on the lesson date (all must be marked), an
- * after-school student only with hours that day (confirm_lesson, 0099); a held one — those with a
+ * after-school student only with hours that day (confirm_lesson, 0023); a held one — those with a
  * mark. By name.
  */
 export function lessonRoster(
