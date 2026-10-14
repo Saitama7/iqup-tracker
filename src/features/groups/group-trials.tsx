@@ -1,7 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { trialsQuery, useTrialsRealtime } from '@/features/trials/api'
-import { phoneCaption, trialWhen, dayShort, type Trial } from '@/features/trials/model'
+import type { StudentsSource } from '@/features/students/model'
+import {
+  dayShort,
+  phoneCaption,
+  enrollPhoneWarning,
+  trialDiscountHistory,
+  trialWhen,
+  type Trial,
+} from '@/features/trials/model'
 import { EnrollTrialDialog, RebookDialog, TrialChip } from '@/features/trials/parts'
 import { tdClass } from '@/features/tariffs/parts'
 import { cn } from '@/lib/utils'
@@ -39,15 +47,29 @@ function trialCaption(t: Trial): string {
   return `${phoneCaption(t.parent_phone)} · записал(а)${author} ${dayShort(t.created_at.slice(0, 10))}`
 }
 
-/** Dialog state for the row actions; render `dialog` once at the page level. */
-export function useTrialActions(group: GroupRow | null, today: string) {
+/**
+ * Dialog state for the row actions; render `dialog` once at the page level. `students` gives
+ * «Оплатил → зачислить» the discounts of the student the trial becomes (В5: 15 % to a former pupil).
+ */
+export function useTrialActions(
+  group: GroupRow | null,
+  today: string,
+  students: StudentsSource | undefined,
+) {
   const [action, setAction] = useState<Trial | null>(null)
   const close = () => {
     setAction(null)
   }
   const dialog =
     !action || !group ? null : action.status === 'attended' ? (
-      <EnrollTrialDialog trial={action} group={group} today={today} onOpenChange={close} />
+      <EnrollTrialDialog
+        trial={action}
+        group={group}
+        history={trialDiscountHistory(students, action)}
+        warning={enrollPhoneWarning(action, students?.students ?? [])}
+        today={today}
+        onOpenChange={close}
+      />
     ) : (
       <RebookDialog trial={action} today={today} onOpenChange={close} />
     )

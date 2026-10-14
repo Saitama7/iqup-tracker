@@ -101,7 +101,7 @@ select throws_ok(
 select throws_ok(
   $$ insert into public.trials (full_name, lesson_id, group_id, status)
      values ('Сразу был', '24600000-0000-4000-8000-000000000002', 'd4600000-0000-4000-8000-000000000001', 'attended') $$,
-  '23514', null, 'a trial starts as scheduled'
+  '23514', null, 'a trial on a future lesson cannot start as attended'
 );
 select throws_ok(
   $$ insert into public.trials (full_name, lesson_id, group_id)

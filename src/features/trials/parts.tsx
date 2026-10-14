@@ -171,6 +171,7 @@ export function EnrollTrialDialog({
   trial,
   group,
   history,
+  warning,
   today,
   onOpenChange,
 }: {
@@ -178,6 +179,8 @@ export function EnrollTrialDialog({
   group: GroupBrief
   /** Discounts of an existing student (А6); a lead has none. */
   history?: DiscountHistory
+  /** enrollPhoneWarning: the phone is another student's — a new student will be created. */
+  warning?: string | null
   today: string
   onOpenChange: (open: boolean) => void
 }) {
@@ -200,6 +203,7 @@ export function EnrollTrialDialog({
       today={today}
       startDate={start}
       description={`${trial.full_name} · был(а) на пробном · абонемент со следующего занятия`}
+      notice={warning}
       submit={(input) =>
         enrollTrial({ trialId: trial.id, startDate: input.startDate, discount: input.discount })
       }

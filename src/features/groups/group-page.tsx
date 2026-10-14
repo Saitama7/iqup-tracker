@@ -143,7 +143,7 @@ export function GroupPage({ groupId }: { groupId: string }) {
     [students.data, balances.data, groupId],
   )
 
-  const trialActions = useTrialActions(group, today)
+  const trialActions = useTrialActions(group, today, students.data)
 
   if (groups.isPending) {
     return <div className={cn(cardClass, 'h-64 animate-pulse')} aria-label="Загрузка" />

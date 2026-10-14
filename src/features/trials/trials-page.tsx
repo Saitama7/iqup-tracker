@@ -25,6 +25,7 @@ import {
   thClass,
 } from '@/features/tariffs/parts'
 import { useNow } from '@/lib/now'
+import { normalizePhone } from '@/lib/phone'
 import { maskPhoneInput } from '@/lib/phone-input'
 import { bishkekDate, formatMonthNom } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -33,6 +34,7 @@ import {
   bookForm,
   bookTrials,
   groupLessonsQuery,
+  pastLessonsQuery,
   TRIALS_KEY,
   trialsQuery,
   useTrialsRealtime,
@@ -47,9 +49,12 @@ import {
   pupilsWord,
   shortPerson,
   SOURCE_LABEL,
+  enrollPhoneWarning,
+  studentsByPhone,
   TRIAL_SOURCES,
   trialGroupLabel,
   trialsWord,
+  trialDiscountHistory,
   trialWhen,
   upcomingRows,
   waitingTrials,
@@ -162,9 +167,11 @@ export function TrialsPage({
       source={students.data}
       today={today}
       initialGroup={search.group}
-      onBooked={() => {
+      onBooked={(backdated) => {
         setFormOpen(false)
-        if (tab !== 'upcoming') onSearchChange({ ...search, tab: undefined })
+        // «Уже был(а)» lands in «Прошли, ждут решения» — show it there
+        const next = backdated ? 'waiting' : 'upcoming'
+        if (tab !== next) onSearchChange({ ...search, tab: backdated ? 'waiting' : undefined })
       }}
     />
   )
@@ -237,7 +244,8 @@ export function TrialsPage({
         <EnrollTrialDialog
           trial={enroll}
           group={enrollGroup}
-          history={studentHistory(students.data, enroll.student_id)}
+          history={trialDiscountHistory(students.data, enroll)}
+          warning={enrollPhoneWarning(enroll, students.data?.students ?? [])}
           today={today}
           onOpenChange={(o) => {
             if (!o) setEnroll(null)
@@ -246,17 +254,6 @@ export function TrialsPage({
       )}
     </div>
   )
-}
-
-/** Discounts of an existing student for «Оплатил → зачислить» (В5); a lead has none. */
-function studentHistory(source: StudentsSource | undefined, studentId: string | null) {
-  const s = studentId ? source?.students.find((x) => x.id === studentId) : undefined
-  if (!s || !source) return undefined
-  return {
-    isReturning: s.is_returning,
-    subscriptions: s.enrollments.flatMap((e) => e.subscriptions),
-    friendsBrought: source.students.filter((f) => f.referred_by_student_id === s.id).length,
-  }
 }
 
 // ─── KPI ────────────────────────────────────────────────────────────────────
@@ -930,9 +927,10 @@ function BookForm({
   source: StudentsSource | undefined
   today: string
   initialGroup: string | undefined
-  onBooked: () => void
+  onBooked: (backdated: boolean) => void
 }) {
   const ids = {
+    backdated: useId(),
     who: useId(),
     student: useId(),
     grade: useId(),
@@ -949,6 +947,7 @@ function BookForm({
   const [grade, setGrade] = useState('')
   const [groupId, setGroupId] = useState(initialGroup ?? '')
   const [lessonId, setLessonId] = useState('')
+  const [backdated, setBackdated] = useState(false)
   const [from, setFrom] = useState<TrialSource | ''>('')
   const [referredBy, setReferredBy] = useState('')
   const [note, setNote] = useState('')
@@ -966,7 +965,12 @@ function BookForm({
       s.enrollments.some((e) => e.group_id === groupId && e.status === 'active'),
     ).length
   const group = groups.find((g) => g.id === groupId) ?? null
-  const lessons = useQuery(groupLessonsQuery(groupId || null, today))
+  // «Уже был(а)»: a lesson that took place (today or earlier), otherwise a planned one ahead
+  const lessons = useQuery(
+    backdated
+      ? pastLessonsQuery(groupId || null, today)
+      : groupLessonsQuery(groupId || null, today),
+  )
   const students = useMemo(
     () =>
       (source?.students ?? [])
@@ -996,14 +1000,14 @@ function BookForm({
             ? (students.find((s) => s.id === studentId)?.full_name ?? 'Ученик')
             : people[0]?.name.trim()
       toast.success(
-        `Записали на пробное: ${who}${lesson ? ` · ${lessonOptionLabel(lesson.date, lesson.start, today)}` : ''}`,
+        `${backdated ? 'Записали задним числом, был(а)' : 'Записали на пробное'}: ${who}${lesson ? ` · ${lessonOptionLabel(lesson.date, lesson.start, today)}` : ''}`,
       )
       setPeople([{ name: '', phone: '' }])
       setStudentId('')
       setReferredBy('')
       setNote('')
       setError(null)
-      onBooked()
+      onBooked(backdated)
     },
     onError: (e) => {
       setError(e.message)
@@ -1030,6 +1034,7 @@ function BookForm({
       // «привёл друг» → the friend's 5 % once the lead is enrolled (В5, enroll_trial)
       referredBy: !existing && from === 'referral' && referredBy ? referredBy : null,
       note,
+      mark: backdated ? 'attended' : null,
     })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Проверьте поля формы')
@@ -1130,6 +1135,7 @@ function BookForm({
                   />
                 </div>
               </Field>
+              <PhoneTaken students={source?.students ?? []} phone={p.phone} />
             </div>
           ))}
           <div className="flex flex-wrap gap-3">
@@ -1193,6 +1199,40 @@ function BookForm({
         </NativeSelect>
       </Field>
 
+      <button
+        id={ids.backdated}
+        type="button"
+        role="switch"
+        aria-checked={backdated}
+        onClick={() => {
+          setBackdated((v) => !v)
+          setLessonId('')
+          setError(null)
+        }}
+        className="flex min-h-11 items-center justify-between gap-3 rounded-xl border-[1.5px] border-line-strong bg-card px-3.5 text-left"
+      >
+        <span className="flex flex-col">
+          <span className="text-[13px] font-extrabold">Уже был(а) на занятии</span>
+          <span className="text-xs font-bold text-ink-muted">
+            пришёл(ла) без записи — сегодня или раньше
+          </span>
+        </span>
+        <span
+          aria-hidden
+          className={cn(
+            'relative h-6 w-10 shrink-0 rounded-full transition-colors',
+            backdated ? 'bg-trial' : 'bg-line-strong',
+          )}
+        >
+          <span
+            className={cn(
+              'absolute top-0.5 left-0.5 size-5 rounded-full bg-card transition-transform',
+              backdated && 'translate-x-4',
+            )}
+          />
+        </span>
+      </button>
+
       <Field id={ids.lesson} label="Занятие">
         <NativeSelect
           id={ids.lesson}
@@ -1210,7 +1250,9 @@ function BookForm({
                 ? 'Загружаем занятия…'
                 : lessons.data?.length
                   ? 'Выберите занятие'
-                  : 'Нет занятий впереди'}
+                  : backdated
+                    ? 'Нет прошедших занятий'
+                    : 'Нет занятий впереди'}
           </option>
           {(lessons.data ?? []).map((l) => (
             <option key={l.id} value={l.id}>
@@ -1270,8 +1312,9 @@ function BookForm({
       </Field>
 
       <p className="rounded-xl bg-trial-soft px-3 py-2.5 text-xs leading-normal font-bold text-trial-strong">
-        {teacher} увидит пробного в списке на это занятие с пометкой «пробный» и отметит был / не
-        был. Урок не списывается и в ЗП не входит. После оплаты — «Оплатил → зачислить».
+        {backdated
+          ? 'Пробный сразу отмечен «был(а)» и попадёт в «Прошли, ждут решения»; в журнале — правка задним числом. Урок не списывается и в ЗП не входит.'
+          : `${teacher} увидит пробного в списке на это занятие с пометкой «пробный» и отметит был / не был. Урок не списывается и в ЗП не входит. После оплаты — «Оплатил → зачислить».`}
       </p>
 
       {error && <ErrorText>{error}</ErrorText>}
@@ -1279,5 +1322,24 @@ function BookForm({
         Записать на пробное
       </SubmitButton>
     </form>
+  )
+}
+
+/** «Этот телефон уже у ученика…» — a lead may be a former pupil (enroll_trial reuses the same name + phone). */
+function PhoneTaken({ students, phone }: { students: StudentsSource['students']; phone: string }) {
+  let normalized: string | null = null
+  try {
+    normalized = phone.trim() ? normalizePhone(phone) : null
+  } catch {
+    normalized = null
+  }
+  const taken = studentsByPhone(students, normalized)
+  if (taken.length === 0) return null
+  return (
+    <p className="text-xs font-bold text-ink-muted">
+      Этот телефон уже есть в учениках: {taken.map((t) => t.full_name).join(', ')}. Если пробное у
+      кого-то из них (и у бывшего ученика) — впишите имя как в карточке: при зачислении не будет
+      дубля и сохранятся его скидки. Брат или сестра — новый ученик.
+    </p>
   )
 }

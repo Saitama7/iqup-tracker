@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { calcMonth } from '@/features/payroll/calc'
+import type { StudentRow } from '@/features/students/model'
 import {
   conversionBySource,
+  enrollPhoneWarning,
   enrollStartDefault,
   fillCaption,
   isUpcoming,
@@ -10,9 +12,13 @@ import {
   lessonTrials,
   markLabel,
   monthConversion,
+  nameKey,
   plusTrials,
   pupilsWord,
   shortPerson,
+  studentsByPhone,
+  trialDiscountHistory,
+  trialStudentId,
   trialsCaption,
   trialsOn,
   trialsWord,
@@ -92,6 +98,7 @@ describe('words', () => {
     expect(trialWhen('2026-10-19', '19:00', TODAY)).toBe('Пн 19 окт 19:00')
     expect(lessonOptionLabel(TODAY, '14:00', TODAY)).toBe('Пн 12 окт · 14:00 · сегодня')
     expect(lessonOptionLabel('2026-10-15', '14:00', TODAY)).toBe('Чт 15 окт · 14:00')
+    expect(lessonOptionLabel('2026-10-11', '14:00', TODAY)).toBe('Вс 11 окт · 14:00 · вчера')
   })
 })
 
@@ -236,5 +243,84 @@ describe('teacher and group screens', () => {
     // no lessons known → the day after the trial / today
     expect(enrollStartDefault('2026-10-12', [], '2026-10-12')).toBe('2026-10-13')
     expect(enrollStartDefault('2026-10-06', [], '2026-10-12')).toBe('2026-10-12')
+  })
+})
+
+describe('the student a trial becomes (#54)', () => {
+  const student = (p: Partial<StudentRow>): StudentRow => ({
+    id: 's',
+    full_name: 'Нурай Жумабаева',
+    grade: 8,
+    parent_name: null,
+    parent_phone: '996555005401',
+    is_returning: false,
+    referred_by_student_id: null,
+    notes: null,
+    created_at: '2026-09-01T00:00:00Z',
+    enrollments: [],
+    ...p,
+  })
+  const former = student({ id: 'former', is_returning: true })
+  const sibling = student({ id: 'sibling', full_name: 'Айбек Жумабаев' })
+  const friend = student({ id: 'friend', full_name: 'Друг', referred_by_student_id: 'former' })
+  const students = [former, sibling, friend]
+  const lead = { student_id: null, full_name: ' нурай жумабаева ', parent_phone: '996555005401' }
+
+  it('a lead with the same name and phone is the existing student, a sibling is not', () => {
+    expect(trialStudentId(lead, students)).toBe('former')
+    expect(trialStudentId({ ...lead, full_name: 'Айсулуу' }, students)).toBeNull()
+    expect(trialStudentId({ ...lead, parent_phone: null }, students)).toBeNull()
+    expect(trialStudentId({ ...lead, student_id: 'sibling' }, students)).toBe('sibling')
+    // two students with the same name and phone: ambiguous → enroll_trial refuses, no history
+    expect(trialStudentId(lead, [...students, student({ id: 'twin' })])).toBeNull()
+  })
+
+  it('discount history follows that student (В5)', () => {
+    const source = { students, groups: [] }
+    expect(trialDiscountHistory(source, lead)).toEqual({
+      isReturning: true,
+      subscriptions: [],
+      friendsBrought: 1,
+    })
+    expect(trialDiscountHistory(source, { ...lead, full_name: 'Новый' })).toBeUndefined()
+    expect(trialDiscountHistory(undefined, lead)).toBeUndefined()
+  })
+
+  it('names compare like person_name_key in 0018: whitespace, NBSP, tabs, case, ё', () => {
+    expect(nameKey('  Нурай   Жумабаева ')).toBe('нурай жумабаева')
+    expect(nameKey('Нурай\u00a0Жумабаева')).toBe('нурай жумабаева')
+    expect(nameKey('Нурай\t \u00a0Жумабаева')).toBe('нурай жумабаева')
+    expect(nameKey('АЛЁНА Ким')).toBe('алена ким')
+    expect(trialStudentId({ ...lead, full_name: 'НУРАЙ\u00a0\u00a0жумабаева' }, students)).toBe(
+      'former',
+    )
+    const alyona = student({ id: 'alyona', full_name: 'Алёна Ким', parent_phone: '996555005430' })
+    expect(
+      trialStudentId({ student_id: null, full_name: 'Алена  Ким', parent_phone: '996555005430' }, [
+        alyona,
+      ]),
+    ).toBe('alyona')
+  })
+
+  it("warns when the phone is another student's and no name matches", () => {
+    expect(enrollPhoneWarning({ ...lead, full_name: 'Айсулуу' }, students)).toBe(
+      'Телефон есть у: Нурай Жумабаева, Айбек Жумабаев, Друг — будет создан новый ученик. Если это он(а) — впишите имя точно как в карточке ученика',
+    )
+    expect(enrollPhoneWarning(lead, students)).toBeNull()
+    expect(enrollPhoneWarning({ ...lead, parent_phone: '996555000000' }, students)).toBeNull()
+    expect(enrollPhoneWarning({ ...lead, parent_phone: null }, students)).toBeNull()
+    expect(
+      enrollPhoneWarning({ ...lead, full_name: 'Айсулуу', student_id: 'sibling' }, students),
+    ).toBeNull()
+  })
+
+  it('students by parent phone for the booking hint', () => {
+    expect(studentsByPhone(students, '996555005401').map((s) => s.id)).toEqual([
+      'former',
+      'sibling',
+      'friend',
+    ])
+    expect(studentsByPhone(students, '996555000000')).toEqual([])
+    expect(studentsByPhone(students, null)).toEqual([])
   })
 })

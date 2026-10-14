@@ -42,6 +42,7 @@ export function EnrollDialog({
   startDate,
   submit,
   description,
+  notice,
   onEnrolled,
 }: {
   open: boolean
@@ -58,6 +59,8 @@ export function EnrollDialog({
   /** Replaces enroll_student — «Оплатил → зачислить» enrolls a trial (enroll_trial, Ж5). */
   submit?: (input: EnrollInput) => Promise<unknown>
   description?: string
+  /** A warning above «Зачислить» (e.g. the trial's phone belongs to another student). */
+  notice?: string | null
   onEnrolled?: () => void
 }) {
   const ids = { student: useId(), group: useId(), date: useId() }
@@ -290,6 +293,14 @@ export function EnrollDialog({
           Скидка — только на цену для ученика; ЗП учителя считается от полной цены.
         </p>
 
+        {notice && (
+          <p
+            role="note"
+            className="rounded-xl bg-warn-soft px-3 py-2 text-xs font-bold text-warn-strong"
+          >
+            {notice}
+          </p>
+        )}
         {error && <ErrorText>{error}</ErrorText>}
         <SubmitButton pending={mutation.isPending}>Зачислить</SubmitButton>
       </form>

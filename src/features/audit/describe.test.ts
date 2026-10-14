@@ -416,6 +416,24 @@ describe('trials', () => {
       text(row({ entity: 'trials', before: attended, after: { ...attended, status: 'closed' } })),
     ).toBe('Розаина Бекова — отказ после пробного')
   })
+
+  it('booked after the fact (#54): the mark comes with the booking', () => {
+    const after = { ...t, status: 'attended', came: true }
+    expect(text(row({ entity: 'trials', action: 'insert', after }))).toBe(
+      'Розаина Бекова — записан(а) задним числом: Математика · 8 класс Б, 10.10 в 09:00 — был(а)',
+    )
+    expect(
+      text(
+        row({
+          entity: 'trials',
+          action: 'insert',
+          after: { ...t, status: 'no_show', came: false },
+        }),
+      ),
+    ).toBe(
+      'Розаина Бекова — записан(а) задним числом: Математика · 8 класс Б, 10.10 в 09:00 — не пришёл(ла)',
+    )
+  })
 })
 
 describe('tables without a describer', () => {

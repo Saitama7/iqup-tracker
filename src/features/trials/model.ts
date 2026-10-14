@@ -2,6 +2,8 @@
 // A trial is never a student-lesson: it does not count in group fill («8 / 10»), in «Отмечено N из M»
 // or in payroll — screens show it next to those numbers as «+1 пробный».
 import { addDays, isoWeekday } from '@/features/groups/model'
+import type { StudentsSource } from '@/features/students/model'
+import type { DiscountHistory } from '@/features/subscriptions/model'
 import type { Database } from '@/lib/supabase/types.gen'
 import { formatPhone } from '@/lib/phone'
 
@@ -125,6 +127,7 @@ export function lessonOptionLabel(date: string, start: string, today: string): s
   const base = `${WEEKDAY_SHORT[isoWeekday(date)] ?? ''} ${dayShort(date)} · ${start}`
   if (date === today) return `${base} · сегодня`
   if (date === addDays(today, 1)) return `${base} · завтра`
+  if (date === addDays(today, -1)) return `${base} · вчера`
   return base
 }
 
@@ -309,4 +312,74 @@ export function enrollStartDefault(
     .filter((d) => d >= min && d > trialDate)
     .sort()[0]
   return next ?? min
+}
+
+// ─── «Оплатил → зачислить»: who the trial becomes ───────────────────────────
+
+/**
+ * Name as compared for «the same person»: any run of whitespace (NBSP and tabs too) → one space,
+ * trimmed, lower case, ё → е. Mirrors person_name_key in 0018.
+ */
+export const nameKey = (name: string) =>
+  name
+    .replace(/[\s\u00a0]+/gu, ' ')
+    .trim()
+    .toLowerCase()
+    .replaceAll('ё', 'е')
+
+const sameName = (a: string, b: string) => nameKey(a) === nameKey(b)
+
+/**
+ * The student the trial is enrolled as: its own student_id, or — for a lead — the one existing student
+ * with the same name and parent phone (a former pupil came back through a trial; enroll_trial in 0018
+ * picks the same one). A sibling (same phone, another name) or several matches → null (a new student).
+ */
+export function trialStudentId(
+  trial: Pick<Trial, 'student_id' | 'full_name' | 'parent_phone'>,
+  students: readonly { id: string; full_name: string; parent_phone: string | null }[],
+): string | null {
+  if (trial.student_id) return trial.student_id
+  if (!trial.parent_phone) return null
+  const matches = students.filter(
+    (s) => s.parent_phone === trial.parent_phone && sameName(s.full_name, trial.full_name),
+  )
+  return matches.length === 1 ? (matches[0]?.id ?? null) : null
+}
+
+/** Existing students with this parent phone — «Уже есть в учениках» hint on the booking form. */
+export function studentsByPhone<T extends { parent_phone: string | null }>(
+  students: readonly T[],
+  phone: string | null,
+): T[] {
+  return phone ? students.filter((s) => s.parent_phone === phone) : []
+}
+
+/**
+ * «Оплатил → зачислить» for a lead whose parent phone is already a student's but no name matches:
+ * enroll_trial creates a new student — warn, the admin may have meant the existing one.
+ */
+export function enrollPhoneWarning(
+  trial: Pick<Trial, 'student_id' | 'full_name' | 'parent_phone'>,
+  students: readonly { id: string; full_name: string; parent_phone: string | null }[],
+): string | null {
+  if (trial.student_id) return null
+  const taken = studentsByPhone(students, trial.parent_phone)
+  if (taken.length === 0 || taken.some((s) => sameName(s.full_name, trial.full_name))) return null
+  return `Телефон есть у: ${taken.map((s) => s.full_name).join(', ')} — будет создан новый ученик. Если это он(а) — впишите имя точно как в карточке ученика`
+}
+
+/** Discounts of the student a trial is enrolled as (В5: 15 % returning, 5 % for a friend); a new lead has none. */
+export function trialDiscountHistory(
+  source: StudentsSource | undefined,
+  trial: Pick<Trial, 'student_id' | 'full_name' | 'parent_phone'>,
+): DiscountHistory | undefined {
+  if (!source) return undefined
+  const id = trialStudentId(trial, source.students)
+  const s = id ? source.students.find((x) => x.id === id) : undefined
+  if (!s) return undefined
+  return {
+    isReturning: s.is_returning,
+    subscriptions: s.enrollments.flatMap((e) => e.subscriptions),
+    friendsBrought: source.students.filter((f) => f.referred_by_student_id === s.id).length,
+  }
 }
