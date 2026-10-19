@@ -109,7 +109,8 @@ test('бухгалтер выдаёт аванс → «К выплате» ме�
   await teacher.close()
 
   // A mistaken advance: deleted with a reason — the sums are back.
-  await history.getByRole('button', { name: 'Удалить аванс 5 000 сом' }).click()
+  await history.getByRole('button', { name: 'Действия: аванс 5 000 сом' }).click()
+  await page.getByRole('button', { name: 'Удалить', exact: true }).click()
   const remove = page.getByRole('form', { name: 'Удалить аванс' })
   await remove.getByRole('button', { name: 'Удалить' }).click()
   await expect(remove.getByRole('alert')).toHaveText('Укажите причину')
