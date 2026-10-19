@@ -278,7 +278,7 @@ describe('studentListRows (А5)', () => {
   })
 
   it('chip counters', () => {
-    expect(payCounts(rows)).toEqual({ debt: 1, soon: 1, partial: 1 })
+    expect(payCounts(rows)).toEqual({ unpaid: 3, debt: 1, soon: 1, partial: 1 })
   })
 })
 
@@ -309,6 +309,12 @@ describe('search and group filter', () => {
   it('pay filter keeps one state', () => {
     expect(filterRows(rows, { pay: 'debt' }).map((r) => r.id)).toEqual(['elina'])
     expect(filterRows(rows, { pay: 'partial', group: 'g8a' }).map((r) => r.id)).toEqual(['nurlan'])
+  })
+
+  it('«Не оплатили» (#93): debt, due and partial together; not the paid, not the idle', () => {
+    const unpaid = filterRows(rows, { pay: 'unpaid' }).map((r) => r.id)
+    expect(unpaid).toHaveLength(3)
+    for (const r of rows.filter((x) => unpaid.includes(x.id))) expect(r.payState).not.toBe('paid')
   })
 })
 

@@ -190,6 +190,7 @@ export function StudentsPage({
 }
 
 const PAY_CHIPS: { value: PayFilter; label: string }[] = [
+  { value: 'unpaid', label: 'Не оплатили' },
   { value: 'debt', label: 'Долг' },
   { value: 'soon', label: 'Пора оплачивать' },
   { value: 'partial', label: 'Частично' },

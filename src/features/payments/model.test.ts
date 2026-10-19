@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
+import type { GroupBrief, StudentRow } from '@/features/students/model'
 import type { PaymentRow, StudentBalance } from './api'
 import {
   amountPresets,
   balanceLine,
   carryToNext,
+  duplicateWarning,
   filterPayments,
   formatPaidAt,
+  groupPayStatuses,
+  historyLine,
   journalCaption,
   journalRow,
   monthBounds,
@@ -13,12 +17,15 @@ import {
   parseAmount,
   paymentHint,
   recentMonths,
+  recordedToast,
   refundHint,
   shiftMonth,
+  subscriptionCaption,
   totals,
   totalsByGroup,
   totalsByTeacher,
   type Lookups,
+  unpaidStatus,
 } from './model'
 
 const G8A = '00000000-0000-4000-b000-000000000001'
@@ -185,7 +192,7 @@ describe('totals (Г2, Г4)', () => {
       subscriptions: 3,
     })
     expect(journalCaption('2026-10', '2026-10-13', totals(rows))).toBe(
-      'Октябрь · 10 200 сом · 4 платежа',
+      'Октябрь · 10\u00a0200 сом · 4 платежа',
     )
   })
   it('a transfer pair (#81) is not money in or out', () => {
@@ -234,7 +241,7 @@ describe('record panel', () => {
   })
   it('presets: the rest and the debt on the current one, half / full on a new one', () => {
     expect(amountPresets('current', 3200, balance({ paidSom: 1600, paidLessons: 6 }))).toEqual([
-      { label: '1 600 · остаток', amount: 1600 },
+      { label: '1\u00a0600 · остаток', amount: 1600 },
     ])
     expect(amountPresets('new', 7400, null).map((p) => p.amount)).toEqual([3700, 7400])
     expect(
@@ -250,7 +257,7 @@ describe('record panel', () => {
           debtSom: 1110,
         }),
       ),
-    ).toEqual([{ label: '1 110 · закрыть долг', amount: 1110 }])
+    ).toEqual([{ label: '1\u00a0110 · закрыть долг', amount: 1110 }])
   })
   it('И37: a new subscription takes over the lessons «в долг» (АМ3)', () => {
     const current = balance({
@@ -264,7 +271,7 @@ describe('record panel', () => {
     expect(
       paymentHint('new', 7400, { lessonsTotal: 20, priceFinal: 7400, priceFull: 7400 }, current),
     ).toBe(
-      'Откроется 20 уроков · 3 урока уйдут на погашение долга, доступно 17 · полная цена 7 400 · ЗП учителя считается от полной цены',
+      'Откроется 20 уроков · 3 урока уйдут на погашение долга, доступно 17 · полная цена 7\u00a0400 · ЗП учителя считается от полной цены',
     )
   })
   it('a payment on the current one: what is opened', () => {
@@ -275,7 +282,7 @@ describe('record panel', () => {
   })
   it('refund hint (В8)', () => {
     expect(refundHint(balance({ lessonsUsed: 7, refundSuggested: 1333 }))).toBe(
-      'Остаток 5 уроков × 266,67 сом = 1 333 сом',
+      'Остаток 5 уроков × 266,67 сом = 1\u00a0333 сом',
     )
   })
   it('parseAmount', () => {
@@ -361,5 +368,264 @@ describe('продлёнка: счёт за месяц в часах (#82)', () 
       lookups,
     )
     expect(row.package).toBe('21 ч за октябрь · 2\u00a0583')
+  })
+})
+
+describe('«Похоже на повтор» (#93)', () => {
+  const SUB = `sub-s1-${G8A}`
+  const student = {
+    id: 's1',
+    enrollments: [
+      {
+        id: 'e1',
+        group_id: G8A,
+        start_date: '2026-09-01',
+        end_date: null,
+        status: 'active' as const,
+        subscriptions: [
+          {
+            id: SUB,
+            lessons_total: 12,
+            price_full: 3200,
+            price_final: 3200,
+            discount_percent: 0,
+            discount_reason: 'none' as const,
+            started_at: '2026-10-01',
+            status: 'active' as const,
+            created_at: '2026-10-01T00:00:00Z',
+          },
+        ],
+      },
+    ],
+  }
+  const current = balance({ subscriptionId: SUB, lessonsUsed: 3, lessonsLeft: 9 })
+  const paidOct5 = pay({ paid_at: '2026-10-05T04:00:00Z' })
+
+  it('a payment in the group within 14 days', () => {
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'current', groupId: G8A, balance: current },
+        [paidOct5],
+        '2026-10-18',
+      ),
+    ).toEqual(['Оплата 3\u00a0200 сом уже внесена 05.10 (абонемент с 01.10, осталось 9 из 12)'])
+    // another group, a refund — not a repeat
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'current', groupId: G8A, balance: current },
+        [
+          pay({ group: G6, paid_at: '2026-10-15T04:00:00Z' }),
+          pay({ kind: 'refund', amount: -800 }),
+        ],
+        '2026-10-18',
+      ),
+    ).toEqual([])
+  })
+
+  it('a new package while the current one is paid with ≥ 3 lessons left', () => {
+    const old = pay({ paid_at: '2026-09-20T04:00:00Z' })
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'new', groupId: G8A, balance: current },
+        [old],
+        '2026-10-18',
+      ),
+    ).toEqual(['Текущий абонемент оплачен, осталось 9 уроков — новый ещё не нужен'])
+    // both reasons at once
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'new', groupId: G8A, balance: current },
+        [paidOct5],
+        '2026-10-18',
+      ),
+    ).toHaveLength(2)
+  })
+
+  it('an after-school invoice already paid', () => {
+    const invoice = balance({
+      subscriptionId: 'inv',
+      unit: 'hour',
+      periodMonth: '2026-10-01',
+      lessonsTotal: 21,
+      pricedTotal: 21,
+      priceFinal: 2583,
+      paidSom: 2583,
+      paidLessons: 21,
+    })
+    const p = pay({ paid_at: '2026-09-28T04:00:00Z', price: 2583 })
+    p.subscription = { ...p.subscription, id: 'inv', hours_total: 21, period_month: '2026-10-01' }
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'current', groupId: G8A, balance: invoice },
+        [p],
+        '2026-10-18',
+      ),
+    ).toEqual(['Счёт за октябрь уже оплачен 28.09'])
+  })
+
+  it('no repeat: the last payment 20 days ago, a partly paid one, a debt', () => {
+    const old = pay({ paid_at: '2026-09-28T04:00:00Z' })
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'current', groupId: G8A, balance: current },
+        [old],
+        '2026-10-18',
+      ),
+    ).toEqual([])
+    const partial = balance({
+      subscriptionId: SUB,
+      paidSom: 1600,
+      paidLessons: 6,
+      lessonsUsed: 2,
+      lessonsLeft: 10,
+    })
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'current', groupId: G8A, balance: partial },
+        [pay({ amount: 1600, paid_at: '2026-09-25T04:00:00Z' })],
+        '2026-10-18',
+      ),
+    ).toEqual([])
+    const debt = balance({
+      subscriptionId: SUB,
+      lessonsUsed: 14,
+      lessonsLeft: -2,
+      debtLessons: 2,
+      debtSom: 533,
+    })
+    expect(
+      duplicateWarning(student, { kind: 'new', groupId: G8A, balance: debt }, [old], '2026-10-18'),
+    ).toEqual([])
+  })
+})
+
+describe('статус оплаты в выборе ученика (#93)', () => {
+  const groups = new Map<string, GroupBrief>([
+    [
+      G8A,
+      {
+        id: G8A,
+        name: '8 класс А',
+        subject: 'Математика',
+        group_type: 'group',
+        status: 'active',
+        start_date: '2026-09-01',
+        end_date: null,
+        teacher: null,
+        schedule_rules: [],
+      },
+    ],
+  ])
+  const student = (subs: StudentRow['enrollments'][number]['subscriptions']): StudentRow => ({
+    id: 's1',
+    full_name: 'Нурлан Асанов',
+    grade: 8,
+    parent_name: null,
+    parent_phone: null,
+    is_returning: false,
+    referred_by_student_id: null,
+    notes: null,
+    created_at: '2026-09-01T00:00:00Z',
+    enrollments: [
+      {
+        id: 'e1',
+        group_id: G8A,
+        start_date: '2026-09-01',
+        end_date: null,
+        status: 'active',
+        subscriptions: subs,
+      },
+    ],
+  })
+  const sub = {
+    id: `sub-s1-${G8A}`,
+    lessons_total: 12,
+    price_full: 3200,
+    price_final: 3200,
+    discount_percent: 0,
+    discount_reason: 'none' as const,
+    started_at: '2026-10-01',
+    status: 'active' as const,
+    created_at: '2026-10-01T00:00:00Z',
+  }
+
+  it('paid: the last payment and what is left', () => {
+    const [row] = groupPayStatuses(
+      student([sub]),
+      groups,
+      [balance({ subscriptionId: sub.id, lessonsUsed: 3, lessonsLeft: 9 })],
+      [pay({ paid_at: '2026-10-05T04:00:00Z' })],
+    )
+    expect(row).toMatchObject({
+      group: 'Математика · 8 класс А',
+      state: 'paid',
+      label: 'Оплачено 05.10 · 3\u00a0200',
+      detail: 'абонемент с 01.10 · осталось 9 из 12',
+      tone: 'ok',
+    })
+  })
+  it('partial, debt, nothing paid', () => {
+    const partial = groupPayStatuses(
+      student([sub]),
+      groups,
+      [
+        balance({
+          subscriptionId: sub.id,
+          paidSom: 1600,
+          paidLessons: 6,
+          lessonsUsed: 1,
+          lessonsLeft: 11,
+        }),
+      ],
+      [pay({ amount: 1600 })],
+    )[0]
+    expect(partial).toMatchObject({
+      label: 'Частично',
+      detail: 'оплачено 6 из 12 · внесено 1\u00a0600 из 3\u00a0200',
+    })
+    const debt = groupPayStatuses(
+      student([sub]),
+      groups,
+      [
+        balance({
+          subscriptionId: sub.id,
+          paidSom: 0,
+          paidLessons: 0,
+          lessonsUsed: 2,
+          lessonsLeft: 10,
+          debtLessons: 2,
+          debtSom: 533,
+        }),
+      ],
+      [],
+    )[0]
+    expect(debt).toMatchObject({ state: 'debt', label: 'Долг 2 урока · 533 сом', tone: 'warn' })
+    const none = groupPayStatuses(
+      student([sub]),
+      groups,
+      [balance({ subscriptionId: sub.id, paidSom: 0, paidLessons: 0 })],
+      [],
+    )
+    expect(none[0]).toMatchObject({ state: 'none', label: 'Нет оплат' })
+    expect(unpaidStatus(none)).toBe(true)
+  })
+  it('history line and the toast', () => {
+    const subs = new Map([[sub.id, sub]])
+    expect(historyLine(pay({ paid_at: '2026-10-05T04:00:00Z' }), subs, groups)).toEqual({
+      date: '05.10',
+      amount: '3\u00a0200 сом',
+      caption: 'Mbank · Математика · 8 класс А · абонемент с 01.10 · Алишка',
+    })
+    expect(recordedToast('Айжан Б.', 3200, '8 класс А', 'абонемент с 01.10')).toBe(
+      'Оплата записана: Айжан Б. · 3\u00a0200 сом · 8 класс А · абонемент с 01.10',
+    )
+    expect(subscriptionCaption({ period_month: '2026-10-01' })).toBe('счёт за октябрь')
   })
 })
