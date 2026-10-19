@@ -9,7 +9,14 @@ import { subjectName } from '@/features/subjects/api'
 import { supabase } from '@/lib/supabase/client'
 import { parseDateRu } from '@/lib/time'
 import { monthEnd, monthStart } from './model'
-import type { Adjustment, MyMonthGroup, MyMonthSource, PayrollSource, PreviewRow } from './model'
+import type {
+  Adjustment,
+  MyMonthGroup,
+  MyMonthSource,
+  PayrollPeriod,
+  PayrollSource,
+  PreviewRow,
+} from './model'
 
 /** Every payroll query starts with this key — realtime and «Провести» invalidate them at once. */
 export const PAYROLL_KEY = 'payroll'
@@ -244,6 +251,25 @@ const plannedSchema = z.object({
   status: z.enum(['planned', 'held', 'cancelled']),
 })
 
+const periodSchema = z.object({
+  closed_at: z.string(),
+  comment: z.string().nullable(),
+  closer: z.object({ full_name: z.string() }).nullable(),
+})
+
+/** The payroll_periods row of `month` (#94); null — the month is open. */
+async function fetchPeriod(month: string): Promise<PayrollPeriod | null> {
+  const { data, error } = await supabase
+    .from('payroll_periods')
+    .select('closed_at, comment, closer:profiles!closed_by(full_name)')
+    .eq('month', monthStart(month))
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  const row = periodSchema.parse(data)
+  return { closedAt: row.closed_at, closedBy: row.closer?.full_name ?? null, comment: row.comment }
+}
+
 /**
  * Б1: v_payroll_preview of `month`, every teacher (with nothing held — zeros) and the month's
  * planned lessons up to `today` — which of them are over decides lessonState(now) on the client.
@@ -253,7 +279,8 @@ export const payrollQuery = (month: string, today: string) =>
     queryKey: [PAYROLL_KEY, 'table', month, today],
     queryFn: async (): Promise<PayrollSource> => {
       const last = monthEnd(month) < today ? monthEnd(month) : today
-      const [preview, adjustments, teachers, planned] = await Promise.all([
+      const [period, preview, adjustments, teachers, planned] = await Promise.all([
+        fetchPeriod(month),
         fetchPreview(month),
         fetchAdjustments(month),
         supabase
@@ -272,6 +299,7 @@ export const payrollQuery = (month: string, today: string) =>
       if (teachers.error) throw teachers.error
       if (planned.error) throw planned.error
       return {
+        period,
         preview,
         adjustments,
         teachers: z.array(payrollTeacherSchema).parse(teachers.data),
@@ -324,6 +352,17 @@ export const deleteAdjustmentForm = z.object({
 
 export type DeleteAdjustmentInput = z.output<typeof deleteAdjustmentForm>
 
+const editReason = z.string().trim().min(1, 'Укажите причину').max(500, 'Слишком длинный текст')
+
+/** «⋯ → Изменить» an advance (#94): the issue form's fields + a reason; admin only (0028). */
+export const editAdvanceForm = (today: string) =>
+  advanceForm(today).omit({ teacherId: true }).extend({ id: z.uuid(), reason: editReason })
+
+export type EditAdvanceInput = z.output<ReturnType<typeof editAdvanceForm>>
+
+export const reopenPeriodForm = z.object({ month: z.string(), reason: editReason })
+export type ReopenPeriodInput = z.output<typeof reopenPeriodForm>
+
 export class AdvanceError extends Error {
   constructor(message: string) {
     super(message)
@@ -343,6 +382,62 @@ export function advanceErrorMessage(error: { code?: string; message?: string }):
   }
   if (error.code === 'P0002') return 'Запись уже удалена'
   return 'Не удалось записать. Проверьте интернет и попробуйте ещё раз.'
+}
+
+/** Postgres error of close_ / reopen_payroll_period → staff-facing text (0028). */
+export function periodErrorMessage(error: { code?: string; message?: string }): string {
+  const m = error.message ?? ''
+  if (error.code === '42501') {
+    return m.includes('reopen')
+      ? 'Открыть период может только администратор'
+      : 'Закрывают период администратор и бухгалтер'
+  }
+  if (error.code === 'P0002') return 'Период уже открыт — обновите страницу'
+  if (error.code === '23514') {
+    if (m.includes('reason')) return 'Укажите причину'
+    if (m.includes('not over')) return 'Месяц ещё не закончился'
+    if (m.includes('already closed')) return 'Период уже закрыт — обновите страницу'
+    if (m.includes('too long')) return 'Слишком длинный комментарий'
+  }
+  return 'Не удалось сохранить. Проверьте интернет и попробуйте ещё раз.'
+}
+
+/** «Закрыть период»: locks every lesson of the month; returns how many. */
+export async function closePeriod(input: { month: string; comment: string }): Promise<number> {
+  const { data, error } = await supabase.rpc('close_payroll_period', {
+    p_month: monthStart(input.month),
+    p_comment: input.comment.trim() === '' ? undefined : input.comment.trim(),
+  })
+  if (error) throw new AdvanceError(periodErrorMessage(error))
+  return z.number().int().parse(data)
+}
+
+/** «Открыть период» (admin, with a reason): unlocks the month's lessons; returns how many. */
+export async function reopenPeriod(input: ReopenPeriodInput): Promise<number> {
+  const { data, error } = await supabase.rpc('reopen_payroll_period', {
+    p_month: monthStart(input.month),
+    p_reason: input.reason,
+  })
+  if (error) throw new AdvanceError(periodErrorMessage(error))
+  return z.number().int().parse(data)
+}
+
+export async function updateAdvance(input: EditAdvanceInput): Promise<void> {
+  const { error } = await supabase.rpc('update_payroll_adjustment', {
+    p_id: input.id,
+    p_amount: input.amount,
+    p_issued_on: input.issuedOn,
+    p_month: monthStart(input.month),
+    p_comment: input.comment,
+    p_reason: input.reason,
+  })
+  if (error) {
+    throw new AdvanceError(
+      error.code === '42501'
+        ? 'Изменить аванс может только администратор'
+        : advanceErrorMessage(error),
+    )
+  }
 }
 
 export async function issueAdvance(input: AdvanceInput): Promise<void> {
@@ -379,6 +474,11 @@ export function usePayrollRealtime() {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'payroll_adjustments' },
+        invalidate,
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'payroll_periods' },
         invalidate,
       )
       .subscribe()

@@ -32,8 +32,8 @@ import {
   type PayTotals,
 } from './calc'
 
-// TODO(R3, docs/03-project-plan.md «R3 — закрытие периода»): payroll_periods does not exist yet,
-// so every month is open and every sum is preliminary; «закрыт DD.MM» comes with close_period.
+// Closed months live in payroll_periods (#94, И77): Б1 closes / reopens them. «Мой месяц» still says
+// «предварительно» — the teacher's view of a closed month is a separate task.
 // Advances are real since #83 (payroll_adjustments): «К выплате» = начислено − авансы.
 export const PRELIMINARY_NOTE = 'Предварительно — пока бухгалтер не закрыл месяц'
 
@@ -165,7 +165,17 @@ export interface PreviewRow extends PayTotals {
   toPay: number
 }
 
+/** A closed payroll month (payroll_periods, #94). */
+export interface PayrollPeriod {
+  closedAt: string
+  /** Who closed it; null — the profile is not readable / a system entry. */
+  closedBy: string | null
+  comment: string | null
+}
+
 export interface PayrollSource {
+  /** Null — the month is open. */
+  period: PayrollPeriod | null
   preview: PreviewRow[]
   /** Every adjustment of the month, oldest first. */
   adjustments: Adjustment[]
@@ -545,6 +555,20 @@ export function payrollCaption(v: PayrollView, month: string): string {
     `${v.unconfirmed} не подтверждено`,
   ].join(' · ')
 }
+
+/** A month can be closed once it is over (close_payroll_period refuses the running month). */
+export const canClosePeriod = (month: string, today: string) => month < monthOf(today)
+
+/** «Период закрыт 05.10» / «Период открыт» (Б1 chip). */
+export function periodChip(period: PayrollPeriod | null): { text: string; closed: boolean } {
+  if (!period) return { text: 'Период открыт', closed: false }
+  return {
+    text: `Период закрыт ${formatDayMonthShort(bishkekDate(Date.parse(period.closedAt)))}`,
+    closed: true,
+  }
+}
+
+const formatDayMonthShort = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`
 
 /** «118 340» → with «сом» where the screen needs it. */
 export const som = (n: number) => `${formatSom(n)} сом`

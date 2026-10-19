@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { TariffTerms } from '@/features/tariffs/current'
 import {
+  canClosePeriod,
+  periodChip,
   adjustmentCaption,
   advanceMonths,
   confirmedCaption,
@@ -380,6 +382,7 @@ describe('УД4 lesson table (#76)', () => {
 describe('payrollView (Б1)', () => {
   const view = payrollView(
     {
+      period: null,
       preview: [
         {
           teacherId: 'g',
@@ -477,6 +480,7 @@ describe('payrollView (Б1)', () => {
   it('«К выплате всего» does not net an overpaid teacher against the others (#83)', () => {
     const v = payrollView(
       {
+        period: null,
         preview: [
           [1_000, 0],
           [500, 2_000],
@@ -514,6 +518,7 @@ describe('payrollView (Б1)', () => {
   it('total hours are rounded to 2 decimals, not float noise', () => {
     const v = payrollView(
       {
+        period: null,
         preview: [0.1, 0.2, 1.33].map((hours, i) => ({
           teacherId: `t${i}`,
           lessonsHeld: 1,
@@ -558,5 +563,19 @@ describe('advances captions (#83)', () => {
   it('an advance counts against the issue month by default; the one before and after may be chosen', () => {
     expect(advanceMonths('2026-10-14')).toEqual(['2026-09', '2026-10', '2026-11'])
     expect(advanceMonths('2026-01-05')).toEqual(['2025-12', '2026-01', '2026-02'])
+  })
+})
+
+describe('payroll period (#94)', () => {
+  it('a month can be closed once it is over', () => {
+    expect(canClosePeriod('2026-09', '2026-10-20')).toBe(true)
+    expect(canClosePeriod('2026-10', '2026-10-20')).toBe(false)
+  })
+
+  it('the chip says open or closed with the day (Bishkek)', () => {
+    expect(periodChip(null)).toEqual({ text: 'Период открыт', closed: false })
+    expect(
+      periodChip({ closedAt: '2026-10-04T20:30:00Z', closedBy: 'Каныкей', comment: null }),
+    ).toEqual({ text: 'Период закрыт 05.10', closed: true })
   })
 })
