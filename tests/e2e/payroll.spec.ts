@@ -97,7 +97,7 @@ test('«Мой месяц» with reduced motion: no tilt, the sum without count-
   await expect(page.getByTestId('pay-card-tilt')).toHaveCount(0)
 })
 
-test('Б1 «Расчёт ЗП»: accountant sees every teacher, closing is R3', async ({ page }, testInfo) => {
+test('Б1 «Расчёт ЗП»: accountant sees every teacher, closing is open to them (#94)', async ({ page }, testInfo) => {
   await pinClock(page, NOW)
   await login(page, AIGERIM)
   // Until the 15th the payroll screen opens on the month being paid — September.
@@ -123,12 +123,12 @@ test('Б1 «Расчёт ЗП»: accountant sees every teacher, closing is R3', 
     await expect(gulzat).toContainText('38 160')
     // Нургуль: after-school — 22 lessons, 66 hours
     await expect(table.getByRole('row', { name: /Нургуль Токтоева/ })).toContainText('66')
-    await expect(page.getByRole('button', { name: 'Закрыть период' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Закрыть период' })).toBeEnabled()
     await expect(page.getByRole('button', { name: 'Сверка со старой схемой' })).toBeDisabled()
   } else {
     const list = page.getByRole('region', { name: 'По учителям' })
     await expect(list.getByRole('listitem').first()).toContainText('52 зан · 318 уч-ур · 45 %')
-    await expect(page.getByRole('button', { name: 'Закрыть сентябрь' })).toBeDisabled()
+    await expect(page.getByRole('button', { name: 'Закрыть сентябрь' })).toBeEnabled()
   }
   await page.screenshot({ path: shot(testInfo, 'payroll'), fullPage: true })
 
@@ -138,7 +138,7 @@ test('Б1 «Расчёт ЗП»: accountant sees every teacher, closing is R3', 
   await expect(page.getByTestId('payroll-total')).toContainText('0')
 })
 
-test('admin: А1 card «Расчёт ЗП → 47 546 сом» opens Б1 read-only', async ({ page }) => {
+test('admin: А1 card «Расчёт ЗП → 47 546 сом» opens Б1, September can be closed', async ({ page }) => {
   test.skip(!isDesktop(page), 'the card is on А1 (desktop)')
   await pinClock(page, NOW)
   await login(page, KANYKEI)
@@ -148,7 +148,7 @@ test('admin: А1 card «Расчёт ЗП → 47 546 сом» opens Б1 read-onl
   await card.click()
   await expect(page).toHaveURL(/\/payroll\?month=2026-09$/)
   await expect(page.getByTestId('payroll-total')).toContainText('47 546')
-  await expect(page.getByRole('button', { name: 'Закрыть период' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Закрыть период' })).toBeEnabled()
 })
 
 test('УД1: month card from v_payroll_preview', async ({ page }) => {
