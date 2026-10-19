@@ -62,7 +62,7 @@ function applyHeld(qc: QueryClient, lessonId: string, v: Variables, confirmedAt:
 }
 
 /** «Сегодня», «Требует внимания» (У2 / УД1 / А1), «Мой месяц», ЗП, балансы учеников. */
-function refresh(qc: QueryClient, lessonId: string, groupId: string) {
+export function refreshAfterLesson(qc: QueryClient, lessonId: string, groupId: string) {
   for (const queryKey of [
     lessonKey(lessonId),
     [TODAY_KEY],
@@ -101,7 +101,7 @@ export function useConfirmLesson(lessonId: string, groupId: string) {
       toast.error(`${v.copy.failed}: ${reason}`)
     },
     onSettled: () => {
-      refresh(qc, lessonId, groupId)
+      refreshAfterLesson(qc, lessonId, groupId)
     },
   })
 }

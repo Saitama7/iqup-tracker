@@ -25,8 +25,13 @@ export interface AuditRow {
   reason: string | null
   at: string
   kind: AuditKind
-  /** Statuses of the marks written by the same «Провести» (lesson rows only). */
+  /**
+   * Statuses of the marks written by the same «Провести» / deleted by the same «Отменить
+   * проведение» (lesson rows only).
+   */
   marks: string[] | null
+  /** «Отменить проведение» (#95): the teacher's pay of the deleted marks, сом; else null. */
+  amount: number | null
 }
 
 export interface AuditLookups {
@@ -304,6 +309,35 @@ function describeLesson(row: AuditRow, l: AuditLookups): Described {
           : { label: 'Удалено', tone: 'stone' },
       link,
       parts: [`${before === 'held' ? 'Проведённое занятие' : 'Занятие'} ${where} удалено`],
+    }
+  }
+  if (before === 'held' && after === 'planned') {
+    // unconfirm_lesson (#95): the marks went with it — «6 отметок удалены (учителю Гульзат −1 050 сом)»
+    const n = row.marks?.length ?? 0
+    const date = str(row.before, 'lesson_date')
+    const start = str(row.before, 'planned_start')
+    const when = [date ? dayMonth(date) : null, start ? hhmm(start) : null]
+      .filter(Boolean)
+      .join(' ')
+    const teacher = str(row.before, 'teacher_id')
+    const pay = row.amount
+      ? [
+          ' (учителю ',
+          strong(firstName(teacherName(teacher, l))),
+          ` −${formatSom(row.amount)} сом)`,
+        ]
+      : []
+    return {
+      badge: { label: 'Правка', tone: 'burned' },
+      link,
+      parts: [
+        'Проведение отменено: ',
+        [groupName(groupId, l), when].filter(Boolean).join(' · '),
+        n > 0
+          ? ` · ${n} ${pluralRu(n, ['отметка удалена', 'отметки удалены', 'отметок удалены'])}`
+          : ' · отметок не было',
+        ...pay,
+      ],
     }
   }
   if (before === 'planned' && after === 'held') {
@@ -1140,7 +1174,8 @@ function reasonNote(row: AuditRow, note: string | null): string | null {
   }
   const label = REASON_LABEL[reason]
   if (label) return `Причина: ${label}`
-  if (note?.includes(`«${reason}»`)) return null
+  // the note already quotes it — whole, or at the end («занятие возвращено …: <причина>», #95)
+  if (note?.includes(`«${reason}»`) || note?.includes(`: ${reason}»`)) return null
   return `Причина: «${reason}»`
 }
 

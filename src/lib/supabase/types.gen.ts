@@ -1148,6 +1148,7 @@ export type Database = {
           action: string | null
           actor_id: string | null
           after: Json | null
+          amount: number | null
           at: string | null
           before: Json | null
           entity: string | null
@@ -1163,6 +1164,7 @@ export type Database = {
           action?: string | null
           actor_id?: string | null
           after?: Json | null
+          amount?: never
           at?: string | null
           before?: Json | null
           entity?: string | null
@@ -1177,6 +1179,7 @@ export type Database = {
           action?: string | null
           actor_id?: string | null
           after?: Json | null
+          amount?: never
           at?: string | null
           before?: Json | null
           entity?: string | null
@@ -1754,6 +1757,16 @@ export type Database = {
         Returns: string
       }
       leads_group: { Args: { p_group_id: string }; Returns: boolean }
+      lesson_pay_exact: { Args: { p_lesson_id: string }; Returns: number }
+      lesson_payroll_impact: {
+        Args: { p_lesson_id: string }
+        Returns: {
+          amount: number
+          marks: number
+          teacher_id: string
+          teacher_name: string
+        }[]
+      }
       lesson_starts_at: { Args: { p_date: string; p_start: string }; Returns: string }
       mark_pay: {
         Args: {
@@ -1912,6 +1925,7 @@ export type Database = {
         }
         Returns: number
       }
+      unconfirm_lesson: { Args: { p_lesson_id: string; p_reason: string }; Returns: undefined }
       update_payment: {
         Args: {
           p_amount: number

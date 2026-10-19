@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { StrictMode, useState } from 'react'
-import { useBackClose } from './use-back-close'
+import { releaseOverlayEntry, useBackClose } from './use-back-close'
 
 // jsdom: history.back() is async and fires popstate, as in a browser.
 function setViewport(desktop: boolean) {
@@ -75,6 +75,25 @@ describe('useBackClose (#57)', () => {
     })
     await act(() => pop)
     expect(window.history.state).toEqual({ page: 1 })
+  })
+
+  it('a released entry is not stepped back on close — a replace navigation keeps it (#95)', async () => {
+    const { result } = renderHook(() => useOverlay(true))
+    releaseOverlayEntry()
+    expect(window.history.state).toEqual({ page: 1 })
+    let popstates = 0
+    const onPop = () => {
+      popstates++
+    }
+    window.addEventListener('popstate', onPop)
+    act(() => {
+      result.current.setOpen(false)
+    })
+    window.history.replaceState({ page: 2 }, '', '/admin/groups')
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    window.removeEventListener('popstate', onPop)
+    expect(popstates).toBe(0)
+    expect(window.location.pathname).toBe('/admin/groups')
   })
 
   it('desktop: no history entry', () => {

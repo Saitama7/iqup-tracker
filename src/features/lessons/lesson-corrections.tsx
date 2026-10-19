@@ -3,7 +3,7 @@
 // correct them («Попросить исправить») and sees the request's status. Closed period — no changes;
 // a request left open there can only be rejected (reject_correction_request works on it).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { LessonSheet } from './api'
@@ -171,8 +171,11 @@ function Changes({ changes, empty }: { changes: readonly MarkChange[]; empty?: s
   )
 }
 
-/** Under the marks of a held lesson, instead of «Провести занятие». */
-export function HeldPanel({ c }: { c: Corrections }) {
+/**
+ * Under the marks of a held lesson, instead of «Провести занятие». `unconfirm` — the admin's
+ * «Отменить проведение» (#95), next to «Исправить отметки».
+ */
+export function HeldPanel({ c, unconfirm }: { c: Corrections; unconfirm?: ReactNode }) {
   const noteId = useId()
   if (c.locked) {
     return (
@@ -181,6 +184,7 @@ export function HeldPanel({ c }: { c: Corrections }) {
         <p className="rounded-2xl bg-line px-4 py-3 text-center text-sm font-extrabold text-ink-muted">
           Период закрыт — отметки не меняются. Исправления — корректировкой ЗП
         </p>
+        {c.isAdmin && unconfirm}
       </div>
     )
   }
@@ -240,9 +244,12 @@ export function HeldPanel({ c }: { c: Corrections }) {
         </p>
       )}
       {c.isAdmin ? (
-        <button type="button" className={outline} onClick={c.start}>
-          Исправить отметки
-        </button>
+        <div className={cn('grid gap-2', unconfirm && 'grid-cols-2')}>
+          <button type="button" className={outline} onClick={c.start}>
+            Исправить отметки
+          </button>
+          {unconfirm}
+        </div>
       ) : (
         c.latest?.status !== 'pending' && (
           <button type="button" className={outline} onClick={c.start}>

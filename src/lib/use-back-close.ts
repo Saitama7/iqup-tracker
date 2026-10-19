@@ -67,3 +67,18 @@ export function useBackClose(open: boolean, onClose: () => void): void {
     }
   }, [active])
 }
+
+/**
+ * Hands the history entry of the phone overlay on top over to the caller: the overlay closing
+ * next will not step back (its entry no longer carries the mark), so a `navigate({ replace })`
+ * right after replaces it — e.g. leaving the screen on a dialog's success without a pending
+ * history.back() racing the navigation. No-op when no overlay entry is on top (desktop).
+ */
+export function releaseOverlayEntry(): void {
+  const state: unknown = window.history.state
+  if (overlayOf(state) === null) return
+  const rest = Object.fromEntries(
+    Object.entries(state as Record<string, unknown>).filter(([k]) => k !== KEY),
+  )
+  window.history.replaceState(rest, '', window.location.href)
+}

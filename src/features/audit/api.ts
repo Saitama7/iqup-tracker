@@ -28,6 +28,7 @@ const rowSchema = z
     at: z.string(),
     kind: z.enum(KINDS as [AuditKind, ...AuditKind[]]),
     marks: z.array(z.string()).nullable(),
+    amount: z.number().int().nullable(),
   })
   .transform((r): AuditRow => ({
     id: r.id,
@@ -41,9 +42,11 @@ const rowSchema = z
     at: r.at,
     kind: r.kind,
     marks: r.marks,
+    amount: r.amount,
   }))
 
-const FIELDS = 'id, actor_id, entity, entity_id, action, before, after, reason, at, kind, marks'
+const FIELDS =
+  'id, actor_id, entity, entity_id, action, before, after, reason, at, kind, marks, amount'
 
 /** Where the next page starts: strictly older than the last row shown. */
 export interface Cursor {
