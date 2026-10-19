@@ -282,11 +282,12 @@ export function StudentPicker({
         <SheetContent
           side="bottom"
           showCloseButton={false}
-          aria-label="Выбор ученика"
           className="gap-0 rounded-t-[24px] border-line bg-card px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]"
         >
           <div className="mx-auto mb-2 h-1 w-10 shrink-0 rounded-full bg-line-strong" aria-hidden />
-          <SheetTitle className="px-1 pb-2 font-display text-lg font-bold">Ученик</SheetTitle>
+          <SheetTitle className="px-1 pb-2 font-display text-lg font-bold">
+            Выбор ученика
+          </SheetTitle>
           <SheetDescription className="sr-only">
             Найдите ученика по имени или телефону
           </SheetDescription>

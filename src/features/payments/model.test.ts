@@ -192,7 +192,7 @@ describe('totals (Г2, Г4)', () => {
       subscriptions: 3,
     })
     expect(journalCaption('2026-10', '2026-10-13', totals(rows))).toBe(
-      'Октябрь · 10 200 сом · 4 платежа',
+      'Октябрь · 10\u00a0200 сом · 4 платежа',
     )
   })
   it('a transfer pair (#81) is not money in or out', () => {
@@ -241,7 +241,7 @@ describe('record panel', () => {
   })
   it('presets: the rest and the debt on the current one, half / full on a new one', () => {
     expect(amountPresets('current', 3200, balance({ paidSom: 1600, paidLessons: 6 }))).toEqual([
-      { label: '1 600 · остаток', amount: 1600 },
+      { label: '1\u00a0600 · остаток', amount: 1600 },
     ])
     expect(amountPresets('new', 7400, null).map((p) => p.amount)).toEqual([3700, 7400])
     expect(
@@ -257,7 +257,7 @@ describe('record panel', () => {
           debtSom: 1110,
         }),
       ),
-    ).toEqual([{ label: '1 110 · закрыть долг', amount: 1110 }])
+    ).toEqual([{ label: '1\u00a0110 · закрыть долг', amount: 1110 }])
   })
   it('И37: a new subscription takes over the lessons «в долг» (АМ3)', () => {
     const current = balance({
@@ -271,7 +271,7 @@ describe('record panel', () => {
     expect(
       paymentHint('new', 7400, { lessonsTotal: 20, priceFinal: 7400, priceFull: 7400 }, current),
     ).toBe(
-      'Откроется 20 уроков · 3 урока уйдут на погашение долга, доступно 17 · полная цена 7 400 · ЗП учителя считается от полной цены',
+      'Откроется 20 уроков · 3 урока уйдут на погашение долга, доступно 17 · полная цена 7\u00a0400 · ЗП учителя считается от полной цены',
     )
   })
   it('a payment on the current one: what is opened', () => {
@@ -282,7 +282,7 @@ describe('record panel', () => {
   })
   it('refund hint (В8)', () => {
     expect(refundHint(balance({ lessonsUsed: 7, refundSuggested: 1333 }))).toBe(
-      'Остаток 5 уроков × 266,67 сом = 1 333 сом',
+      'Остаток 5 уроков × 266,67 сом = 1\u00a0333 сом',
     )
   })
   it('parseAmount', () => {
@@ -409,7 +409,7 @@ describe('«Похоже на повтор» (#93)', () => {
         [paidOct5],
         '2026-10-18',
       ),
-    ).toEqual(['Оплата 3 200 сом уже внесена 05.10 (абонемент с 01.10, осталось 9 из 12)'])
+    ).toEqual(['Оплата 3\u00a0200 сом уже внесена 05.10 (абонемент с 01.10, осталось 9 из 12)'])
     // another group, a refund — not a repeat
     expect(
       duplicateWarning(
@@ -566,7 +566,7 @@ describe('статус оплаты в выборе ученика (#93)', () =>
     expect(row).toMatchObject({
       group: 'Математика · 8 класс А',
       state: 'paid',
-      label: 'Оплачено 05.10 · 3 200',
+      label: 'Оплачено 05.10 · 3\u00a0200',
       detail: 'абонемент с 01.10 · осталось 9 из 12',
       tone: 'ok',
     })
@@ -588,7 +588,7 @@ describe('статус оплаты в выборе ученика (#93)', () =>
     )[0]
     expect(partial).toMatchObject({
       label: 'Частично',
-      detail: 'оплачено 6 из 12 · внесено 1 600 из 3 200',
+      detail: 'оплачено 6 из 12 · внесено 1\u00a0600 из 3\u00a0200',
     })
     const debt = groupPayStatuses(
       student([sub]),
@@ -620,11 +620,11 @@ describe('статус оплаты в выборе ученика (#93)', () =>
     const subs = new Map([[sub.id, sub]])
     expect(historyLine(pay({ paid_at: '2026-10-05T04:00:00Z' }), subs, groups)).toEqual({
       date: '05.10',
-      amount: '3 200 сом',
+      amount: '3\u00a0200 сом',
       caption: 'Mbank · Математика · 8 класс А · абонемент с 01.10 · Алишка',
     })
     expect(recordedToast('Айжан Б.', 3200, '8 класс А', 'абонемент с 01.10')).toBe(
-      'Оплата записана: Айжан Б. · 3 200 сом · 8 класс А · абонемент с 01.10',
+      'Оплата записана: Айжан Б. · 3\u00a0200 сом · 8 класс А · абонемент с 01.10',
     )
     expect(subscriptionCaption({ period_month: '2026-10-01' })).toBe('счёт за октябрь')
   })
