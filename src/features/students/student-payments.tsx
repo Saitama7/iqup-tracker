@@ -3,6 +3,9 @@ import { Link } from '@tanstack/react-router'
 import { formatSom } from '@/features/tariffs/model'
 import { cardClass } from '@/features/tariffs/parts'
 import type { PaymentRow } from '@/features/payments/api'
+import { packageLabel } from '@/features/payments/edit-model'
+import { isEditable, PaymentMenu, usePaymentEditor } from '@/features/payments/payment-edit'
+import { useSession } from '@/lib/auth'
 import { bishkekDate } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { formatShortDate } from './model'
@@ -33,12 +36,20 @@ export function PaymentsSection({
   payments,
   state,
   groupNameOf,
+  studentName,
+  groupLabelOf,
 }: {
   studentId: string
   payments: readonly PaymentRow[]
   state: 'pending' | 'error' | 'ready'
   groupNameOf: (groupId: string) => string | null
+  /** For the dialogs «Изменить / Удалить оплату» (#92). */
+  studentName: string
+  groupLabelOf: (groupId: string) => string
 }) {
+  // Г9: the admin edits and deletes payments (#92); RLS + the RPCs enforce it anyway.
+  const canEdit = useSession().roles.includes('admin')
+  const editor = usePaymentEditor()
   return (
     <section aria-label="Платежи" className={cn(cardClass, 'flex flex-col')}>
       <div className="flex items-center justify-between border-b border-line px-4 py-3 min-[900px]:px-[18px] min-[900px]:py-3.5">
@@ -64,7 +75,10 @@ export function PaymentsSection({
           {payments.map((p) => (
             <li
               key={p.id}
-              className="flex items-baseline justify-between gap-3 border-b border-line px-4 py-2.5 text-[13px] last:border-0 min-[900px]:px-[18px]"
+              className={cn(
+                'flex justify-between gap-3 border-b border-line px-4 py-2.5 text-[13px] last:border-0 min-[900px]:px-[18px]',
+                canEdit ? 'items-center py-1 pr-1 min-[900px]:pr-1.5' : 'items-baseline',
+              )}
             >
               <span className="min-w-0 font-bold text-ink-muted">
                 {paymentCaption(p, groupNameOf(p.subscription.enrollment.group_id))}
@@ -77,10 +91,31 @@ export function PaymentsSection({
               >
                 {signedSom(p.amount)}
               </span>
+              {canEdit &&
+                (isEditable(p) ? (
+                  <PaymentMenu
+                    label={`${p.kind === 'refund' ? 'возврат' : 'оплата'} ${signedSom(p.amount)}, ${formatShortDate(bishkekDate(Date.parse(p.paid_at)))}`}
+                    onAction={(a) => {
+                      editor.open(
+                        {
+                          payment: p,
+                          studentId,
+                          student: studentName,
+                          group: groupLabelOf(p.subscription.enrollment.group_id),
+                          package: packageLabel(p),
+                        },
+                        a,
+                      )
+                    }}
+                  />
+                ) : (
+                  <span className="size-11 shrink-0" aria-hidden />
+                ))}
             </li>
           ))}
         </ul>
       )}
+      {editor.dialogs}
     </section>
   )
 }

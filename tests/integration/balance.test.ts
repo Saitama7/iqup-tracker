@@ -188,3 +188,112 @@ describe('after-school by hours (#82 fixture)', () => {
     ])
   })
 })
+
+describe('delete_payment / update_payment (#92): the view and balance.ts still agree', () => {
+  async function expectAgree(supabase: Client) {
+    const [view, ts] = await Promise.all([viewRows(supabase), tsBalances(supabase)])
+    expect(view.size).toBe(ts.length)
+    for (const b of ts) expect(view.get(b.subscriptionId)).toEqual(asView(b))
+    return view
+  }
+
+  async function lastPayment(supabase: Client, subscriptionId: string) {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('id')
+      .eq('subscription_id', subscriptionId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single()
+    if (error) throw error
+    return data.id
+  }
+
+  it('a duplicate payment and a duplicate «новый абонемент» are recorded, edited, deleted', async () => {
+    const supabase = await signIn('0555 775 772') // Алишка, admin
+    const before = await expectAgree(supabase)
+    const fixture = await fixtureSubscriptions(supabase)
+    const { data: subs, error } = await supabase
+      .from('v_student_balance')
+      .select('subscription_id, enrollment_id')
+      .eq('unit', 'lesson')
+      .eq('status', 'active')
+      .eq('is_current', true)
+      .gt('lessons_used', 0)
+      .gt('paid_som', 0)
+    if (error) throw error
+    const target = subs.find((s) => s.subscription_id && !fixture.has(s.subscription_id))
+    if (!target?.subscription_id || !target.enrollment_id) throw new Error('no seed subscription')
+    const subscriptionId = target.subscription_id
+
+    const rec = await supabase.rpc('record_payment', {
+      p_subscription_id: subscriptionId,
+      p_amount: 500,
+      p_method: 'cash',
+    })
+    if (rec.error) throw rec.error
+    await expectAgree(supabase)
+    const paymentId = await lastPayment(supabase, subscriptionId)
+
+    const upd = await supabase.rpc('update_payment', {
+      p_payment_id: paymentId,
+      p_amount: 700,
+      p_method: 'mbank',
+      p_paid_on: new Date().toLocaleDateString('sv', { timeZone: 'Asia/Bishkek' }),
+      p_comment: 'опечатка',
+      p_reason: 'интеграционный тест',
+    })
+    if (upd.error) throw upd.error
+    await expectAgree(supabase)
+
+    const del = await supabase.rpc('delete_payment', {
+      p_payment_id: paymentId,
+      p_reason: 'интеграционный тест',
+    })
+    if (del.error) throw del.error
+    expect(del.data).toBe('deleted')
+    expect((await expectAgree(supabase)).get(subscriptionId)).toEqual(before.get(subscriptionId))
+
+    const buy = await supabase.rpc('buy_subscription', {
+      p_enrollment_id: target.enrollment_id,
+      p_amount: 1000,
+      p_method: 'cash',
+    })
+    if (buy.error) throw buy.error
+    const bought = buy.data[0] as (typeof buy.data)[number] | undefined
+    if (!bought) throw new Error('no subscription bought')
+    await expectAgree(supabase)
+    const del2 = await supabase.rpc('delete_payment', {
+      p_payment_id: bought.payment_id,
+      p_reason: 'интеграционный тест',
+    })
+    if (del2.error) throw del2.error
+    expect(del2.data).toBe('subscription_deleted')
+    const after = await expectAgree(supabase)
+    expect(after.has(bought.subscription_id)).toBe(false)
+    expect(after).toEqual(before)
+  })
+
+  it('an extra payment on an hour invoice with credit is deleted (#82 fixture)', async () => {
+    const supabase = await signIn('0555 775 772')
+    const before = await expectAgree(supabase)
+    const fixture = await fixtureSubscriptions(supabase)
+    const invoice = [...before.values()].find(
+      (r) => r.subscription_id && fixture.has(r.subscription_id) && (r.paid_som ?? 0) > 0,
+    )
+    if (!invoice?.subscription_id) throw new Error('no paid fixture invoice')
+    const rec = await supabase.rpc('record_payment', {
+      p_subscription_id: invoice.subscription_id,
+      p_amount: 123,
+      p_method: 'cash',
+    })
+    if (rec.error) throw rec.error
+    await expectAgree(supabase)
+    const del = await supabase.rpc('delete_payment', {
+      p_payment_id: await lastPayment(supabase, invoice.subscription_id),
+      p_reason: 'интеграционный тест',
+    })
+    if (del.error) throw del.error
+    expect(await expectAgree(supabase)).toEqual(before)
+  })
+})
