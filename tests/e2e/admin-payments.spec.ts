@@ -125,7 +125,7 @@ test('А7: частичная оплата открывает 6 уроков, в
     // from А5 / А6: the pupil comes preselected
     await page.goto(`/admin/payments?student=${studentId}`)
     const form = page.getByRole('form', { name: 'Записать оплату' })
-    await expect(form.getByLabel('Ученик')).toHaveValue(studentId)
+    await expect(form.getByLabel('Ученик', { exact: true })).toContainText(name)
     await expect(form.getByLabel('Что оплачивает')).toContainText('доплата по текущему')
     await expect(form.getByText('Текущий: осталось 12 из 12')).toBeVisible()
     await expect(form.getByText('пора оплачивать', { exact: true })).toBeVisible()
@@ -137,8 +137,11 @@ test('А7: частичная оплата открывает 6 уроков, в
     await form.getByRole('button', { name: /^Записать 1\s600 сом/ }).click()
     await expect(page.getByText(`Оплата записана: ${name} · 1\u00a0600 сом`)).toBeVisible()
 
-    // the panel is reset; the pupil's balance now has 6 paid lessons
-    await form.getByLabel('Ученик').selectOption(studentId)
+    // the panel is reset for the next student (#93); the pupil's balance now has 6 paid lessons
+    await form.getByLabel('Ученик', { exact: true }).click()
+    const picker = page.getByRole('dialog', { name: 'Выбор ученика' })
+    await picker.getByRole('searchbox', { name: 'Поиск ученика' }).fill(name)
+    await picker.getByRole('option', { name: new RegExp(name) }).click()
     await expect(form.getByText('оплачено 6 из 12', { exact: true })).toBeVisible()
     await page.screenshot({ path: shot(testInfo, 'payments'), fullPage: true })
 

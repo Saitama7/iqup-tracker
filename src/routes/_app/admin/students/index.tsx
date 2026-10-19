@@ -6,7 +6,7 @@ import { StudentsPage } from '@/features/students/students-page'
 const searchSchema = z.object({
   q: z.string().optional().catch(undefined),
   group: z.string().optional().catch(undefined),
-  pay: z.enum(['debt', 'soon', 'partial']).optional().catch(undefined),
+  pay: z.enum(['unpaid', 'debt', 'soon', 'partial']).optional().catch(undefined),
 })
 
 // А5 Ученики (docs/design/AdminStudents.dc.html); role guard — admin/route.tsx.
