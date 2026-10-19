@@ -1,4 +1,5 @@
--- А9 «Тарифы и праздники» (issue #7): tariffs in effect and past holidays are frozen (0006),
+-- А9 «Тарифы и праздники» (issue #7): tariffs in effect and past holidays are frozen (0006) for
+-- direct writes (a signed-in user writes holidays only through the RPCs of 0028, #94),
 -- a planned tariff version can be deleted, only admin writes, created_by is the signed-in user.
 -- The earliest start of a new tariff (today / 1st of next month, К6) — tariffs_next_month.test.sql.
 begin;
@@ -88,17 +89,18 @@ select is_empty(
   'the planned tariff is gone'
 );
 
+-- #94: a signed-in admin writes holidays only through save_holiday / delete_holidays (0028)
 select throws_ok(
   $$ insert into public.holidays (day, name) select past - 1, 'Задним числом' from d $$,
-  '23514', null, 'admin cannot add a holiday in the past'
+  '42501', null, 'admin cannot insert a holiday directly'
 );
 select lives_ok(
-  $$ insert into public.holidays (day, name) select today, 'Сегодня' from d $$,
-  'admin adds a holiday for today'
+  $$ select public.save_holiday((select today from d), 'Сегодня') $$,
+  'admin adds a holiday for today (save_holiday)'
 );
 select lives_ok(
-  $$ delete from public.holidays where day = (select future from d) $$,
-  'admin deletes an upcoming holiday'
+  $$ select public.delete_holidays(array[(select future from d)]) $$,
+  'admin deletes an upcoming holiday (delete_holidays)'
 );
 
 -- ─── Accountant and teacher: read only ──────────────────────────────────────
