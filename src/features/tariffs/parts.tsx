@@ -37,12 +37,17 @@ export function ErrorText({ children }: { children: ReactNode }) {
 export function SubmitButton({
   children,
   pending,
+  disabled,
+  describedBy,
   onClick,
   variant = 'primary',
   className,
 }: {
   children: ReactNode
   pending?: boolean
+  disabled?: boolean
+  /** aria-describedby — why the button is disabled. */
+  describedBy?: string
   onClick?: () => void
   variant?: 'primary' | 'outline' | 'danger'
   className?: string
@@ -51,7 +56,8 @@ export function SubmitButton({
     <button
       type={onClick ? 'button' : 'submit'}
       onClick={onClick}
-      disabled={pending}
+      disabled={pending || disabled}
+      aria-describedby={describedBy}
       className={cn(
         'flex min-h-11 items-center justify-center gap-2 rounded-[14px] px-4 text-sm font-extrabold whitespace-nowrap disabled:opacity-50',
         variant === 'primary' && 'bg-ink text-brand',

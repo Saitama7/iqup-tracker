@@ -384,8 +384,16 @@ export function matchesQuery(row: Pick<StudentListRow, 'fullName' | 'parentPhone
   return fold(row.fullName).includes(fold(query))
 }
 
-export type PayFilter = 'debt' | 'soon' | 'partial'
-export const PAY_FILTERS: readonly PayFilter[] = ['debt', 'soon', 'partial']
+/** unpaid — «Не оплатили» (#93): debt, due, partly paid, or in a group with no subscription yet. */
+export type PayFilter = 'unpaid' | 'debt' | 'soon' | 'partial'
+export const PAY_FILTERS: readonly PayFilter[] = ['unpaid', 'debt', 'soon', 'partial']
+
+/** «Не оплатили»: the admin is to take money — «Кто ещё не оплатил» of А7 (#93). */
+export const unpaidRow = (r: Pick<StudentListRow, 'payState' | 'status'>) =>
+  r.status === 'active' && r.payState !== 'paid'
+
+const payMatches = (r: StudentListRow, pay: PayFilter) =>
+  pay === 'unpaid' ? unpaidRow(r) : r.payState === pay
 
 export interface StudentFilter {
   q?: string
@@ -397,7 +405,7 @@ export function filterRows(rows: readonly StudentListRow[], f: StudentFilter): S
   return rows.filter(
     (r) =>
       (!f.group || r.groupIds.includes(f.group)) &&
-      (!f.pay || r.payState === f.pay) &&
+      (!f.pay || payMatches(r, f.pay)) &&
       matchesQuery(r, f.q ?? ''),
   )
 }
@@ -405,6 +413,7 @@ export function filterRows(rows: readonly StudentListRow[], f: StudentFilter): S
 /** Counters of the filter chips (the group and the search are not applied). */
 export function payCounts(rows: readonly StudentListRow[]): Record<PayFilter, number> {
   return {
+    unpaid: rows.filter(unpaidRow).length,
     debt: rows.filter((r) => r.payState === 'debt').length,
     soon: rows.filter((r) => r.payState === 'soon').length,
     partial: rows.filter((r) => r.payState === 'partial').length,

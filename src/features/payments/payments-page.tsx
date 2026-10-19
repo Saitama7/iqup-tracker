@@ -6,7 +6,7 @@
 import { monthAccusative } from '@/features/afterschool/model'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { useId, useMemo, useState, type ReactNode, type SubmitEvent } from 'react'
+import { useId, useMemo, useRef, useState, type ReactNode, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { DateInput } from '@/components/ui/date-picker'
 import { PageHeader, PageTitle } from '@/components/page'
@@ -19,6 +19,7 @@ import {
   type StudentsSource,
 } from '@/features/students/model'
 import { NativeSelect } from '@/features/students/parts'
+import { StudentPicker, type StudentPickerOption } from '@/features/students/student-picker'
 import { tariffsQuery } from '@/features/subscriptions/api'
 import {
   DISCOUNTS,
@@ -45,6 +46,7 @@ import { bishkekDate, formatDateRu } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import {
+  allPaymentsQuery,
   BALANCES_KEY,
   balancesQuery,
   PAYMENT_METHODS,
@@ -61,7 +63,10 @@ import { debtOverLimit } from './balance'
 import {
   amountPresets,
   balanceLine,
+  duplicateWarning,
   filterPayments,
+  groupPayStatuses,
+  historyLine,
   journalCaption,
   journalRow,
   METHOD_BUTTON,
@@ -71,17 +76,22 @@ import {
   monthOf,
   parseAmount,
   paymentHint,
+  paymentsOf,
   recentMonths,
+  recordedToast,
   refundHint,
   shiftMonth,
   signedSom,
   som,
+  subscriptionCaption,
+  subscriptionsOf,
   totals,
   totalsByGroup,
   totalsByTeacher,
   type JournalRow,
   type Lookups,
   type TotalsRow,
+  unpaidStatus,
 } from './model'
 
 export const PAYMENT_TABS = ['record', 'journal', 'groups', 'teachers'] as const
@@ -734,7 +744,12 @@ function RecordPanel({
   const id = useId()
   const queryClient = useQueryClient()
   const tariffs = useQuery(tariffsQuery())
+  // every payment: the picker shows who already paid and when, the panel warns of a repeat (#93)
+  const allPayments = useQuery(allPaymentsQuery())
+  const payments = useMemo(() => allPayments.data ?? [], [allPayments.data])
+  const pickerRef = useRef<HTMLButtonElement>(null)
   const [studentId, setStudentId] = useState(initialStudent ?? '')
+  const [confirmed, setConfirmed] = useState(false)
   const [picked, setTarget] = useState<Target | null>(null)
   const [amount, setAmount] = useState('')
   const [pickedDiscount, setDiscount] = useState<DiscountPct | null>(null)
@@ -753,6 +768,33 @@ function RecordPanel({
   )
   const student = students.find((s) => s.id === studentId)
   const choices = useMemo(() => choicesOf(student, source, balances), [student, source, balances])
+  const groupsById = useMemo(() => new Map((source?.groups ?? []).map((g) => [g.id, g])), [source])
+  const pickerOptions = useMemo(
+    () =>
+      students.map((s): StudentPickerOption => {
+        const statuses = groupPayStatuses(s, groupsById, balances, payments)
+        return {
+          id: s.id,
+          fullName: s.full_name,
+          grade: s.grade,
+          parentPhone: s.parent_phone,
+          groups: statuses.map((x) => x.group).join(' · '),
+          statuses: statuses.map((x) => ({
+            key: x.groupId,
+            group: x.group,
+            label: x.label,
+            detail: x.detail,
+            tone: x.tone,
+          })),
+          unpaid: allPayments.data ? unpaidStatus(statuses) : undefined,
+        }
+      }),
+    [students, groupsById, balances, payments, allPayments.data],
+  )
+  const recent = useMemo(
+    () => (student ? paymentsOf(payments, student.id).slice(0, 3) : []),
+    [student, payments],
+  )
 
   const history = useMemo(
     () =>
@@ -799,6 +841,37 @@ function RecordPanel({
     setError(null)
     setTarget(null)
     setDiscount(null)
+    setConfirmed(false)
+  }
+
+  // «Похоже на повтор» (#93, И75): a warning with a confirmation, never a block
+  const warning =
+    student && choice && !refund
+      ? duplicateWarning(
+          student,
+          { kind: target.kind, groupId: choice.groupId, balance: current },
+          payments,
+          today,
+        )
+      : []
+  const blocked = warning.length > 0 && !confirmed
+
+  /** «8 класс А», «абонемент с 01.10» / «счёт за октябрь» — the toast. */
+  const paidFor = (): [string | null, string] => {
+    const g = choice ? groupsById.get(choice.groupId) : undefined
+    if (target?.kind === 'current' && current && student) {
+      const s = subscriptionsOf(student).get(current.subscriptionId)
+      return [
+        g?.name ?? null,
+        subscriptionCaption({ started_at: s?.started_at, period_month: s?.period_month }),
+      ]
+    }
+    // a new package starts as buy_subscription starts it: today, or after the enrollment's last one
+    const e = student?.enrollments.find((x) => x.id === choice?.enrollmentId)
+    const start = [today, e?.start_date ?? '', ...(e?.subscriptions.map((x) => x.started_at) ?? [])]
+      .sort()
+      .at(-1)
+    return [g?.name ?? null, subscriptionCaption({ started_at: start })]
   }
 
   const onDone = async (text: string) => {
@@ -810,12 +883,16 @@ function RecordPanel({
     ])
     toast.success(text)
     reset()
+    setStudentId('')
+    // the next student: back to the picker
+    pickerRef.current?.focus()
   }
 
   const pay = useMutation({
     mutationFn: recordPayment,
     onSuccess: async (_, input) => {
-      await onDone(`Оплата записана: ${student?.full_name ?? 'ученик'} · ${som(input.amount)}`)
+      const [group, what] = paidFor()
+      await onDone(recordedToast(student?.full_name ?? 'ученик', input.amount, group, what))
     },
     onError: (e) => {
       setError(e.message)
@@ -942,23 +1019,60 @@ function RecordPanel({
       </div>
 
       <Field id={`${id}-student`} label="Ученик">
-        <NativeSelect
+        <StudentPicker
           id={`${id}-student`}
           value={studentId}
-          onChange={(e) => {
-            setStudentId(e.target.value)
+          onChange={(next) => {
+            setStudentId(next)
             reset()
           }}
-        >
-          <option value="">Выберите ученика</option>
-          {students.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.full_name}
-              {s.grade ? ` · ${s.grade} класс` : ''}
-            </option>
-          ))}
-        </NativeSelect>
+          options={pickerOptions}
+          triggerRef={pickerRef}
+        />
       </Field>
+
+      {student && (
+        <section
+          aria-label="Оплаты ученика"
+          className="flex flex-col gap-1.5 rounded-xl border border-line px-3 py-2.5"
+        >
+          <div className="flex items-baseline justify-between gap-2">
+            <h3 className={labelClass}>Оплаты ученика</h3>
+            <Link
+              to="/admin/students/$studentId"
+              params={{ studentId: student.id }}
+              className="text-xs font-extrabold whitespace-nowrap text-teal"
+            >
+              Все оплаты →
+            </Link>
+          </div>
+          {recent.length === 0 ? (
+            <p className="text-xs font-bold text-ink-muted">
+              {allPayments.isPending ? 'Загрузка…' : 'Оплат ещё не было'}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {recent.map((p) => {
+                const h = historyLine(p, subscriptionsOf(student), groupsById)
+                return (
+                  <li key={p.id} className="flex gap-2 text-xs font-bold">
+                    <span className="shrink-0 tabular-nums">{h.date}</span>
+                    <span
+                      className={cn(
+                        'shrink-0 whitespace-nowrap tabular-nums',
+                        p.amount < 0 ? 'text-burned-strong' : 'text-ink',
+                      )}
+                    >
+                      {h.amount}
+                    </span>
+                    <span className="min-w-0 text-ink-muted">{h.caption}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      )}
 
       {student && (
         <Field id={`${id}-target`} label={refund ? 'Группа · абонемент' : 'Что оплачивает'}>
@@ -976,6 +1090,7 @@ function RecordPanel({
               setDiscount(null)
               setAmount('')
               setError(null)
+              setConfirmed(false)
             }}
           >
             {choices.flatMap((c) => [
@@ -1018,6 +1133,32 @@ function RecordPanel({
           >
             {line.note}
           </span>
+        </div>
+      )}
+
+      {warning.length > 0 && (
+        <div
+          id={`${id}-repeat`}
+          role="status"
+          className="flex flex-col gap-2 rounded-xl bg-warn-soft px-3 py-2.5 text-[13px] font-bold text-warn-strong"
+        >
+          <p className="font-extrabold">Похоже на повтор</p>
+          <ul className="flex list-disc flex-col gap-1 pl-4">
+            {warning.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+          <label className="flex min-h-11 items-center gap-2.5 text-ink">
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={(e) => {
+                setConfirmed(e.target.checked)
+              }}
+              className="size-5 shrink-0 accent-ink"
+            />
+            Да, это новая оплата — записать ещё одну
+          </label>
         </div>
       )}
 
@@ -1166,6 +1307,8 @@ function RecordPanel({
       {student && target && (
         <SubmitButton
           pending={pending}
+          disabled={blocked}
+          describedBy={blocked ? `${id}-repeat` : undefined}
           variant={refund ? 'danger' : 'primary'}
           className="min-h-12"
         >
@@ -1175,6 +1318,13 @@ function RecordPanel({
         </SubmitButton>
       )}
       {!student && <EmptyHint>Выберите ученика — покажем его абонементы и долг.</EmptyHint>}
+      <Link
+        to="/admin/students"
+        search={{ pay: 'unpaid' }}
+        className="flex min-h-11 items-center self-start text-[13px] font-extrabold text-teal"
+      >
+        Кто ещё не оплатил →
+      </Link>
     </form>
   )
 }
