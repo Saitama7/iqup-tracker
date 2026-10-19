@@ -2,12 +2,12 @@
 // the marks are deleted, the teacher's pending requests rejected; the dialog shows what the teacher
 // loses (lesson_payroll_impact). A closed period refuses — the button in the dialog is off.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useId, useRef, useState, type SubmitEvent } from 'react'
+import { useId, useState, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { AUDIT_KEY } from '@/features/audit/api'
 import { FormDialog } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, SubmitButton } from '@/features/tariffs/parts'
-import { afterOverlayClosed } from '@/lib/use-back-close'
+import { releaseOverlayEntry } from '@/lib/use-back-close'
 import type { LessonSheet } from './api'
 import { unconfirmDoneText, unconfirmImpactText, unconfirmRequestsText } from './unconfirm'
 import { lessonPayrollImpactQuery, unconfirmForm, unconfirmLesson } from './unconfirm-api'
@@ -24,23 +24,10 @@ export function UnconfirmLesson({
   sheet: LessonSheet
   /** Pending correction requests of the lesson — rejected with it. */
   pendingRequests: number
-  /** Back to the screen the sheet came from (И64). */
+  /** Replace the sheet by the screen it came from (И64), at once — not after a history.back(). */
   onDone: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [done, setDone] = useState(false)
-  const doneRef = useRef(onDone)
-  useEffect(() => {
-    doneRef.current = onDone
-  })
-  // On the phone the dialog holds a history entry: leave only after it is gone, or «назад» to the
-  // source would just pop the dialog's entry.
-  useEffect(() => {
-    if (open || !done) return
-    return afterOverlayClosed(() => {
-      doneRef.current()
-    })
-  }, [open, done])
   return (
     <>
       <button
@@ -66,8 +53,12 @@ export function UnconfirmLesson({
               setOpen(false)
             }}
             onDone={() => {
+              // The refetched sheet is «planned» and unmounts this button, and a history.back()
+              // from the dialog's close would race the navigation: the dialog gives its phone
+              // history entry up (no back on close) and the source replaces it right away.
+              releaseOverlayEntry()
               setOpen(false)
-              setDone(true)
+              onDone()
             }}
           />
         )}
@@ -97,11 +88,12 @@ function UnconfirmForm({
   const mutation = useMutation({
     mutationFn: unconfirmLesson,
     onSuccess: () => {
-      // the RPC is done; the lists, payroll, balances and А10 refetch in the background
-      refreshAfterLesson(qc, sheet.id, sheet.group.id)
-      void qc.invalidateQueries({ queryKey: [AUDIT_KEY] })
+      // the RPC is done: leave first, then the lists, payroll, balances and А10 refetch in the
+      // background (as in #92) — the navigation does not wait for them
       toast.success(unconfirmDoneText(sheet.group.name, sheet.lesson_date))
       onDone()
+      refreshAfterLesson(qc, sheet.id, sheet.group.id)
+      void qc.invalidateQueries({ queryKey: [AUDIT_KEY] })
     },
     onError: (e) => {
       setError(e.message)

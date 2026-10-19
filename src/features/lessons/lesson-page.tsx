@@ -150,9 +150,16 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   // they differ (the anchor of the next unconfirmed lesson, another screen before the sheet).
   // Without history (reload, a direct link) — replace the sheet by the source.
   const source = lessonSource(search)
+  // no source: a teacher — «Сегодня»; an admin without the teacher role — the dashboard
+  const sourceTarget = () =>
+    source ?? (roles.includes('teacher') ? lessonReturn(search) : { to: '/admin' })
+  // The sheet stops being what it was (#95 «Отменить проведение»): replace it by the source at
+  // once — deterministic, no history.back() to wait for.
+  const replaceBySource = () => {
+    void navigate({ ...sourceTarget(), replace: true })
+  }
   const returnToSource = () => {
-    // no source: a teacher — «Сегодня»; an admin without the teacher role — the dashboard
-    const target = source ?? (roles.includes('teacher') ? lessonReturn(search) : { to: '/admin' })
+    const target = sourceTarget()
     if (!router.history.canGoBack()) {
       void navigate({ ...target, replace: true })
       return
@@ -212,7 +219,7 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
         <UnconfirmLesson
           sheet={sheet}
           pendingRequests={corrections.pending ? 1 : 0}
-          onDone={returnToSource}
+          onDone={replaceBySource}
         />
       ) : null,
     busy: mutation.isPending || corrections.busy,
