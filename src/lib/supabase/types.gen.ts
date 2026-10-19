@@ -1624,6 +1624,7 @@ export type Database = {
       delete_group: { Args: { p_group_id: string }; Returns: number }
       delete_payment: { Args: { p_payment_id: string; p_reason: string }; Returns: string }
       delete_payroll_adjustment: { Args: { p_id: string; p_reason: string }; Returns: undefined }
+      deleted_subscription_enrollment: { Args: { p_subscription_id: string }; Returns: string }
       enroll_student: {
         Args: {
           p_discount_pct?: number

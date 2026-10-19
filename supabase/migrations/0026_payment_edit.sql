@@ -250,6 +250,30 @@ grant execute on function public.update_payment(uuid, integer, public.payment_me
 
 -- ─── audit_search_text ──────────────────────────────────────────────────────
 
+-- The enrollment of a subscription deleted with its payment (delete_payment): from the
+-- subscription's delete snapshot. Security definer + a partial index — v_audit_feed.search calls it
+-- for every payment row whose subscription is gone, RLS of audit_log per row would time out; staff
+-- only (the journal is theirs, Д-RLS of audit_log).
+create index if not exists audit_log_subscription_delete_idx
+  on public.audit_log (entity_id) where entity = 'subscriptions' and action = 'delete';
+
+create or replace function public.deleted_subscription_enrollment(p_subscription_id uuid)
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select (a.before ->> 'enrollment_id')::uuid
+  from public.audit_log a
+  where a.entity = 'subscriptions' and a.action = 'delete' and a.entity_id = p_subscription_id
+    and public.is_staff()
+  limit 1;
+$$;
+
+revoke execute on function public.deleted_subscription_enrollment(uuid) from public, anon;
+grant execute on function public.deleted_subscription_enrollment(uuid) to authenticated;
+
 -- Same as 0025; a payment of a subscription deleted with it (delete_payment) finds the enrollment in
 -- the subscription's delete snapshot.
 create or replace function public.audit_search_text(p_entity text, p_entity_id uuid, p_row jsonb)
@@ -287,11 +311,7 @@ begin
       select s.enrollment_id into v_enrollment
       from public.subscriptions s where s.id = (p_row ->> 'subscription_id')::uuid;
       if v_enrollment is null then
-        select (a.before ->> 'enrollment_id')::uuid into v_enrollment
-        from public.audit_log a
-        where a.entity = 'subscriptions' and a.action = 'delete'
-          and a.entity_id = (p_row ->> 'subscription_id')::uuid
-        limit 1;
+        v_enrollment := public.deleted_subscription_enrollment((p_row ->> 'subscription_id')::uuid);
       end if;
     when 'teacher_rates', 'payroll_adjustments' then
       v_teacher := (p_row ->> 'teacher_id')::uuid;
