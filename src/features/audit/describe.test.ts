@@ -664,8 +664,11 @@ describe('trials', () => {
 
 describe('tables without a describer', () => {
   it('fall back to the table and the action', () => {
-    const e = describeAuditRow(row({ entity: 'holidays', action: 'insert', after: {} }), lookups)
-    expect(plain(e.parts)).toBe('holidays: запись добавлена')
+    const e = describeAuditRow(
+      row({ entity: 'schedule_rules', action: 'insert', after: {} }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe('schedule_rules: запись добавлена')
     expect(e.link).toBeNull()
   })
 })
@@ -1091,5 +1094,304 @@ describe('afterschool_plans (#82)', () => {
         }),
       ),
     ).toBe('Алина Исакова — график продлёнки с 01.10.2026: ПН 1,5 ч')
+  })
+})
+
+describe('admin superuser actions (#94)', () => {
+  const ASEL = 'f0000000-0000-4000-8000-000000000002'
+  const l2: AuditLookups = { ...lookups, teachers: { ...lookups.teachers, [ASEL]: 'Асель Нурова' } }
+  const REASON = 'ошибка ввода'
+  const entry = (r: AuditRow, l: AuditLookups = l2) => describeAuditRow(r, l)
+
+  it('close_payroll_period: month closed, comment', () => {
+    const e = entry(
+      row({
+        entity: 'payroll_periods',
+        action: 'insert',
+        after: { month: '2026-09-01', comment: 'сверили' },
+        reason: 'сверили',
+      }),
+    )
+    expect(plain(e.parts)).toBe('Месяц закрыт: сентябрь 2026')
+    expect(e.note).toBe('Комментарий: «сверили»')
+  })
+
+  it('reopen_payroll_period: month opened, reason', () => {
+    const e = entry(
+      row({
+        entity: 'payroll_periods',
+        action: 'delete',
+        before: { month: '2026-09-01' },
+        reason: REASON,
+      }),
+    )
+    expect(plain(e.parts)).toBe('Месяц открыт: сентябрь 2026')
+    expect(e.note).toBe('Причина: «ошибка ввода»')
+  })
+
+  it('update_payroll_adjustment: what changed', () => {
+    const adv = {
+      teacher_id: GULZAT,
+      kind: 'advance',
+      amount: 5000,
+      issued_on: '2026-09-18',
+      month: '2026-09-01',
+      comment: null,
+    }
+    const e = entry(
+      row({
+        entity: 'payroll_adjustments',
+        before: adv,
+        after: { ...adv, amount: 6000, month: '2026-10-01' },
+        reason: REASON,
+      }),
+    )
+    expect(plain(e.parts)).toBe(
+      'Гульзат Асанова — аванс изменён: сумма 5 000 → 6 000 сом · месяц ЗП сентябрь → октябрь',
+    )
+    expect(e.note).toBe('Причина: «ошибка ввода»')
+  })
+
+  it('update_lesson: moved, new length and teacher', () => {
+    const held = { ...lesson, status: 'held', duration_min: 60, teacher_id: GULZAT }
+    const e = entry(
+      row({
+        before: held,
+        after: {
+          ...held,
+          lesson_date: '2026-10-11',
+          duration_min: 90,
+          teacher_id: ASEL,
+        },
+        reason: REASON,
+      }),
+    )
+    expect(plain(e.parts)).toBe(
+      'Занятие Математика · 8 класс Б, 10.10 в 09:00 перенесено на 11.10 в 09:00 · длительность 60 → 90 мин · учитель Гульзат Асанова → Асель Нурова',
+    )
+    expect(e.note).toBe('Причина: «ошибка ввода»')
+  })
+
+  it('update_lesson: only the length', () => {
+    expect(
+      text(
+        row({
+          before: { ...lesson, duration_min: 60 },
+          after: { ...lesson, duration_min: 90 },
+        }),
+      ),
+    ).toBe('Занятие Математика · 8 класс Б, 10.10 в 09:00 · длительность 60 → 90 мин')
+  })
+
+  it('a holiday lesson brought back and a lesson opened in the period', () => {
+    expect(
+      text(
+        row({
+          before: { ...lesson, status: 'cancelled', cancel_reason: 'holiday' },
+          after: lesson,
+        }),
+      ),
+    ).toBe('Занятие Математика · 8 класс Б, 10.10 в 09:00 возвращено в расписание')
+    expect(text(row({ before: { ...lesson, is_locked: true }, after: lesson }))).toBe(
+      'Занятие Математика · 8 класс Б, 10.10 в 09:00 открыто в периоде',
+    )
+  })
+
+  const tariff = {
+    group_type: 'group',
+    valid_from: '2026-11-01',
+    package_price: 3500,
+    lessons_in_package: 12,
+  }
+
+  it('update_tariff_version: price and hour price', () => {
+    const e = entry(
+      row({
+        entity: 'tariffs',
+        entityId: 't3',
+        before: { ...tariff, package_price: 3200 },
+        after: tariff,
+        reason: REASON,
+      }),
+    )
+    expect(plain(e.parts)).toBe('Тариф «Групповая» с 01.11.2026: 3 200 → 3 500 сом')
+    expect(e.note).toBe('Причина: «ошибка ввода»')
+    expect(
+      text(
+        row({
+          entity: 'tariffs',
+          before: { ...tariff, group_type: 'afterschool', hour_price: 500 },
+          after: { ...tariff, group_type: 'afterschool', hour_price: 550 },
+        }),
+      ),
+    ).toBe('Тариф «Продлёнка» с 01.11.2026: цена часа 500 → 550 сом')
+  })
+
+  it('delete_tariff_version: cancelled with a reason', () => {
+    const e = entry(row({ entity: 'tariffs', action: 'delete', before: tariff, reason: REASON }))
+    expect(plain(e.parts)).toBe('Тариф «Групповая» с 01.11.2026 отменён')
+    expect(e.note).toBe('Причина: «ошибка ввода»')
+  })
+
+  it('plan_tariffs_from_today', () => {
+    const e = entry(
+      row({
+        entity: 'tariffs',
+        action: 'insert',
+        entityId: 't4',
+        after: { ...tariff, valid_from: '2026-10-12', package_price: 3600 },
+        reason: 'tariff_from_today',
+      }),
+    )
+    expect(e.note).toBe('Причина: новая цена действует с сегодняшнего дня')
+  })
+
+  const holiday = { day: '2026-11-07', name: 'День революции' }
+
+  it('save_holiday: added, renamed, back-dated', () => {
+    expect(text(row({ entity: 'holidays', action: 'insert', after: holiday }))).toBe(
+      'Праздник добавлен: 07.11 — День революции',
+    )
+    expect(
+      text(
+        row({
+          entity: 'holidays',
+          before: holiday,
+          after: { ...holiday, name: 'Праздник' },
+        }),
+      ),
+    ).toBe('Праздник переименован: 07.11 — День революции → Праздник')
+    const e = entry(
+      row({
+        entity: 'holidays',
+        action: 'insert',
+        after: { day: '2026-10-05', name: 'Выходной' },
+        reason: REASON,
+      }),
+    )
+    expect(plain(e.parts)).toBe('Праздник добавлен (задним числом): 05.10 — Выходной')
+    expect(e.badge.label).toBe('Правка')
+    expect(e.note).toBe('Причина: «ошибка ввода»')
+  })
+
+  it('delete_holidays', () => {
+    expect(text(row({ entity: 'holidays', action: 'delete', before: holiday }))).toBe(
+      'Праздник удалён: 07.11 — День революции',
+    )
+  })
+
+  const trial = {
+    full_name: 'Нурлан',
+    grade: 5,
+    parent_phone: '+996700000000',
+    source: 'instagram',
+    note: null,
+    lesson_id: LESSON,
+    group_id: GROUP,
+    status: 'scheduled',
+  }
+
+  it('update_trial: lead fields', () => {
+    const e = entry(
+      row({
+        entity: 'trials',
+        before: trial,
+        after: { ...trial, grade: 6, source: '2gis' },
+        reason: REASON,
+      }),
+    )
+    expect(plain(e.parts)).toMatch(/^Нурлан — пробное изменено: класс 5 → 6 · источник .+ → .+$/)
+    expect(e.note).toBe('Причина: «ошибка ввода»')
+  })
+
+  it('reopen_trial: back to the funnel', () => {
+    expect(
+      text(
+        row({
+          entity: 'trials',
+          before: { ...trial, status: 'closed', came: true },
+          after: { ...trial, status: 'attended', came: true },
+          reason: REASON,
+        }),
+      ),
+    ).toBe('Нурлан — возвращён(а) в воронку: был(а) на пробном')
+  })
+
+  it('delete_correction_request', () => {
+    const e = entry(
+      row({
+        entity: 'attendance_correction_requests',
+        action: 'delete',
+        before: { lesson_id: LESSON, teacher_id: GULZAT, marks: [], status: 'pending' },
+        reason: REASON,
+      }),
+    )
+    expect(plain(e.parts)).toBe(
+      'запрос Гульзат Асанова на исправление отметок занятия Математика · 8 класс Б, 10.10 в 09:00 удалён',
+    )
+    expect(e.note).toBe('Причина: «ошибка ввода»')
+  })
+
+  it('delete_group: the reason of the admin, cascaded rows name the group', () => {
+    const gone = 'b0000000-0000-4000-8000-0000000000fe'
+    const l: AuditLookups = {
+      ...l2,
+      groups: { ...l2.groups, [gone]: { name: '9 класс', subject: '' } },
+    }
+    const g = entry(
+      row({
+        entity: 'groups',
+        entityId: gone,
+        action: 'delete',
+        before: { name: '9 класс' },
+        reason: REASON,
+      }),
+      l,
+    )
+    expect(plain(g.parts)).toBe('группа 9 класс удалена')
+    expect(g.note).toBe('Причина: «ошибка ввода»')
+    expect(
+      plain(
+        entry(
+          row({
+            action: 'delete',
+            before: { ...lesson, group_id: gone },
+            reason: REASON,
+          }),
+          l,
+        ).parts,
+      ),
+    ).toBe('Занятие 9 класс, 10.10 в 09:00 удалено')
+  })
+
+  it('delete_student and what went with them', () => {
+    const e = entry(
+      row({
+        entity: 'students',
+        action: 'delete',
+        before: { full_name: 'Нурлан Асанов' },
+        reason: REASON,
+      }),
+    )
+    expect(plain(e.parts)).toBe('Ученик удалён: Нурлан Асанов')
+    expect(e.note).toBe('Причина: «ошибка ввода»')
+    expect(
+      text(
+        row({
+          entity: 'attendance',
+          action: 'delete',
+          before: { lesson_id: LESSON, student_id: ALINA, status: 'present' },
+          reason: REASON,
+        }),
+      ),
+    ).toContain('Отметка Алина Исакова удалена')
+  })
+
+  it('delete_subject: with a reason', () => {
+    const e = entry(
+      row({ entity: 'subjects', action: 'delete', before: { name: 'Шахматы' }, reason: REASON }),
+    )
+    expect(plain(e.parts)).toBe('Предмет удалён: Шахматы')
+    expect(e.note).toBe('Причина: «ошибка ввода»')
   })
 })

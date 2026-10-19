@@ -205,7 +205,8 @@ describe('lesson_edit_payroll_impact ↔ update_lesson', () => {
         p_start: cur.planned_start,
         p_duration_min: cur.duration_min,
         p_teacher_id: newTeacher,
-        p_substitute_teacher_id: null,
+        // the generated Args are not nullable, the function takes null (no substitute)
+        p_substitute_teacher_id: null as unknown as string,
         p_reason: 'impact test',
       }),
     )

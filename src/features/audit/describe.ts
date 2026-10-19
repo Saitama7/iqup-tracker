@@ -7,6 +7,7 @@ import { pluralRu } from '@/features/lessons/select'
 import { CANCEL_REASON_LABEL, type AttendanceStatus } from '@/features/groups/model'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import type { GroupType } from '@/features/tariffs/current'
+import { SOURCE_LABEL } from '@/features/trials/model'
 import { bishkekDate } from '@/lib/time'
 
 export type AuditAction = 'insert' | 'update' | 'delete'
@@ -108,6 +109,9 @@ export const ENTITY_LABEL: Record<string, string> = {
   payroll_adjustments: 'Авансы',
   attendance_presets: 'Заморозки заранее',
   afterschool_plans: 'График продлёнки',
+  payroll_periods: 'Закрытые месяцы',
+  holidays: 'Праздники',
+  students: 'Ученики',
 }
 
 const STATUS_TONE: Record<AttendanceStatus, TextTone> = {
@@ -187,7 +191,8 @@ type Described = Pick<AuditEntry, 'badge' | 'parts' | 'link'> & { note?: string 
 
 const groupName = (id: string | null, l: AuditLookups) => {
   const g = id ? l.groups[id] : undefined
-  return g ? groupLabel(g) : 'группа'
+  // a deleted group is known by its name only (no subject)
+  return g ? (g.subject ? groupLabel(g) : g.name) : 'группа'
 }
 const groupLink = (groupId: string | null): AuditLink | null =>
   groupId ? { to: '/admin/groups/$groupId', params: { groupId }, label: 'Группа' } : null
@@ -275,6 +280,29 @@ function lateBy(row: AuditRow): string | null {
 }
 
 const teacherName = (id: string | null, l: AuditLookups) => (id && l.teachers[id]) || 'учитель'
+
+/** « · длительность 60 → 90 мин · учитель Гульзат → Асель · замена снята» — update_lesson's other fields. */
+function lessonExtras(row: AuditRow, l: AuditLookups): Part[] {
+  const parts: Part[] = []
+  if (changed(row, 'duration_min')) {
+    parts.push(
+      ` · длительность ${num(row.before, 'duration_min') ?? '—'} → ${num(row.after, 'duration_min') ?? '—'} мин`,
+    )
+  }
+  if (changed(row, 'teacher_id')) {
+    parts.push(
+      ' · учитель ',
+      strong(teacherName(str(row.before, 'teacher_id'), l)),
+      ' → ',
+      strong(teacherName(str(row.after, 'teacher_id'), l)),
+    )
+  }
+  if (changed(row, 'substitute_teacher_id')) {
+    const sub = str(row.after, 'substitute_teacher_id')
+    parts.push(sub ? [' · замена — ', l.teachers[sub] ?? 'учитель'].join('') : ' · замена снята')
+  }
+  return parts
+}
 
 function describeLesson(row: AuditRow, l: AuditLookups): Described {
   const s = current(row)
@@ -376,10 +404,19 @@ function describeLesson(row: AuditRow, l: AuditLookups): Described {
       note: comment ? `Комментарий: «${comment}»` : null,
     }
   }
+  if (before === 'cancelled' && after === 'planned') {
+    // delete_holidays / a cancelled lesson brought back: «занятие … возвращено в расписание»
+    return {
+      badge: { label: 'Занятие', tone: 'stone' },
+      link,
+      parts: [`Занятие ${where} возвращено в расписание`],
+    }
+  }
   if (
     changed(row, 'teacher_id') &&
     !changed(row, 'lesson_date') &&
-    !changed(row, 'planned_start')
+    !changed(row, 'planned_start') &&
+    !changed(row, 'duration_min')
   ) {
     const day = str(s, 'lesson_date')
     return {
@@ -405,7 +442,15 @@ function describeLesson(row: AuditRow, l: AuditLookups): Described {
     return {
       badge: { label: 'Перенос', tone: 'stone' },
       link,
-      parts: [`Занятие ${from} перенесено на ${to}`],
+      parts: [`Занятие ${from} перенесено на ${to}`, ...lessonExtras(row, l)],
+    }
+  }
+  if (changed(row, 'duration_min')) {
+    // update_lesson (#94): only the length (and maybe the teacher) changed
+    return {
+      badge: { label: 'Занятие', tone: 'stone' },
+      link,
+      parts: [`Занятие ${where}`, ...lessonExtras(row, l)],
     }
   }
   if (changed(row, 'substitute_teacher_id')) {
@@ -416,6 +461,13 @@ function describeLesson(row: AuditRow, l: AuditLookups): Described {
       parts: sub
         ? [`Занятие ${where}: замена — `, strong(l.teachers[sub] ?? 'учитель')]
         : [`Занятие ${where}: замена снята`],
+    }
+  }
+  if (changed(row, 'is_locked') && !bool(row.after, 'is_locked')) {
+    return {
+      badge: { label: 'Период', tone: 'stone' },
+      link,
+      parts: [`Занятие ${where} открыто в периоде`],
     }
   }
   if (changed(row, 'is_locked') && bool(row.after, 'is_locked')) {
@@ -481,6 +533,13 @@ function describeCorrectionRequest(row: AuditRow, l: AuditLookups): Described {
       link,
       parts: [teacher, ' просит исправить отметки занятия', where, ': ', ...changes],
       note: comment ? `Комментарий: «${comment}»` : null,
+    }
+  }
+  if (row.action === 'delete') {
+    return {
+      badge: { label: 'Удалено', tone: 'stone' },
+      link,
+      parts: ['запрос ', teacher, ' на исправление отметок занятия', where, ' удалён'],
     }
   }
   const decision = str(row.after, 'status')
@@ -616,9 +675,10 @@ function describeSubscription(row: AuditRow, l: AuditLookups): Described {
     }
   }
   if (row.action === 'delete') {
-    // #92: delete_payment takes the duplicate «новый абонемент» with its payment, with the admin's reason
+    // #92: delete_payment takes the duplicate «новый абонемент» with its payment, with the admin's
+    // reason; its enrollment stays. delete_student / delete_group (#94) take the enrollment too.
     const withPayment =
-      !!row.reason && !isServiceReason(row.reason) && !(row.reason in REASON_LABEL)
+      !!e && !!row.reason && !isServiceReason(row.reason) && !(row.reason in REASON_LABEL)
     return {
       badge: { label: 'Абонемент', tone: 'stone' },
       link,
@@ -627,7 +687,7 @@ function describeSubscription(row: AuditRow, l: AuditLookups): Described {
             'Абонемент удалён вместе с оплатой: ',
             ...who.slice(0, 1),
             ` · ${package_}`,
-            groupTail(e?.groupId ?? null, l),
+            groupTail(e.groupId, l),
           ]
         : [...who, `абонемент ${package_} удалён`],
     }
@@ -941,6 +1001,28 @@ const MONTH_NAMES = [
 ]
 
 /** «Гульзат Асанова — аванс 5 000 сом от 18.09.2026 в счёт ЗП за сентябрь» (#83). */
+/** update_payroll_adjustment (#94): «сумма 5 000 → 6 000 сом · дата 18.09 → 20.09 · месяц ЗП сентябрь → октябрь». */
+function adjustmentChanges(row: AuditRow): string {
+  const monthName = (s: Snapshot | null) => {
+    const m = str(s, 'month')
+    return m ? (MONTH_NAMES[Number(m.slice(5, 7)) - 1] ?? '—') : '—'
+  }
+  const day = (s: Snapshot | null) => {
+    const d = str(s, 'issued_on')
+    return d ? dayMonth(d) : '—'
+  }
+  return [
+    changed(row, 'amount')
+      ? `сумма ${formatSom(num(row.before, 'amount') ?? 0)} → ${formatSom(num(row.after, 'amount') ?? 0)} сом`
+      : null,
+    changed(row, 'issued_on') ? `дата ${day(row.before)} → ${day(row.after)}` : null,
+    changed(row, 'month') ? `месяц ЗП ${monthName(row.before)} → ${monthName(row.after)}` : null,
+    changed(row, 'comment') ? 'комментарий изменён' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 function describeAdjustment(row: AuditRow, l: AuditLookups): Described {
   const s = current(row)
   const teacherId = str(s, 'teacher_id')
@@ -950,13 +1032,23 @@ function describeAdjustment(row: AuditRow, l: AuditLookups): Described {
   const issued = str(s, 'issued_on')
   const month = str(s, 'month')
   const forMonth = month ? ` в счёт ЗП за ${MONTH_NAMES[Number(month.slice(5, 7)) - 1] ?? ''}` : ''
+  if (row.action === 'update') {
+    const changes = adjustmentChanges(row)
+    const comment = str(s, 'comment')
+    return {
+      badge: { label: 'Аванс', tone: 'warn' },
+      link: null,
+      parts: [...who, `${label} изменён`, changes ? `: ${changes}` : ''],
+      note: comment ? `«${comment}»` : null,
+    }
+  }
   const parts: Part[] = [
     ...who,
     `${label} `,
     strong(`${formatSom(num(s, 'amount') ?? 0)} сом`),
     issued ? ` от ${fullDate(issued)}` : '',
     forMonth,
-    row.action === 'delete' ? ' — удалён' : row.action === 'update' ? ' — изменён' : '',
+    row.action === 'delete' ? ' — удалён' : '',
   ]
   const comment = str(s, 'comment')
   return {
@@ -989,13 +1081,21 @@ function describeTariff(row: AuditRow, l: AuditLookups): Described {
     }
   }
   if (row.action === 'update') {
+    // update_tariff_version (#94): the price of a version, and for afterschool the hour price
     const was = num(row.before, 'package_price') ?? 0
+    const hourWas = num(row.before, 'hour_price')
+    const hour = num(row.after, 'hour_price')
     return {
       badge,
       link,
       parts: [
-        `${label} с ${fullDate(from)}: ${formatSom(was)} → `,
-        strong(`${formatSom(price)} сом`),
+        `${label} с ${fullDate(from)}: `,
+        ...(changed(row, 'package_price')
+          ? [`${formatSom(was)} → `, strong(`${formatSom(price)} сом`)]
+          : []),
+        changed(row, 'hour_price')
+          ? `${changed(row, 'package_price') ? ', ' : ''}цена часа ${hourWas === null ? '—' : formatSom(hourWas)} → ${hour === null ? '—' : formatSom(hour)} сом`
+          : '',
       ],
     }
   }
@@ -1045,6 +1145,26 @@ function describeSubject(row: AuditRow): Described {
   return { badge, link, parts: ['Предмет ', strong(name), ': порядок в списке изменён'] }
 }
 
+function trialEdits(row: AuditRow): string[] {
+  const grade = (s: Snapshot | null) => num(s, 'grade')
+  const source = (s: Snapshot | null) => {
+    const v = str(s, 'source')
+    return v ? labelOf(SOURCE_LABEL, v) : '—'
+  }
+  return [
+    changed(row, 'full_name')
+      ? `имя ${str(row.before, 'full_name') ?? '—'} → ${str(row.after, 'full_name') ?? '—'}`
+      : null,
+    changed(row, 'grade') ? `класс ${grade(row.before) ?? '—'} → ${grade(row.after) ?? '—'}` : null,
+    changed(row, 'parent_phone')
+      ? `телефон ${str(row.before, 'parent_phone') ?? '—'} → ${str(row.after, 'parent_phone') ?? '—'}`
+      : null,
+    changed(row, 'source') ? `источник ${source(row.before)} → ${source(row.after)}` : null,
+    changed(row, 'note') ? 'заметка изменена' : null,
+    changed(row, 'lesson_id') ? 'перенесено на другое занятие' : null,
+  ].filter((x): x is string => x !== null)
+}
+
 function describeTrial(row: AuditRow, l: AuditLookups): Described {
   const s = current(row)
   const lessonId = str(s, 'lesson_id')
@@ -1077,6 +1197,17 @@ function describeTrial(row: AuditRow, l: AuditLookups): Described {
     return { badge, link, parts: [...who, `записан(а) на пробное: ${where}`] }
   }
   if (row.action === 'delete') return { badge, link, parts: [...who, 'пробное удалено'] }
+  if (str(row.before, 'status') === 'closed' && changed(row, 'status')) {
+    // reopen_trial (#94): «Вернуть в воронку»
+    const next = str(row.after, 'status')
+    const to =
+      next === 'attended'
+        ? 'был(а) на пробном'
+        : next === 'scheduled'
+          ? `записан(а) на пробное: ${where}`
+          : 'не пришёл(ла)'
+    return { badge, link, parts: [...who, `возвращён(а) в воронку: ${to}`] }
+  }
   if (changed(row, 'status')) {
     const next = str(row.after, 'status')
     if (next === 'attended') {
@@ -1105,9 +1236,87 @@ function describeTrial(row: AuditRow, l: AuditLookups): Described {
     }
     if (next === 'scheduled') return { badge, link, parts: [...who, `записан(а) заново: ${where}`] }
   }
-  if (changed(row, 'lesson_id'))
+  const edits = trialEdits(row)
+  if (edits.length === 1 && changed(row, 'lesson_id')) {
     return { badge, link, parts: [...who, `пробное перенесено: ${where}`] }
+  }
+  if (edits.length > 0) {
+    // update_trial (#94): the lead's fields (and the lesson)
+    return {
+      badge,
+      link,
+      parts: [
+        ...who,
+        `пробное изменено: ${edits.join(' · ')}`,
+        changed(row, 'lesson_id') ? ` (${where})` : '',
+      ],
+    }
+  }
   return { badge, link, parts: [...who, 'пробное изменено'] }
+}
+
+/** «сентябрь 2026» from '2026-09-01'. */
+const monthYear = (iso: string | null) =>
+  iso ? `${MONTH_NAMES[Number(iso.slice(5, 7)) - 1] ?? ''} ${iso.slice(0, 4)}` : '—'
+
+/** close_payroll_period / reopen_payroll_period (#94): the row exists = the month is closed. */
+function describePayrollPeriod(row: AuditRow): Described {
+  const month = strong(monthYear(str(current(row), 'month')))
+  if (row.action === 'delete') {
+    return {
+      badge: { label: 'Период', tone: 'warn' },
+      link: null,
+      parts: ['Месяц открыт: ', month],
+    }
+  }
+  const comment = str(row.after, 'comment')
+  return {
+    badge: { label: 'Период', tone: 'stone' },
+    link: null,
+    parts: ['Месяц закрыт: ', month],
+    note: comment ? `Комментарий: «${comment}»` : null,
+  }
+}
+
+/** save_holiday / delete_holidays (#94): «Праздник добавлен: 07.11 — День ...», back-dated when in the past. */
+function describeHoliday(row: AuditRow): Described {
+  const s = current(row)
+  const day = str(s, 'day')
+  const name = str(s, 'name') ?? '—'
+  const retro = day !== null && day < bishkekDay(row.at)
+  const link: AuditLink = { to: '/admin/settings', label: 'Праздники' }
+  const when = day ? `${dayMonth(day)} — ` : ''
+  const badge = retro
+    ? { label: 'Правка', tone: 'burned' as const }
+    : { label: 'Праздник', tone: 'teal' as const }
+  const back = retro ? ' (задним числом)' : ''
+  if (row.action === 'insert') {
+    return { badge, link, parts: [`Праздник добавлен${back}: ${when}`, strong(name)] }
+  }
+  if (row.action === 'delete') {
+    return { badge, link, parts: [`Праздник удалён${back}: ${when}`, strong(name)] }
+  }
+  return {
+    badge,
+    link,
+    parts: [
+      `Праздник переименован${back}: ${when}${str(row.before, 'name') ?? '—'} → `,
+      strong(name),
+    ],
+  }
+}
+
+/** Only a delete is audited (delete_student): the name stays in the snapshot. */
+function describeStudent(row: AuditRow): Described {
+  const name = str(current(row), 'full_name') ?? 'ученик'
+  const badge = { label: 'Ученик', tone: 'stone' as const }
+  return row.action === 'delete'
+    ? {
+        badge: { label: 'Удалено', tone: 'stone' },
+        link: null,
+        parts: ['Ученик удалён: ', strong(name)],
+      }
+    : { badge, link: null, parts: ['Ученик ', strong(name), ` — ${ACTION_TEXT[row.action]}`] }
 }
 
 const ACTION_TEXT: Record<AuditAction, string> = {
@@ -1139,6 +1348,9 @@ const DESCRIBERS: Record<string, (row: AuditRow, l: AuditLookups) => Described> 
   payroll_adjustments: describeAdjustment,
   attendance_presets: describePreset,
   afterschool_plans: describePlan,
+  payroll_periods: describePayrollPeriod,
+  holidays: describeHoliday,
+  students: describeStudent,
 }
 
 /** The author's name: «Система» — service role, migrations, imports (no auth.uid()). */
@@ -1157,6 +1369,8 @@ const REASON_LABEL: Record<string, string> = {
   transfer_student: 'перевод в другую группу',
   withdraw_enrollment: 'ученик ушёл из группы',
   delete_enrollment: 'записан(а) по ошибке',
+  // #94 (0028)
+  tariff_from_today: 'новая цена действует с сегодняшнего дня',
 }
 
 /**
