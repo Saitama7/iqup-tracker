@@ -182,6 +182,7 @@ test('А7: дубль оплаты удаляется с причиной, ба�
       const sheet = page.getByRole('dialog', { name: 'Оплата' })
       await expect(sheet).toContainText(name)
       await expect(sheet.getByRole('link', { name: 'Карточка ученика' })).toBeVisible()
+      await page.waitForTimeout(600) // the sheet slides in (500 ms) — for the screenshot only
       await page.screenshot({ path: shot(testInfo, 'r92-payment-sheet') })
       await sheet.getByRole('button', { name: 'Удалить' }).click()
     }
