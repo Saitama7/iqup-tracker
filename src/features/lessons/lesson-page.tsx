@@ -63,6 +63,7 @@ import {
   type LessonState,
 } from './select'
 import { trialsSuffix } from './trials-view'
+import { UnconfirmLesson } from './unconfirm-lesson'
 import { useConfirmLesson } from './use-confirm-lesson'
 
 export function LessonPage({ lessonId, search }: { lessonId: string; search: LessonSearch }) {
@@ -99,6 +100,8 @@ interface SheetModel {
   /** A held lesson: the admin corrects its marks / the teacher proposes new ones (#74). */
   correcting: boolean
   corrections: Corrections
+  /** The admin's «Отменить проведение» of a held lesson (#95); null — not offered. */
+  unconfirm: ReactNode
   /** The marks are being sent — buttons wait for the database. */
   busy: boolean
   /** Offline: the confirm waits for the network (TanStack paused mutation). */
@@ -204,6 +207,14 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
     editable,
     correcting,
     corrections,
+    unconfirm:
+      isAdmin && sheet.status === 'held' && !correcting ? (
+        <UnconfirmLesson
+          sheet={sheet}
+          pendingRequests={corrections.pending ? 1 : 0}
+          onDone={returnToSource}
+        />
+      ) : null,
     busy: mutation.isPending || corrections.busy,
     paused: mutation.isPaused,
     canConfirm: editable && counts.unmarked === 0 && !mutation.isPending,
@@ -514,7 +525,11 @@ function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
           <span className="text-burned-strong">Не был {counts.burned}</span>
           <span className="text-ink-muted">Не отмечено {counts.unmarked}</span>
         </p>
-        {m.sheet.status === 'held' ? <HeldPanel c={m.corrections} /> : <ConfirmAction m={m} />}
+        {m.sheet.status === 'held' ? (
+          <HeldPanel c={m.corrections} unconfirm={m.unconfirm} />
+        ) : (
+          <ConfirmAction m={m} />
+        )}
       </footer>
     </section>
   )
@@ -725,7 +740,7 @@ function Summary({ m }: { m: SheetModel }) {
           {m.accrual && <p className="text-[11px] font-bold text-ink-muted">{PRELIMINARY_NOTE}</p>}
         </dl>
         {m.sheet.status === 'held' ? (
-          <HeldPanel c={m.corrections} />
+          <HeldPanel c={m.corrections} unconfirm={m.unconfirm} />
         ) : (
           <ConfirmAction m={m} desktop />
         )}

@@ -47,6 +47,7 @@ function row(over: Partial<AuditRow>): AuditRow {
     at: '2026-10-12T07:40:00.123456+00:00',
     kind: 'other',
     marks: null,
+    amount: null,
     ...over,
   }
 }
@@ -211,6 +212,23 @@ describe('attendance corrections (#74)', () => {
     )
     expect(plain(rejected.parts)).toMatch(/отклонён$/)
     expect(rejected.note).toBe('Причина: «Не подтвердилось»')
+    // rejected by «Отменить проведение» (#95): the admin's reason is not repeated
+    const unconfirmed = describeAuditRow(
+      row({
+        entity: 'attendance_correction_requests',
+        before: request,
+        after: {
+          ...request,
+          status: 'rejected',
+          decision_comment: 'занятие возвращено в запланированные: провели не ту дату',
+        },
+        reason: 'провели не ту дату',
+      }),
+      lookups,
+    )
+    expect(unconfirmed.note).toBe(
+      'Причина: «занятие возвращено в запланированные: провели не ту дату»',
+    )
   })
 })
 
@@ -292,6 +310,37 @@ describe('lessons', () => {
       'Занятие Математика · 8 класс Б, 10.10 в 09:00 проведено · был 2, не был 1',
     )
     expect(e.badge.label).toBe('Проведено')
+  })
+
+  it('unconfirmed by the admin (#95): marks deleted, the teacher loses pay, the reason', () => {
+    const held = {
+      ...lesson,
+      status: 'held',
+      teacher_id: GULZAT,
+      confirmed_at: '2026-10-10T04:02:00+00:00',
+    }
+    const r = row({
+      kind: 'retro',
+      before: held,
+      after: { ...held, status: 'planned', confirmed_at: null },
+      reason: 'провели не ту дату',
+      marks: ['absent_burned', 'absent_frozen', 'present', 'present', 'present', 'present'],
+      amount: 1050,
+    })
+    const e = describeAuditRow(r, lookups)
+    expect(plain(e.parts)).toBe(
+      'Проведение отменено: Математика · 8 класс Б · 10.10 09:00 · 6 отметок удалены (учителю Гульзат −1 050 сом)',
+    )
+    expect(e.badge).toEqual({ label: 'Правка', tone: 'burned' })
+    expect(e.note).toBe('Причина: «провели не ту дату»')
+    expect(e.kind).toBe('retro')
+
+    expect(text(row({ ...r, marks: ['absent_frozen'], amount: 0 }))).toBe(
+      'Проведение отменено: Математика · 8 класс Б · 10.10 09:00 · 1 отметка удалена',
+    )
+    expect(text(row({ ...r, marks: [], amount: 0 }))).toBe(
+      'Проведение отменено: Математика · 8 класс Б · 10.10 09:00 · отметок не было',
+    )
   })
 
   it('planned, extra, cancelled, held cancelled, deleted', () => {
