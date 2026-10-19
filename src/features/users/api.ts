@@ -92,6 +92,11 @@ const phoneField = z.string().transform((v, ctx) => {
   }
 })
 
+export const profileForm = z.object({
+  fullName: z.string().trim().min(1, 'Введите имя и фамилию').max(200),
+  phone: phoneField,
+})
+
 const passwordField = z.string().min(8, 'Пароль — минимум 8 символов').max(72)
 
 /** «Новый пользователь» form → create-user body. */
@@ -224,6 +229,14 @@ export const updateRoles = (input: { userId: string; roles: z.infer<typeof roleS
     action: 'update_roles',
     user_id: input.userId,
     roles: input.roles,
+  })
+
+export const updateProfile = (input: { userId: string; fullName: string; phone: string }) =>
+  callUsersFunction<{ user_id: string; full_name: string; phone: string }>({
+    action: 'update_profile',
+    user_id: input.userId,
+    full_name: input.fullName,
+    phone: input.phone,
   })
 
 export const setActive = (input: { userId: string; active: boolean }) =>

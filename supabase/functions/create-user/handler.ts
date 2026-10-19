@@ -56,6 +56,14 @@ export interface CreateUserDeps {
   setProfileActive(userId: string, active: boolean): Promise<void>
   /** Auth ban: a deactivated user cannot sign in or refresh the session. */
   setAuthBanned(userId: string, banned: boolean): Promise<void>
+  /** Current name/phone of a profile; null when there is none. */
+  findProfileContact(userId: string): Promise<{ phone: string; full_name: string } | null>
+  /** True when a teachers row NOT linked to this user already holds the phone (teachers.phone is unique). */
+  teacherPhoneTaken(phone: string, exceptUserId: string): Promise<boolean>
+  /** Login email in Auth (phone → email). */
+  setAuthEmail(userId: string, email: string): Promise<void>
+  /** profiles + the linked teachers row (teachers.user_id = userId): full_name and phone. */
+  setContact(userId: string, contact: { phone: string; full_name: string }): Promise<void>
   /** Today in Asia/Bishkek, YYYY-MM-DD. */
   today(): string
 }
@@ -119,7 +127,15 @@ const setActiveSchema = z.object({
   active: z.boolean(),
 })
 
+const updateProfileSchema = z.object({
+  action: z.literal('update_profile'),
+  user_id: z.uuid(),
+  full_name: z.string().trim().min(1).max(200),
+  phone,
+})
+
 const bodySchema = z.union([
+  updateProfileSchema,
   resetSchema,
   updateRateSchema,
   updateRolesSchema,
@@ -195,6 +211,32 @@ export async function handleCreateUser(
       throw e
     }
     return { status: 200, body: { user_id: input.user_id, roles: input.roles } }
+  }
+
+  if (input.action === 'update_profile') {
+    const current = await deps.findProfileContact(input.user_id)
+    if (!current) return fail(404, 'not_found', 'Пользователь не найден')
+    const phoneChanged = current.phone !== input.phone
+    if (phoneChanged) {
+      const owner = await deps.findUserIdByPhone(input.phone)
+      if (
+        (owner && owner !== input.user_id) ||
+        (await deps.teacherPhoneTaken(input.phone, input.user_id))
+      ) {
+        return fail(409, 'phone_taken', 'Телефон уже занят')
+      }
+      // Auth first: a failure leaves the old login and profile untouched.
+      await deps.setAuthEmail(input.user_id, phoneToEmail(input.phone))
+    }
+    const next = { phone: input.phone, full_name: input.full_name }
+    try {
+      await deps.setContact(input.user_id, next)
+    } catch (e) {
+      if (phoneChanged) await deps.setAuthEmail(input.user_id, phoneToEmail(current.phone))
+      await deps.setContact(input.user_id, current).catch(() => undefined)
+      throw e
+    }
+    return { status: 200, body: { user_id: input.user_id, ...next } }
   }
 
   if (input.action === 'set_active') {

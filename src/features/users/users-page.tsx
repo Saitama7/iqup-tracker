@@ -24,9 +24,11 @@ import {
   createUserForm,
   fixRateForm,
   isTimeoutError,
+  profileForm,
   rateForm,
   resetPassword,
   setActive,
+  updateProfile,
   updateRate,
   updateRoles,
   usersQuery,
@@ -792,6 +794,14 @@ function EditUserDialog({
         </div>
 
         {teacher && <RateEditor teacher={teacher} />}
+        {userId && phone && (
+          <ProfileEditor
+            key={`${fullName}:${phone}`}
+            userId={userId}
+            fullName={fullName}
+            phone={phone}
+          />
+        )}
         {userId && <RolesEditor key={roles.join()} userId={userId} roles={roles} isSelf={isSelf} />}
         {userId && phone && (
           <PasswordReset
@@ -999,6 +1009,98 @@ function NewRateForm({ teacher }: { teacher: TeacherRow }) {
       )}
       <SubmitButton pending={mutation.isPending}>Новая ставка с даты</SubmitButton>
     </form>
+  )
+}
+
+function ProfileEditor({
+  userId,
+  fullName: currentName,
+  phone: currentPhone,
+}: {
+  userId: string
+  fullName: string
+  phone: string
+}) {
+  const invalidate = useInvalidateUsers()
+  const nameId = useId()
+  const phoneId = useId()
+  const initialPhone = maskPhoneInput(currentPhone.replace(/^996/, ''))
+  const [fullName, setFullName] = useState(currentName)
+  const [phone, setPhone] = useState(initialPhone)
+  const [error, setError] = useState<string | null>(null)
+  const changed = fullName.trim() !== currentName || phone !== initialPhone
+
+  const mutation = useMutation({
+    mutationFn: updateProfile,
+    onSuccess: async () => {
+      await invalidate()
+      setError(null)
+      toast.success('Данные сохранены')
+    },
+    onError: (e) => {
+      setError(e.message)
+    },
+  })
+
+  function onSubmit(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const parsed = profileForm.safeParse({ fullName, phone })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Проверьте поля формы')
+      return
+    }
+    setError(null)
+    mutation.mutate({ userId, ...parsed.data })
+  }
+
+  return (
+    <EditorBlock title="Данные">
+      <form
+        onSubmit={onSubmit}
+        noValidate
+        aria-label="Данные пользователя"
+        className="flex flex-col gap-2.5"
+      >
+        <Field id={nameId} label="Имя и фамилия">
+          <input
+            id={nameId}
+            className={inputClass}
+            autoComplete="off"
+            value={fullName}
+            onChange={(e) => {
+              setFullName(e.target.value)
+            }}
+          />
+        </Field>
+        <Field id={phoneId} label="Телефон (логин)">
+          <div className="flex min-h-11 items-center gap-2 rounded-xl border-[1.5px] border-line-strong bg-card px-3.5 focus-within:border-ink">
+            <span className="font-extrabold text-ink-muted">+996</span>
+            <input
+              id={phoneId}
+              type="tel"
+              inputMode="numeric"
+              autoComplete="off"
+              className="min-w-0 flex-1 bg-transparent text-base font-bold outline-none"
+              value={phone}
+              onChange={(e) => {
+                setPhone(maskPhoneInput(e.target.value))
+              }}
+            />
+          </div>
+        </Field>
+        <p className="text-xs font-bold text-ink-muted">
+          Телефон — это логин: после смены человек входит по новому номеру с прежним паролем.
+        </p>
+        {error && (
+          <p role="alert" className="text-sm font-bold text-burned">
+            {error}
+          </p>
+        )}
+        <SubmitButton pending={mutation.isPending} disabled={!changed} variant="outline">
+          Сохранить данные
+        </SubmitButton>
+      </form>
+    </EditorBlock>
   )
 }
 
