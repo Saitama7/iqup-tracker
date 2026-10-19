@@ -67,3 +67,23 @@ export function useBackClose(open: boolean, onClose: () => void): void {
     }
   }, [active])
 }
+
+/**
+ * Runs `next` once the history entry of a phone overlay closing now is gone (useBackClose steps
+ * back after the overlay unmounts) — e.g. «назад» to the source screen right after a dialog's
+ * success; at once when no overlay entry is on top. Returns a cancel.
+ */
+export function afterOverlayClosed(next: () => void): () => void {
+  if (overlayOf(window.history.state) === null) {
+    next()
+    return () => undefined
+  }
+  const onPopState = () => {
+    window.removeEventListener('popstate', onPopState)
+    next()
+  }
+  window.addEventListener('popstate', onPopState)
+  return () => {
+    window.removeEventListener('popstate', onPopState)
+  }
+}

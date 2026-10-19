@@ -2,11 +2,12 @@
 // the marks are deleted, the teacher's pending requests rejected; the dialog shows what the teacher
 // loses (lesson_payroll_impact). A closed period refuses — the button in the dialog is off.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useState, type SubmitEvent } from 'react'
+import { useEffect, useId, useRef, useState, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { AUDIT_KEY } from '@/features/audit/api'
 import { FormDialog } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, SubmitButton } from '@/features/tariffs/parts'
+import { afterOverlayClosed } from '@/lib/use-back-close'
 import type { LessonSheet } from './api'
 import { unconfirmDoneText, unconfirmImpactText, unconfirmRequestsText } from './unconfirm'
 import { lessonPayrollImpactQuery, unconfirmForm, unconfirmLesson } from './unconfirm-api'
@@ -27,6 +28,19 @@ export function UnconfirmLesson({
   onDone: () => void
 }) {
   const [open, setOpen] = useState(false)
+  const [done, setDone] = useState(false)
+  const doneRef = useRef(onDone)
+  useEffect(() => {
+    doneRef.current = onDone
+  })
+  // On the phone the dialog holds a history entry: leave only after it is gone, or «назад» to the
+  // source would just pop the dialog's entry.
+  useEffect(() => {
+    if (open || !done) return
+    return afterOverlayClosed(() => {
+      doneRef.current()
+    })
+  }, [open, done])
   return (
     <>
       <button
@@ -53,7 +67,7 @@ export function UnconfirmLesson({
             }}
             onDone={() => {
               setOpen(false)
-              onDone()
+              setDone(true)
             }}
           />
         )}
@@ -160,7 +174,12 @@ function UnconfirmForm({
         <SubmitButton variant="outline" onClick={onCancel}>
           Не отменять
         </SubmitButton>
-        <SubmitButton variant="danger" pending={mutation.isPending} disabled={sheet.is_locked}>
+        <SubmitButton
+          variant="danger"
+          pending={mutation.isPending}
+          disabled={sheet.is_locked}
+          className="text-center whitespace-normal"
+        >
           Отменить проведение
         </SubmitButton>
       </div>
