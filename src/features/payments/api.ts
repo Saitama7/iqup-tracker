@@ -223,6 +223,23 @@ export const studentPaymentsQuery = (studentId: string) =>
     },
   })
 
+/**
+ * Every payment, newest first — «Записать оплату» shows each student's last payment and warns of a
+ * repeat (#93). ~200 students × a payment a month: a few thousand rows a year.
+ */
+export const allPaymentsQuery = () =>
+  queryOptions({
+    queryKey: [PAYMENTS_KEY, 'all'],
+    queryFn: async (): Promise<PaymentRow[]> => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select(PAYMENT_FIELDS)
+        .order('paid_at', { ascending: false })
+      if (error) throw error
+      return withAuthors(z.array(paymentSchema).parse(data))
+    },
+  })
+
 // ─── Form input ─────────────────────────────────────────────────────────────
 
 const amount = z

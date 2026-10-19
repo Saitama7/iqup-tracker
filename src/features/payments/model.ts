@@ -3,7 +3,13 @@
 import { formatHours, monthAccusative } from '@/features/afterschool/model'
 import { pluralRu } from '@/features/lessons/select'
 import { formatLessonPrice, formatSom } from '@/features/tariffs/model'
-import { availableLessons, paidLessons, payState, type PayState } from './balance'
+import {
+  groupLabel,
+  type GroupBrief,
+  type StudentRow,
+  type SubscriptionRow,
+} from '@/features/students/model'
+import { availableLessons, debtOverLimit, paidLessons, payState, type PayState } from './balance'
 import type { PaymentMethod, PaymentRow, StudentBalance } from './api'
 
 export const METHOD_LABEL: Record<PaymentMethod, string> = { cash: 'наличные', mbank: 'Mbank' }
@@ -385,4 +391,249 @@ export function refundHint(b: StudentBalance): string {
 export function parseAmount(v: string): number | null {
   const d = v.replace(/\s/g, '')
   return /^\d+$/.test(d) ? Number(d) : null
+}
+
+// ─── Duplicate guard of «Записать оплату» (#93) ────────────────────────────
+
+/** paid_at → its Bishkek date '2026-10-05' (invariant 8). */
+export const paidOnDate = (paidAt: string) =>
+  new Date(Date.parse(paidAt) + 6 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+/** '2026-10-05' → «05.10». */
+export const dayMonth = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}`
+
+const dayIndex = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000
+
+/** A payment like the last one within this many days is likely a repeat (И75). */
+export const REPEAT_DAYS = 14
+
+/** What a subscription is: «абонемент с 01.10» / «счёт за октябрь» (after-school month, #82). */
+export function subscriptionCaption(s: {
+  started_at?: string | null
+  period_month?: string | null
+}): string {
+  if (s.period_month) return `счёт за ${monthAccusative(s.period_month)}`
+  return s.started_at ? `абонемент с ${dayMonth(s.started_at)}` : 'абонемент'
+}
+
+/** The student's subscriptions by id — payment rows do not carry started_at. */
+export function subscriptionsOf(
+  student: Pick<StudentRow, 'enrollments'>,
+): Map<string, SubscriptionRow> {
+  return new Map(student.enrollments.flatMap((e) => e.subscriptions.map((s) => [s.id, s])))
+}
+
+/** Payments of one student (optionally in one group), newest first. */
+export function paymentsOf(
+  payments: readonly PaymentRow[],
+  studentId: string,
+  groupId?: string,
+): PaymentRow[] {
+  return payments
+    .filter(
+      (p) =>
+        p.subscription.enrollment.student_id === studentId &&
+        (!groupId || p.subscription.enrollment.group_id === groupId),
+    )
+    .sort((a, b) => b.paid_at.localeCompare(a.paid_at))
+}
+
+export interface DuplicateTarget {
+  kind: 'current' | 'new'
+  groupId: string
+  /** The subscription paid on («current»), or the enrollment's current one («new»). */
+  balance: StudentBalance | null
+}
+
+/**
+ * «Похоже на повтор» (#93, И75): reasons to think the payment about to be recorded was already
+ * made — a payment in the group in the last 14 days, a new package while the current one is paid
+ * with ≥ 3 lessons left, an after-school invoice already paid. Empty — no warning. Never a block:
+ * a second payment in a month happens (a top-up, a sibling with the same phone, И47).
+ */
+export function duplicateWarning(
+  student: Pick<StudentRow, 'id' | 'enrollments'>,
+  target: DuplicateTarget,
+  payments: readonly PaymentRow[],
+  today: string,
+): string[] {
+  const reasons: string[] = []
+  const subs = subscriptionsOf(student)
+  const b = target.balance
+  const paid = paymentsOf(payments, student.id, target.groupId).filter((p) => p.kind === 'payment')
+
+  const recent = paid.find((p) => {
+    const days = dayIndex(today) - dayIndex(paidOnDate(p.paid_at))
+    return days >= 0 && days < REPEAT_DAYS
+  })
+  if (recent) {
+    const s = subs.get(recent.subscription.id)
+    const what = subscriptionCaption({
+      started_at: s?.started_at,
+      period_month: s?.period_month ?? recent.subscription.period_month,
+    })
+    const left =
+      b && b.subscriptionId === recent.subscription.id && !b.refunded
+        ? `, осталось ${unitOf(b, Math.max(0, b.lessonsLeft), b.lessonsTotal)}`
+        : ''
+    reasons.push(
+      `Оплата ${som(recent.amount)} уже внесена ${dayMonth(paidOnDate(recent.paid_at))} (${what}${left})`,
+    )
+  }
+
+  if (
+    target.kind === 'new' &&
+    b &&
+    !b.refunded &&
+    b.unit === 'lesson' &&
+    b.debtLessons === 0 &&
+    b.paidLessons >= b.lessonsTotal &&
+    b.lessonsLeft >= 3
+  ) {
+    reasons.push(
+      `Текущий абонемент оплачен, осталось ${b.lessonsLeft} ${pluralRu(b.lessonsLeft, LESSONS)} — новый ещё не нужен`,
+    )
+  }
+
+  if (
+    target.kind === 'current' &&
+    b &&
+    b.unit === 'hour' &&
+    b.periodMonth &&
+    b.paidSom >= b.priceFinal
+  ) {
+    const last = paid.find((p) => p.subscription.id === b.subscriptionId)
+    reasons.push(
+      `Счёт за ${monthAccusative(b.periodMonth)} уже оплачен${last ? ` ${dayMonth(paidOnDate(last.paid_at))}` : ''}`,
+    )
+  }
+  return reasons
+}
+
+/** PayState of the picker, plus «Нет оплат» — nothing paid in the group yet. */
+export type PickerPayState = PayState | 'none'
+
+export interface GroupPayStatus {
+  groupId: string
+  group: string
+  state: PickerPayState
+  /** «Оплачено 05.10 · 3 200» / «Частично» / «Пора оплачивать» / «Долг 2 ур. · 533 сом» / «Нет оплат». */
+  label: string
+  /** «абонемент с 01.10 · осталось 9 из 12» / «оплачено 6 из 12 · внесено 1 600 из 3 200». */
+  detail: string | null
+  tone: 'ok' | 'warn' | 'burned' | 'muted'
+}
+
+/**
+ * Payment status of a student per active enrollment — rows of the student picker (#93). The current
+ * subscription's state as payState (А5), the last payment's date and amount.
+ */
+export function groupPayStatuses(
+  student: StudentRow,
+  groups: ReadonlyMap<string, GroupBrief>,
+  balances: readonly StudentBalance[],
+  payments: readonly PaymentRow[],
+): GroupPayStatus[] {
+  const subs = subscriptionsOf(student)
+  const seen = new Set<string>()
+  return student.enrollments
+    .filter((e) => e.status === 'active' && !seen.has(e.group_id) && seen.add(e.group_id))
+    .map((e): GroupPayStatus => {
+      const g = groups.get(e.group_id)
+      const group = g ? groupLabel(g) : 'Группа'
+      const b =
+        balances.find(
+          (x) => x.studentId === student.id && x.groupId === e.group_id && x.isCurrent,
+        ) ?? null
+      const money = paymentsOf(payments, student.id, e.group_id).filter((p) => p.kind !== 'refund')
+      const last = money.find((p) => p.kind === 'payment') ?? null
+      const base = { groupId: e.group_id, group }
+      if (!b || (money.length === 0 && b.debtLessons === 0)) {
+        return { ...base, state: 'none', label: 'Нет оплат', detail: null, tone: 'muted' }
+      }
+      const state = payState(b)
+      const lastText = last
+        ? `${dayMonth(paidOnDate(last.paid_at))} · ${formatSom(last.amount)}`
+        : null
+      if (state === 'paid') {
+        const s = subs.get(b.subscriptionId)
+        return {
+          ...base,
+          state,
+          label: lastText ? `Оплачено ${lastText}` : 'Оплачено',
+          detail:
+            b.unit === 'hour' && b.periodMonth
+              ? `счёт за ${monthAccusative(b.periodMonth)} оплачен`
+              : `${subscriptionCaption({ started_at: s?.started_at })} · осталось ${unitOf(b, Math.max(0, b.lessonsLeft), b.lessonsTotal)}`,
+          tone: 'ok',
+        }
+      }
+      if (state === 'partial') {
+        return {
+          ...base,
+          state,
+          label: 'Частично',
+          detail: `оплачено ${unitOf(b, Math.max(0, b.paidLessons), b.lessonsTotal)} · внесено ${formatSom(b.paidSom)} из ${formatSom(b.priceFinal)}`,
+          tone: 'warn',
+        }
+      }
+      if (state === 'soon') {
+        return {
+          ...base,
+          state,
+          label: 'Пора оплачивать',
+          detail: lastText ? `последняя оплата ${lastText}` : null,
+          tone: 'warn',
+        }
+      }
+      return {
+        ...base,
+        state,
+        label: `Долг ${unitCount(b, b.debtLessons)} · ${som(b.debtSom)}`,
+        detail: lastText ? `последняя оплата ${lastText}` : null,
+        tone: debtOverLimit(b.debtLessons) ? 'burned' : 'warn',
+      }
+    })
+}
+
+/** «Не оплатили» of the picker: any group in debt, due, partly paid or with nothing paid. */
+export const unpaidStatus = (rows: readonly Pick<GroupPayStatus, 'state'>[]) =>
+  rows.some((r) => r.state !== 'paid')
+
+/** A line of «Оплаты ученика»: «05.10 · 3 200 сом · Mbank · Математика · 8 класс А · абонемент с 01.10 · Алишка». */
+export function historyLine(
+  p: PaymentRow,
+  subs: ReadonlyMap<string, SubscriptionRow>,
+  groups: ReadonlyMap<string, GroupBrief>,
+): { date: string; amount: string; caption: string } {
+  const s = subs.get(p.subscription.id)
+  const g = groups.get(p.subscription.enrollment.group_id)
+  return {
+    date: dayMonth(paidOnDate(p.paid_at)),
+    amount: `${signedSom(p.amount)} сом`,
+    caption: [
+      p.method ? METHOD_LABEL[p.method] : 'перенос',
+      g ? groupLabel(g) : null,
+      subscriptionCaption({
+        started_at: s?.started_at,
+        period_month: s?.period_month ?? p.subscription.period_month,
+      }),
+      p.kind === 'refund' ? 'возврат' : null,
+      p.createdByName,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  }
+}
+
+/** The toast: «Оплата записана: Айжан Б. · 3 200 сом · 8 класс А · абонемент с 01.10». */
+export function recordedToast(
+  studentName: string,
+  amount: number,
+  groupName: string | null,
+  what: string,
+): string {
+  return ['Оплата записана: ' + studentName, som(amount), groupName, what]
+    .filter(Boolean)
+    .join(' · ')
 }
