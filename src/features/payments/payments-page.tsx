@@ -93,6 +93,8 @@ import {
   type TotalsRow,
   unpaidStatus,
 } from './model'
+import { isEditable, PaymentMenu, usePaymentEditor, type PaymentTarget } from './payment-edit'
+import type { PaymentRow } from './api'
 
 export const PAYMENT_TABS = ['record', 'journal', 'groups', 'teachers'] as const
 export type PaymentTab = (typeof PAYMENT_TABS)[number]
@@ -289,6 +291,7 @@ export function PaymentsPage({
       rows={filtered.map((p) => journalRow(p, lookups))}
       isDesktop={isDesktop}
       linkStudents={canWrite}
+      editable={canWrite ? filtered : undefined}
     />
   ) : (
     <TotalsTable
@@ -421,12 +424,29 @@ function Journal({
   rows,
   isDesktop,
   linkStudents,
+  editable,
 }: {
   rows: JournalRow[]
   isDesktop: boolean
   /** А6 is admin-only: the accountant gets plain names (И43). */
   linkStudents: boolean
+  /** Admin (Г9): the rows behind the journal — «⋯ → Изменить / Удалить» (#92); none for the accountant. */
+  editable?: readonly PaymentRow[]
 }) {
+  const editor = usePaymentEditor()
+  const byId = useMemo(() => new Map((editable ?? []).map((p) => [p.id, p])), [editable])
+  const targetOf = (r: JournalRow): PaymentTarget | null => {
+    const payment = byId.get(r.id)
+    return payment && isEditable(payment)
+      ? {
+          payment,
+          studentId: r.studentId,
+          student: r.student,
+          group: r.caption,
+          package: r.package,
+        }
+      : null
+  }
   const name = (r: JournalRow, className: string) =>
     linkStudents ? (
       <Link
@@ -448,34 +468,61 @@ function Journal({
   }
   if (!isDesktop) {
     return (
-      <ul aria-label="Журнал оплат" className="flex flex-col gap-2.5">
-        {rows.map((r) => (
-          <li
-            key={r.id}
-            className={cn(
+      <>
+        <ul aria-label="Журнал оплат" className="flex flex-col gap-2.5">
+          {rows.map((r) => {
+            const target = targetOf(r)
+            const card = cn(
               cardClass,
-              'flex items-start justify-between gap-3 p-4',
+              'flex w-full items-start justify-between gap-3 p-4 text-left',
               r.refund && 'bg-burned-tint',
-            )}
-          >
-            <div className="flex min-w-0 flex-col gap-0.5">
-              {name(r, 'font-extrabold text-ink')}
-              <span className="text-[13px] font-bold text-ink-muted">{r.caption}</span>
-              <span className="text-xs font-bold text-ink-muted">
-                {r.date} · {r.package} · {r.method} · {r.author}
-              </span>
-            </div>
-            <span
-              className={cn(
-                'font-display text-base font-bold whitespace-nowrap',
-                r.refund && 'text-burned-strong',
-              )}
-            >
-              {signedSom(r.amount)}
-            </span>
-          </li>
-        ))}
-      </ul>
+            )
+            const body = (
+              <>
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  {target ? (
+                    <span className="font-extrabold text-ink">{r.student}</span>
+                  ) : (
+                    name(r, 'font-extrabold text-ink')
+                  )}
+                  <span className="text-[13px] font-bold text-ink-muted">{r.caption}</span>
+                  <span className="text-xs font-bold text-ink-muted">
+                    {r.date} · {r.package} · {r.method} · {r.author}
+                  </span>
+                </div>
+                <span
+                  className={cn(
+                    'font-display text-base font-bold whitespace-nowrap',
+                    r.refund && 'text-burned-strong',
+                  )}
+                >
+                  {signedSom(r.amount)}
+                </span>
+              </>
+            )
+            return (
+              <li key={r.id}>
+                {target ? (
+                  // admin: a tap opens the details with «Изменить» / «Удалить» (#92)
+                  <button
+                    type="button"
+                    aria-label={`${r.refund ? 'Возврат' : 'Оплата'}: ${r.student}, ${signedSom(r.amount)}`}
+                    onClick={() => {
+                      editor.open(target, 'details')
+                    }}
+                    className={card}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <div className={card}>{body}</div>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+        {editor.dialogs}
+      </>
     )
   }
   return (
@@ -489,6 +536,11 @@ function Journal({
             <th className={thClass}>Способ</th>
             <th className={cn(thClass, 'text-right')}>Сумма</th>
             <th className={thClass}>Записал</th>
+            {editable && (
+              <th className={thClass}>
+                <span className="sr-only">Действия</span>
+              </th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -515,10 +567,24 @@ function Journal({
                 {signedSom(r.amount)}
               </td>
               <td className={cn(tdClass, 'text-ink-muted')}>{r.author}</td>
+              {editable && (
+                <td className={cn(tdClass, 'w-12 py-0 pr-1')}>
+                  {targetOf(r) && (
+                    <PaymentMenu
+                      label={`${r.student}, ${r.date}, ${signedSom(r.amount)}`}
+                      onAction={(a) => {
+                        const target = targetOf(r)
+                        if (target) editor.open(target, a)
+                      }}
+                    />
+                  )}
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
+      {editor.dialogs}
     </section>
   )
 }

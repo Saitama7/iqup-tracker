@@ -7,6 +7,7 @@ import { pluralRu } from '@/features/lessons/select'
 import { CANCEL_REASON_LABEL, type AttendanceStatus } from '@/features/groups/model'
 import { formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/model'
 import type { GroupType } from '@/features/tariffs/current'
+import { bishkekDate } from '@/lib/time'
 
 export type AuditAction = 'insert' | 'update' | 'delete'
 /** v_audit_feed.kind (0014) — the filter chips. */
@@ -581,10 +582,20 @@ function describeSubscription(row: AuditRow, l: AuditLookups): Described {
     }
   }
   if (row.action === 'delete') {
+    // #92: delete_payment takes the duplicate «новый абонемент» with its payment, with the admin's reason
+    const withPayment =
+      !!row.reason && !isServiceReason(row.reason) && !(row.reason in REASON_LABEL)
     return {
       badge: { label: 'Абонемент', tone: 'stone' },
       link,
-      parts: [...who, `абонемент ${package_} удалён`],
+      parts: withPayment
+        ? [
+            'Абонемент удалён вместе с оплатой: ',
+            ...who.slice(0, 1),
+            ` · ${package_}`,
+            groupTail(e?.groupId ?? null, l),
+          ]
+        : [...who, `абонемент ${package_} удалён`],
     }
   }
   if (changed(row, 'started_at') && !changed(row, 'status')) {
@@ -625,6 +636,16 @@ function describeSubscription(row: AuditRow, l: AuditLookups): Described {
 
 const METHOD: Record<string, string> = { cash: 'наличные', mbank: 'Mbank' }
 
+/** « · Математика · 8 класс А», or nothing without the group. */
+const groupTail = (groupId: string | null, l: AuditLookups) =>
+  groupId ? ` · ${groupName(groupId, l)}` : ''
+
+/** paid_at (timestamptz) → «05.10» in Bishkek. */
+const paidDay = (s: Snapshot | null) => {
+  const at = str(s, 'paid_at')
+  return at ? dayMonth(bishkekDate(Date.parse(at))) : null
+}
+
 /** «Нурлан Асанов · Математика · 8 класс А — оплата 1 600 сом (Mbank), абонемент 12 уроков». */
 function describePayment(row: AuditRow, l: AuditLookups): Described {
   const s = current(row)
@@ -642,18 +663,50 @@ function describePayment(row: AuditRow, l: AuditLookups): Described {
   const money = strong(`${formatSom(Math.abs(amount))} сом`)
   const comment = str(s, 'reason')
 
+  const student = strong((e && l.students[e.studentId]) || 'Ученик')
   if (row.action === 'delete') {
+    // #92 (Г10): «Оплата удалена: Айжан Б. · 3 200 сом · 05.10 · 8 класс А», the reason in the note
+    const day = paidDay(s)
     return {
-      badge: { label: 'Платёж', tone: 'stone' },
+      badge: { label: refund ? 'Возврат' : 'Оплата', tone: 'stone' },
       link,
-      parts: [...who, refund ? 'возврат ' : 'платёж ', money, ` (${method}) удалён`],
+      parts: [
+        refund ? 'Возврат удалён: ' : transfer ? 'Перенос удалён: ' : 'Оплата удалена: ',
+        student,
+        ' · ',
+        money,
+        day ? ` · ${day}` : '',
+        groupTail(e?.groupId ?? null, l),
+      ],
     }
   }
   if (row.action === 'update') {
+    // #92: «Оплата изменена: Айжан Б. · сумма 3 200 → 1 600 сом · способ наличные → Mbank»
+    const was = Math.abs(num(row.before, 'amount') ?? 0)
+    const changes = [
+      changed(row, 'amount')
+        ? `сумма ${formatSom(was)} → ${formatSom(Math.abs(amount))} сом`
+        : null,
+      changed(row, 'method')
+        ? `способ ${METHOD[str(row.before, 'method') ?? ''] ?? '—'} → ${method || '—'}`
+        : null,
+      changed(row, 'paid_at') && paidDay(row.before) !== paidDay(row.after)
+        ? `дата ${paidDay(row.before) ?? '—'} → ${paidDay(row.after) ?? '—'}`
+        : null,
+      changed(row, 'reason')
+        ? refund
+          ? 'причина возврата изменена'
+          : 'комментарий изменён'
+        : null,
+    ].filter(Boolean)
     return {
-      badge: { label: 'Платёж', tone: 'stone' },
+      badge: { label: refund ? 'Возврат' : 'Оплата', tone: 'stone' },
       link,
-      parts: [...who, refund ? 'возврат ' : 'платёж ', money, ` (${method}) изменён`],
+      parts: [
+        refund ? 'Возврат изменён: ' : 'Оплата изменена: ',
+        student,
+        changes.length > 0 ? ` · ${changes.join(' · ')}` : '',
+      ],
     }
   }
   if (transfer) {

@@ -347,6 +347,8 @@ function DesktopStudent({
             payments={payments}
             state={paymentsState}
             groupNameOf={(id) => (view.enrollments.length > 1 ? groupName(view, id) : null)}
+            studentName={s.full_name}
+            groupLabelOf={(id) => groupName(view, id) ?? 'Группа'}
           />
           <Totals view={view} records={records} />
           <Notes notes={s.notes} />
@@ -661,6 +663,8 @@ function MobileStudent({
         payments={payments}
         state={paymentsState}
         groupNameOf={(id) => (view.enrollments.length > 1 ? groupName(view, id) : null)}
+        studentName={s.full_name}
+        groupLabelOf={(id) => groupName(view, id) ?? 'Группа'}
       />
 
       <section aria-label="Посещаемость" className={cn(cardClass, 'flex flex-col rounded-[18px]')}>

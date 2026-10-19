@@ -715,7 +715,111 @@ describe('payments (#47)', () => {
         row({ entity: 'payments', action: 'delete', before: payment, kind: 'payment' }),
         EMPTY_LOOKUPS,
       ),
-    ).toBe('Ученик — платёж 1 600 сом (Mbank) удалён')
+    ).toBe('Оплата удалена: Ученик · 1 600 сом')
+  })
+})
+
+describe('payments deleted / edited by the admin (#92, Г10)', () => {
+  const payment = {
+    id: '30000000-0000-4000-8000-000000000002',
+    subscription_id: SUB,
+    amount: 3200,
+    method: 'cash',
+    kind: 'payment',
+    reason: null,
+    paid_at: '2026-10-04T20:30:00+00:00', // 05.10 02:30 in Bishkek
+  }
+  it('«Оплата удалена: Алина Исакова · 3 200 сом · 05.10 · Математика · 8 класс Б · Причина: «…»»', () => {
+    const e = describeAuditRow(
+      row({
+        entity: 'payments',
+        action: 'delete',
+        before: payment,
+        reason: 'внесли дважды',
+        kind: 'payment',
+      }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Оплата удалена: Алина Исакова · 3 200 сом · 05.10 · Математика · 8 класс Б',
+    )
+    expect(e.note).toBe('Причина: «внесли дважды»')
+    expect(e.link).toMatchObject({ params: { studentId: ALINA } })
+  })
+  it('«Возврат удалён: …»', () => {
+    const r = row({
+      entity: 'payments',
+      action: 'delete',
+      before: { ...payment, amount: -2000, kind: 'refund', reason: 'уехал' },
+      reason: 'возврат не выдавали',
+      kind: 'payment',
+    })
+    expect(text(r)).toBe(
+      'Возврат удалён: Алина Исакова · 2 000 сом · 05.10 · Математика · 8 класс Б',
+    )
+    expect(describeAuditRow(r, lookups).note).toBe('Причина: «возврат не выдавали»')
+  })
+  it('«Оплата изменена: сумма 3 200 → 1 600 сом» with every change and the reason', () => {
+    const e = describeAuditRow(
+      row({
+        entity: 'payments',
+        action: 'update',
+        before: payment,
+        after: {
+          ...payment,
+          amount: 1600,
+          method: 'mbank',
+          paid_at: '2026-10-02T06:00:00+00:00',
+          reason: 'половина',
+        },
+        reason: 'ошиблись суммой',
+        kind: 'payment',
+      }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Оплата изменена: Алина Исакова · сумма 3 200 → 1 600 сом · способ наличные → Mbank · дата 05.10 → 02.10 · комментарий изменён',
+    )
+    expect(e.note).toBe('Причина: «ошиблись суммой»')
+  })
+  it('the same day at another time is not a date change', () => {
+    expect(
+      text(
+        row({
+          entity: 'payments',
+          action: 'update',
+          before: payment,
+          after: { ...payment, amount: 3000, paid_at: '2026-10-05T06:00:00+00:00' },
+          reason: 'сумма',
+          kind: 'payment',
+        }),
+      ),
+    ).toBe('Оплата изменена: Алина Исакова · сумма 3 200 → 3 000 сом')
+  })
+  it('«Абонемент удалён вместе с оплатой» — the subscription row of delete_payment', () => {
+    const sub = {
+      id: SUB,
+      enrollment_id: ENROLLMENT,
+      lessons_total: 12,
+      price_final: 3200,
+      status: 'active',
+    }
+    const r = row({
+      entity: 'subscriptions',
+      entityId: SUB,
+      action: 'delete',
+      before: sub,
+      reason: 'внесли дважды',
+      kind: 'payment',
+    })
+    expect(text(r)).toBe(
+      'Абонемент удалён вместе с оплатой: Алина Исакова · 12 уроков · Математика · 8 класс Б',
+    )
+    expect(describeAuditRow(r, lookups).note).toBe('Причина: «внесли дважды»')
+    // «Записан по ошибке» (0024) deletes unpaid packages with its service reason — the old line
+    expect(text({ ...r, reason: 'delete_enrollment' })).toBe(
+      'Алина Исакова · Математика · 8 класс Б — абонемент 12 уроков удалён',
+    )
   })
 })
 
