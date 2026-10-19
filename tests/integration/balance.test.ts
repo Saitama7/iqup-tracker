@@ -260,7 +260,7 @@ describe('delete_payment / update_payment (#92): the view and balance.ts still a
       p_method: 'cash',
     })
     if (buy.error) throw buy.error
-    const bought = buy.data[0]
+    const bought = buy.data[0] as (typeof buy.data)[number] | undefined
     if (!bought) throw new Error('no subscription bought')
     await expectAgree(supabase)
     const del2 = await supabase.rpc('delete_payment', {
@@ -279,7 +279,7 @@ describe('delete_payment / update_payment (#92): the view and balance.ts still a
     const before = await expectAgree(supabase)
     const fixture = await fixtureSubscriptions(supabase)
     const invoice = [...before.values()].find(
-      (r) => r.subscription_id && fixture.has(r.subscription_id) && r.paid_som > 0,
+      (r) => r.subscription_id && fixture.has(r.subscription_id) && (r.paid_som ?? 0) > 0,
     )
     if (!invoice?.subscription_id) throw new Error('no paid fixture invoice')
     const rec = await supabase.rpc('record_payment', {

@@ -237,8 +237,9 @@ function DeleteForm({ target, onDone }: { target: PaymentTarget; onDone: () => v
 
   const mutation = useMutation({
     mutationFn: deletePayment,
-    onSuccess: async () => {
-      await invalidate()
+    onSuccess: () => {
+      // the RPC is done; the journal, balances and А10 refetch in the background
+      void invalidate()
       toast.success(
         `${p.kind === 'refund' ? 'Возврат удалён' : 'Оплата удалена'}: ${target.student} · ${som(Math.abs(p.amount))}`,
       )
@@ -275,6 +276,11 @@ function DeleteForm({ target, onDone }: { target: PaymentTarget; onDone: () => v
           className="rounded-xl bg-accent px-3 py-2.5 text-sm font-bold text-warn-strong"
         >
           {deleteImpactText(effect)}
+        </p>
+      ) : impact.isError ? (
+        <p role="status" data-testid="delete-impact" className="text-xs font-bold text-ink-muted">
+          Не удалось проверить абонемент — база всё равно проверит при удалении.
+          <span className="sr-only"> {impact.error.message}</span>
         </p>
       ) : (
         impact.isPending && <div className="h-10 animate-pulse rounded-xl bg-muted" aria-hidden />
@@ -320,8 +326,9 @@ function EditForm({ target, onDone }: { target: PaymentTarget; onDone: () => voi
 
   const mutation = useMutation({
     mutationFn: updatePayment,
-    onSuccess: async () => {
-      await invalidate()
+    onSuccess: () => {
+      // the RPC is done; the journal, balances and А10 refetch in the background
+      void invalidate()
       toast.success(refund ? 'Возврат изменён' : 'Оплата изменена')
       onDone()
     },

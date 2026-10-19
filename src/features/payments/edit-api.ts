@@ -4,7 +4,7 @@ import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { supabase } from '@/lib/supabase/client'
 import { parseDateRu } from '@/lib/time'
-import { PaymentError, PAYMENTS_KEY } from './api'
+import { PaymentError } from './api'
 import type { ImpactSubscription } from './edit-model'
 
 const impactSchema = z.array(
@@ -26,7 +26,10 @@ const impactSchema = z.array(
 /** Every subscription of the enrollment behind `subscriptionId`, with payments and marks. */
 export const paymentImpactQuery = (subscriptionId: string) =>
   queryOptions({
-    queryKey: [PAYMENTS_KEY, 'impact', subscriptionId],
+    // not under PAYMENTS_KEY: the invalidation after a delete must not refetch a subscription that went
+    queryKey: ['payment-impact', subscriptionId],
+    retry: false,
+    staleTime: 0,
     queryFn: async (): Promise<ImpactSubscription[]> => {
       const own = await supabase
         .from('subscriptions')
