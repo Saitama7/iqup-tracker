@@ -96,6 +96,14 @@ const subscriptionSchema = z.object({
   price_final: z.number().int(),
   enrollment: enrollmentSchema,
 })
+const deletedSubscriptionSchema = z.object({
+  entity_id: z.uuid(),
+  before: z.object({
+    enrollment_id: z.uuid(),
+    lessons_total: z.number().int(),
+    price_final: z.number().int(),
+  }),
+})
 const named = z.object({ id: z.uuid(), full_name: z.string() })
 const groupSchema = z.object({ id: z.uuid(), name: z.string(), subject: subjectName })
 const tariffSchema = z.object({
@@ -128,6 +136,43 @@ function requestStudentIds(snapshot: Record<string, unknown> | null): (string | 
   )
 }
 
+/**
+ * A payment whose subscription went with it (delete_payment, #92): the package and the enrollment
+ * from the subscription's delete snapshot, so the line still names the student and the group.
+ */
+async function deletedSubscriptions(ids: readonly string[]) {
+  const snapshots = await select(
+    () =>
+      supabase
+        .from('v_audit_feed')
+        .select('entity_id, before')
+        .eq('entity', 'subscriptions')
+        .eq('action', 'delete')
+        .in('entity_id', [...ids]),
+    deletedSubscriptionSchema,
+    ids.length === 0,
+  )
+  const enrollmentIds = [...new Set(snapshots.map((r) => r.before.enrollment_id))]
+  const enrollments = await select(
+    () => supabase.from('enrollments').select('id, student_id, group_id').in('id', enrollmentIds),
+    enrollmentSchema,
+    enrollmentIds.length === 0,
+  )
+  return snapshots.flatMap((r) => {
+    const enrollment = enrollments.find((e) => e.id === r.before.enrollment_id)
+    return enrollment
+      ? [
+          {
+            id: r.entity_id,
+            lessons_total: r.before.lessons_total,
+            price_final: r.before.price_final,
+            enrollment,
+          },
+        ]
+      : []
+  })
+}
+
 /** Names behind the page's rows. Two steps: lessons / enrollments first, then who and which group. */
 async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['lookups']> {
   const lessonIds = ids(
@@ -149,7 +194,7 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
   const subscriptionIds = ids(
     rows.filter((r) => r.entity === 'payments').map((r) => field(r, 'subscription_id')),
   )
-  const [lessons, ownEnrollments, tariffs, subscriptions] = await Promise.all([
+  const [lessons, ownEnrollments, tariffs, liveSubscriptions] = await Promise.all([
     select(
       () =>
         supabase
@@ -184,6 +229,12 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
       subscriptionIds.length === 0,
     ),
   ])
+  const subscriptions = [
+    ...liveSubscriptions,
+    ...(await deletedSubscriptions(
+      subscriptionIds.filter((id) => !liveSubscriptions.some((s) => s.id === id)),
+    )),
+  ]
   const enrollments = [...ownEnrollments, ...subscriptions.map((s) => s.enrollment)]
 
   const studentIds = ids([
