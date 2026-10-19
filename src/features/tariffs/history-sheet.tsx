@@ -1,8 +1,5 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import { useId, useState, type SubmitEvent } from 'react'
-import { toast } from 'sonner'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { useState } from 'react'
 import {
   Sheet,
   SheetClose,
@@ -10,27 +7,19 @@ import {
   SheetDescription,
   SheetTitle,
 } from '@/components/ui/sheet'
-import { DateInput } from '@/components/ui/date-picker'
-import { formatDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { tariffHourPrice } from '@/features/afterschool/model'
-import { deleteTariffVersion, planTariffs, planTariffsForm, settingsQuery } from './api'
-import { GROUP_TYPES, lessonPrice, tariffFor, teacherShare, type GroupType } from './current'
+import { lessonPrice } from './current'
 import {
   formatDateLong,
   formatLessonPrice,
   formatSom,
   GROUP_TYPE_LABEL,
-  planMinDate,
-  planMinDateHint,
   subscriptionsCaption,
   versionSummary,
-  type PlanMinDate,
-  type SubscriptionRef,
-  type Tariff,
   type TariffVersion,
 } from './model'
-import { cardClass, chipClass, ErrorText, Field, inputClass, numClass, SubmitButton } from './parts'
+import { cardClass, chipClass, numClass } from './parts'
+import { VersionActions } from './version-edit'
 
 const thClass =
   'px-2.5 py-2 text-left text-[11px] font-extrabold tracking-[0.06em] whitespace-nowrap text-ink-muted uppercase'
@@ -40,11 +29,6 @@ const PILL: Record<TariffVersion['status'], { text: string; className: string }>
   planned: { text: 'запланирован', className: 'bg-teal-soft text-teal-strong' },
   current: { text: 'текущий', className: 'bg-ink text-brand' },
   archive: { text: 'архив', className: 'bg-stone text-ink-muted' },
-}
-
-function useInvalidateSettings() {
-  const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: settingsQuery().queryKey })
 }
 
 // А9а История тарифов (docs/design/SettingsTariffHistory.dc.html): Sheet on the right.
@@ -191,245 +175,7 @@ function VersionCard({ version: v, next }: { version: TariffVersion; next?: Tari
       )}
 
       {caption && <p className="text-xs font-bold text-ink-muted">{caption}</p>}
-      {v.status === 'planned' && <DeletePlanned validFrom={v.validFrom} />}
+      {v.status !== 'archive' && <VersionActions version={v} />}
     </li>
-  )
-}
-
-/** A planned version can be dropped and planned again; versions in effect never change. */
-function DeletePlanned({ validFrom }: { validFrom: string }) {
-  const invalidate = useInvalidateSettings()
-  const [confirming, setConfirming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const mutation = useMutation({
-    mutationFn: deleteTariffVersion,
-    onSuccess: async () => {
-      await invalidate()
-      toast.success('Запланированный тариф удалён')
-    },
-    onError: (e) => {
-      setError(e.message)
-    },
-  })
-
-  return (
-    <div className="flex flex-col gap-2">
-      {error && <ErrorText>{error}</ErrorText>}
-      {confirming ? (
-        <div className="flex gap-2">
-          <SubmitButton
-            variant="outline"
-            className="flex-1"
-            onClick={() => {
-              setConfirming(false)
-            }}
-          >
-            Отмена
-          </SubmitButton>
-          <SubmitButton
-            variant="danger"
-            className="flex-1"
-            pending={mutation.isPending}
-            onClick={() => {
-              mutation.mutate(validFrom)
-            }}
-          >
-            Да, удалить
-          </SubmitButton>
-        </div>
-      ) : (
-        <SubmitButton
-          variant="danger"
-          className="self-start"
-          onClick={() => {
-            setConfirming(true)
-          }}
-        >
-          Удалить запланированный
-        </SubmitButton>
-      )}
-    </div>
-  )
-}
-
-// ─── Plan a new version ─────────────────────────────────────────────────────
-
-/** «Новая версия тарифов» / «Запланировать новый тариф с даты…»: one date, all group types. */
-export function PlanTariffsDialog({
-  open,
-  onOpenChange,
-  tariffs,
-  subscriptions,
-  today,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  tariffs: Tariff[]
-  subscriptions: SubscriptionRef[]
-  today: string
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] gap-4 overflow-y-auto rounded-[20px] border-line bg-card p-6 sm:max-w-lg">
-        <div className="flex flex-col gap-1.5 pr-6">
-          <DialogTitle className="font-display text-lg font-bold">Новая версия тарифов</DialogTitle>
-          <DialogDescription className="text-sm font-bold text-ink-muted">
-            Действующие тарифы не меняются: занятия до этой даты считаются по ним.
-          </DialogDescription>
-        </div>
-        {/* Remount on open: fresh defaults from the tariffs in effect. */}
-        {open && (
-          <PlanForm
-            tariffs={tariffs}
-            today={today}
-            min={planMinDate({ tariffs, subscriptions }, today)}
-            onDone={() => {
-              onOpenChange(false)
-            }}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function PlanForm({
-  tariffs,
-  today,
-  min,
-  onDone,
-}: {
-  tariffs: Tariff[]
-  today: string
-  min: PlanMinDate
-  onDone: () => void
-}) {
-  const invalidate = useInvalidateSettings()
-  const dateId = useId()
-  const hintId = useId()
-  const priceId = useId()
-  const [validFrom, setValidFrom] = useState(() => formatDateRu(min.date))
-  const hint = planMinDateHint(min)
-  const [prices, setPrices] = useState(
-    () =>
-      Object.fromEntries(
-        GROUP_TYPES.map((t) => [t, String(tariffFor(t, today, tariffs)?.package_price ?? '')]),
-      ) as Record<GroupType, string>,
-  )
-  const currentAfterschool = tariffFor('afterschool', today, tariffs)
-  const [hourPrice, setHourPrice] = useState(() =>
-    currentAfterschool ? String(tariffHourPrice(currentAfterschool)) : '',
-  )
-  const [error, setError] = useState<string | null>(null)
-  const mutation = useMutation({
-    mutationFn: (input: Parameters<typeof planTariffs>[0]) => planTariffs(input, tariffs),
-    onSuccess: async (_res, input) => {
-      await invalidate()
-      toast.success(`Тариф запланирован с ${formatDateLong(input.validFrom)}`)
-      onDone()
-    },
-    onError: (e) => {
-      setError(e.message)
-    },
-  })
-
-  function onSubmit(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const parsed = planTariffsForm(min).safeParse({ validFrom, prices, hourPrice })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Проверьте дату и цены')
-      return
-    }
-    setError(null)
-    mutation.mutate(parsed.data)
-  }
-
-  return (
-    <form
-      onSubmit={onSubmit}
-      noValidate
-      aria-label="Новая версия тарифов"
-      className="flex flex-col gap-3.5"
-    >
-      <Field id={dateId} label="Действует с">
-        <DateInput
-          id={dateId}
-          className={inputClass}
-          value={validFrom}
-          min={min.date}
-          aria-describedby={hint ? hintId : undefined}
-          onChange={(v) => {
-            setValidFrom(v)
-          }}
-        />
-        {hint && (
-          <p id={hintId} className="text-xs font-bold text-ink-muted">
-            {hint}
-          </p>
-        )}
-      </Field>
-      <div className="flex flex-col gap-2.5">
-        {GROUP_TYPES.map((type) => {
-          const base = tariffFor(type, today, tariffs)
-          const price = Number(prices[type].replace(/\s/g, ''))
-          const preview =
-            base && Number.isInteger(price) && price > 0 ? { ...base, package_price: price } : null
-          return (
-            <div key={type} className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3">
-              <div className="flex min-w-0 flex-col">
-                <label htmlFor={`${priceId}-${type}`} className="text-sm font-extrabold">
-                  {GROUP_TYPE_LABEL[type]}
-                </label>
-                <span className="text-xs font-bold text-ink-muted">
-                  {preview
-                    ? `${preview.lessons_in_package} ур. · урок ${formatLessonPrice(lessonPrice(preview))} · учителю ${teacherShare(preview, 45)} / ${teacherShare(preview, 50)}`
-                    : base
-                      ? `сейчас ${formatSom(base.package_price)}`
-                      : ''}
-                </span>
-              </div>
-              <input
-                id={`${priceId}-${type}`}
-                inputMode="numeric"
-                autoComplete="off"
-                className={cn(inputClass, 'text-right tabular-nums')}
-                value={prices[type]}
-                onChange={(e) => {
-                  setPrices((p) => ({ ...p, [type]: e.target.value }))
-                }}
-              />
-            </div>
-          )
-        })}
-      </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_120px] items-center gap-3">
-        <div className="flex min-w-0 flex-col">
-          <label htmlFor={`${priceId}-hour`} className="text-sm font-extrabold">
-            Продлёнка · цена часа
-          </label>
-          <span className="text-xs font-bold text-ink-muted">
-            счёт за месяц = часы по графику × цена часа
-            {currentAfterschool
-              ? ` · сейчас ${formatSom(tariffHourPrice(currentAfterschool))}`
-              : ''}
-          </span>
-        </div>
-        <input
-          id={`${priceId}-hour`}
-          inputMode="numeric"
-          autoComplete="off"
-          className={cn(inputClass, 'text-right tabular-nums')}
-          value={hourPrice}
-          onChange={(e) => {
-            setHourPrice(e.target.value)
-          }}
-        />
-      </div>
-      <p className="rounded-xl bg-muted px-3 py-2.5 text-xs font-bold text-ink-muted">
-        Мест, уроков в пакете, длительность и заморозки переносятся из действующего тарифа.
-      </p>
-      {error && <ErrorText>{error}</ErrorText>}
-      <SubmitButton pending={mutation.isPending}>Запланировать</SubmitButton>
-    </form>
   )
 }
