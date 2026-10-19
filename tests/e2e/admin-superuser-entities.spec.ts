@@ -34,7 +34,9 @@ test.beforeEach(async ({}, testInfo) => wipe(testInfo))
 // eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
 test.afterEach(async ({}, testInfo) => wipe(testInfo))
 
-test('А11: админ правит закрытое пробное и возвращает его в воронку', async ({ page }, testInfo) => {
+test('А11: админ правит закрытое пробное и возвращает его в воронку', async ({
+  page,
+}, testInfo) => {
   const n = names(testInfo)
   const db = service()
   const groupId = await makeGroup(n.group, await teacherId('Гульзат%'), '2026-10-01')
@@ -86,7 +88,11 @@ test('А11: админ правит закрытое пробное и возв�
 })
 
 test('А4: группа с оплатами не удаляется — подсказка про перевод и архив', async ({ page }) => {
-  const { data: group } = await service().from('groups').select('id').eq('name', '8 класс А').single()
+  const { data: group } = await service()
+    .from('groups')
+    .select('id')
+    .eq('name', '8 класс А')
+    .single()
   await login(page, KANYKEI)
   await page.goto(`/admin/groups/${group?.id ?? ''}`)
   await page.getByRole('button', { name: 'Изменить', exact: true }).click()
@@ -100,11 +106,16 @@ test('А4: группа с оплатами не удаляется — подс
   await page.getByRole('button', { name: 'Закрыть', exact: true }).click()
   await expect(blockers).toBeHidden()
 
-  const { data } = await service().from('groups').select('id').eq('id', group?.id ?? '')
+  const { data } = await service()
+    .from('groups')
+    .select('id')
+    .eq('id', group?.id ?? '')
   expect(data).toHaveLength(1)
 })
 
-test('А4: группа без денег удаляется с предпросмотром ЗП и причиной', async ({ page }, testInfo) => {
+test('А4: группа без денег удаляется с предпросмотром ЗП и причиной', async ({
+  page,
+}, testInfo) => {
   const n = names(testInfo)
   const groupId = await makeGroup(n.group, await teacherId('Гульзат%'), '2026-10-01')
   const e = await makeEnrollment(n.student, groupId, '2026-10-01')
@@ -115,7 +126,9 @@ test('А4: группа без денег удаляется с предпрос
   await page.getByRole('button', { name: 'Изменить', exact: true }).click()
   await page.getByRole('button', { name: 'Удалить группу' }).click()
 
-  await expect(page.getByTestId('group-delete-impact')).toContainText(/^Удалится: \d+ занятий \(1 проведённых\)/)
+  await expect(page.getByTestId('group-delete-impact')).toContainText(
+    /^Удалится: \d+ занятий \(1 проведённых\)/,
+  )
   const form = page.getByRole('form', { name: 'Удалить группу' })
   await form.getByRole('button', { name: 'Удалить группу' }).click()
   await expect(form.getByRole('alert')).toHaveText('Укажите причину')

@@ -126,7 +126,9 @@ test('А9: current tariffs, rules, holidays; А9а history panel', async ({ page
   await page.screenshot({ path: testInfo.outputPath('history.png') })
 })
 
-test('holiday: add, a past date asks for a reason, delete with confirm', async ({ page }, testInfo) => {
+test('holiday: add, a past date asks for a reason, delete with confirm', async ({
+  page,
+}, testInfo) => {
   const f = fixtures(testInfo)
   await login(page, KANYKEI)
   await expect(page).toHaveURL(/\/admin$/)

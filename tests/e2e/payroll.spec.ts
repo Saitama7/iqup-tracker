@@ -97,7 +97,9 @@ test('«Мой месяц» with reduced motion: no tilt, the sum without count-
   await expect(page.getByTestId('pay-card-tilt')).toHaveCount(0)
 })
 
-test('Б1 «Расчёт ЗП»: accountant sees every teacher, closing is open to them (#94)', async ({ page }, testInfo) => {
+test('Б1 «Расчёт ЗП»: accountant sees every teacher, closing is open to them (#94)', async ({
+  page,
+}, testInfo) => {
   await pinClock(page, NOW)
   await login(page, AIGERIM)
   // Until the 15th the payroll screen opens on the month being paid — September.
@@ -138,7 +140,9 @@ test('Б1 «Расчёт ЗП»: accountant sees every teacher, closing is open 
   await expect(page.getByTestId('payroll-total')).toContainText('0')
 })
 
-test('admin: А1 card «Расчёт ЗП → 47 546 сом» opens Б1, September can be closed', async ({ page }) => {
+test('admin: А1 card «Расчёт ЗП → 47 546 сом» opens Б1, September can be closed', async ({
+  page,
+}) => {
   test.skip(!isDesktop(page), 'the card is on А1 (desktop)')
   await pinClock(page, NOW)
   await login(page, KANYKEI)

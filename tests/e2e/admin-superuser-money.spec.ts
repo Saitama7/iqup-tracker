@@ -31,7 +31,12 @@ test('Б1: админ закрывает и снова открывает мес
   await expect(close.getByTestId('close-unconfirmed')).toBeVisible()
   await close.getByRole('button', { name: 'Закрыть период' }).click()
   await expect(page.getByText(/^Период закрыт: август/)).toBeVisible()
-  await expect(page.getByTestId('period-chip').or(page.getByText(/Период закрыт/)).first()).toBeVisible()
+  await expect(
+    page
+      .getByTestId('period-chip')
+      .or(page.getByText(/Период закрыт/))
+      .first(),
+  ).toBeVisible()
 
   await page.getByRole('button', { name: 'Открыть период' }).click()
   const reopen = page.getByRole('form', { name: 'Открыть период' })
