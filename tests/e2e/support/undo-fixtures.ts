@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import { localSupabase } from '../../../scripts/local-supabase'
+import { phoneToEmail } from '../../../supabase/functions/_shared/phone'
 import type { Database } from '../../../src/lib/supabase/types.gen'
 
 // #73 fixtures: own groups, pupils, payments and marks, so the specs never touch the seed's rows.
@@ -177,4 +178,18 @@ export async function cleanup(groupNames: string[], studentNames: string[]) {
   await db.from('schedule_rules').delete().in('group_id', groupIds)
   await db.from('groups').delete().in('id', groupIds)
   await db.from('students').delete().in('id', studentIds)
+}
+
+/** A client signed in as the admin (Каныкей) — for RPCs that check `is_admin()`. */
+export async function asAdmin() {
+  const env = localSupabase()
+  const db = createClient<Database>(env.apiUrl, env.anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+  const { error } = await db.auth.signInWithPassword({
+    email: phoneToEmail('0552775771'),
+    password: 'iqup-demo',
+  })
+  if (error) throw error
+  return db
 }
