@@ -1493,6 +1493,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      assert_edit_reason: { Args: { p_reason: string }; Returns: string }
       assert_enrollment_undoable: { Args: { p_enrollment_id: string }; Returns: undefined }
       assert_payment_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
       assert_payroll_staff: { Args: Record<PropertyKey, never>; Returns: undefined }
@@ -1621,6 +1622,7 @@ export type Database = {
         }[]
       }
       delete_group: { Args: { p_group_id: string }; Returns: number }
+      delete_payment: { Args: { p_payment_id: string; p_reason: string }; Returns: string }
       delete_payroll_adjustment: { Args: { p_id: string; p_reason: string }; Returns: undefined }
       enroll_student: {
         Args: {
@@ -1908,6 +1910,17 @@ export type Database = {
           >
         }
         Returns: number
+      }
+      update_payment: {
+        Args: {
+          p_amount: number
+          p_comment: string
+          p_method: Database['public']['Enums']['payment_method']
+          p_paid_on: string
+          p_payment_id: string
+          p_reason: string
+        }
+        Returns: undefined
       }
       user_last_sign_in: {
         Args: Record<PropertyKey, never>
