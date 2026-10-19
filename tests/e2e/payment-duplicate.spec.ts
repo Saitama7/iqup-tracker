@@ -36,7 +36,7 @@ function service() {
 
 const tag = (testInfo: TestInfo) =>
   `${testInfo.project.name === 'webkit-desktop' ? 'Деска' : 'Мобиля'} ${testInfo.repeatEachIndex + 1}`
-// look-alike names: «повтор» finds both; the search folds ё → е, «повторева» finds the second
+// look-alike names: «<tag> повтор» finds both (the other project's pupils run in parallel); the search folds ё → е, «повторева» finds the second
 const names = (testInfo: TestInfo) => ({
   paid: `${tag(testInfo)} Повторова`,
   other: `${tag(testInfo)} Повторёва`,
@@ -155,7 +155,7 @@ test('#93: повторная оплата — статус в поиске, «�
     // ─── the picker: both look-alikes, told apart by the phone ──────────────
     await picker.click()
     const popup = page.getByRole('dialog', { name: 'Выбор ученика' })
-    await popup.getByRole('searchbox', { name: 'Поиск ученика' }).fill('повтор')
+    await popup.getByRole('searchbox', { name: 'Поиск ученика' }).fill(`${tag(testInfo)} повтор`)
     const options = popup.getByRole('option')
     await expect(options).toHaveCount(2)
     const paidRow = options.filter({ hasText: paid })
@@ -216,7 +216,7 @@ test('#93: повторная оплата — статус в поиске, «�
     await expect(popup.getByRole('option')).toHaveCount(1)
     await expect(popup.getByRole('option')).toContainText(other)
     // ё = е (И47 nameKey)
-    await popup.getByRole('searchbox', { name: 'Поиск ученика' }).fill('повторева')
+    await popup.getByRole('searchbox', { name: 'Поиск ученика' }).fill(`${tag(testInfo)} повторева`)
     await expect(popup.getByRole('option')).toHaveCount(1)
     await expect(popup.getByRole('option')).toContainText(other)
     await page.keyboard.press('Escape')

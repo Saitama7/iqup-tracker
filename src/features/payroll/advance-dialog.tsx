@@ -1,10 +1,13 @@
 // «Выдать аванс» and the advances history of a teacher on Б1 (#83, А8; Б2а PayrollAdjustment.dc.html).
-// Admin and accountant issue; a mistaken entry is deleted with a reason while the month is open.
+// Admin and accountant issue; a mistaken entry is deleted with a reason while the month is open; the
+// admin also edits it with a reason (#94, «⋯ → Изменить»).
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Trash2 } from 'lucide-react'
+import { MoreHorizontal } from 'lucide-react'
 import { useId, useState, type SubmitEvent } from 'react'
 import { toast } from 'sonner'
 import { DateInput } from '@/components/ui/date-picker'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { AUDIT_KEY } from '@/features/audit/api'
 import { FormDialog, NativeSelect } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, SubmitButton } from '@/features/tariffs/parts'
 import { formatSom } from '@/features/tariffs/model'
@@ -14,8 +17,10 @@ import {
   advanceForm,
   deleteAdjustment,
   deleteAdjustmentForm,
+  editAdvanceForm,
   issueAdvance,
   PAYROLL_KEY,
+  updateAdvance,
 } from './api'
 import {
   adjustmentCaption,
@@ -227,13 +232,20 @@ function AdvanceForm({
   )
 }
 
-/** The teacher's advances of the month (Б1 row expansion): date · author, comment, amount, delete. */
+/**
+ * The teacher's advances of the month (Б1 row expansion): date · author, comment, amount and «⋯»
+ * (Изменить — admin, #94; Удалить). A closed month — no actions (the database refuses them anyway).
+ */
 export function AdvancesList({
   adjustments,
   onDelete,
+  onEdit,
 }: {
   adjustments: Adjustment[]
-  onDelete: (a: Adjustment) => void
+  /** Null — the month is closed. */
+  onDelete: ((a: Adjustment) => void) | null
+  /** Null — not the admin, or the month is closed. */
+  onEdit: ((a: Adjustment) => void) | null
 }) {
   if (adjustments.length === 0) {
     return <p className="text-[13px] font-bold text-ink-muted">Авансов за месяц нет</p>
@@ -243,7 +255,7 @@ export function AdvancesList({
       {adjustments.map((a) => (
         <li
           key={a.id}
-          className="flex items-center gap-3 border-b border-line py-2 last:border-b-0"
+          className="flex min-h-11 items-center gap-3 border-b border-line py-2 last:border-b-0"
         >
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-[13px] font-extrabold">{adjustmentCaption(a)}</span>
@@ -254,19 +266,250 @@ export function AdvancesList({
           <span className="font-display text-sm font-bold whitespace-nowrap">
             {minusSom(a.amount)}
           </span>
-          <button
-            type="button"
-            onClick={() => {
-              onDelete(a)
-            }}
-            aria-label={`Удалить аванс ${formatSom(a.amount)} сом`}
-            className="flex size-11 shrink-0 items-center justify-center rounded-xl text-ink-muted hover:text-burned-strong"
-          >
-            <Trash2 className="size-4" aria-hidden />
-          </button>
+          {onDelete && (
+            <AdvanceMenu
+              label={`аванс ${formatSom(a.amount)} сом`}
+              onEdit={
+                onEdit
+                  ? () => {
+                      onEdit(a)
+                    }
+                  : null
+              }
+              onDelete={() => {
+                onDelete(a)
+              }}
+            />
+          )}
         </li>
       ))}
     </ul>
+  )
+}
+
+function AdvanceMenu({
+  label,
+  onEdit,
+  onDelete,
+}: {
+  label: string
+  onEdit: (() => void) | null
+  onDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const item =
+    'flex min-h-11 items-center rounded-xl px-3 text-left text-sm font-bold hover:bg-muted'
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        aria-label={`Действия: ${label}`}
+        className="flex size-11 shrink-0 items-center justify-center rounded-xl text-ink-muted hover:bg-muted"
+      >
+        <MoreHorizontal className="size-5" aria-hidden />
+      </PopoverTrigger>
+      <PopoverContent align="end" className="flex w-52 flex-col p-1.5">
+        {onEdit && (
+          <button
+            type="button"
+            className={item}
+            onClick={() => {
+              setOpen(false)
+              onEdit()
+            }}
+          >
+            Изменить
+          </button>
+        )}
+        <button
+          type="button"
+          className={cn(item, 'text-burned-strong')}
+          onClick={() => {
+            setOpen(false)
+            onDelete()
+          }}
+        >
+          Удалить
+        </button>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** «Изменить аванс» (admin, #94): amount, date, payroll month, comment and a reason. */
+export function EditAdvanceDialog({
+  adjustment,
+  name,
+  today,
+  onOpenChange,
+}: {
+  adjustment: Adjustment | null
+  name: string
+  today: string
+  onOpenChange: (open: boolean) => void
+}) {
+  return (
+    <FormDialog
+      open={adjustment !== null}
+      onOpenChange={onOpenChange}
+      title={`Изменить аванс${name ? ` · ${name}` : ''}`}
+      description="Старое и новое значение с причиной останутся в журнале изменений."
+    >
+      {adjustment && (
+        <EditAdvanceForm
+          key={adjustment.id}
+          adjustment={adjustment}
+          today={today}
+          onDone={() => {
+            onOpenChange(false)
+          }}
+        />
+      )}
+    </FormDialog>
+  )
+}
+
+function EditAdvanceForm({
+  adjustment,
+  today,
+  onDone,
+}: {
+  adjustment: Adjustment
+  today: string
+  onDone: () => void
+}) {
+  const id = useId()
+  const queryClient = useQueryClient()
+  const [amount, setAmount] = useState(String(adjustment.amount))
+  const [issuedOn, setIssuedOn] = useState(formatDateRu(adjustment.issuedOn))
+  const [month, setMonth] = useState(monthOf(adjustment.month))
+  const [comment, setComment] = useState(adjustment.comment ?? '')
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  const issuedIso = parseDateRu(issuedOn) ?? adjustment.issuedOn
+  const months = advanceMonths(issuedIso)
+  const chosen = months.includes(month) ? month : monthOf(issuedIso)
+
+  const mutation = useMutation({
+    mutationFn: updateAdvance,
+    onSuccess: async (_, input) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [PAYROLL_KEY] }),
+        queryClient.invalidateQueries({ queryKey: [AUDIT_KEY] }),
+      ])
+      toast.success(
+        `Аванс изменён: ${som(input.amount)} · в счёт ЗП за ${monthNom(input.month).toLowerCase()}`,
+      )
+      onDone()
+    },
+    onError: (e) => {
+      setError(e.message)
+    },
+  })
+
+  function onSubmit(e: SubmitEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const parsed = editAdvanceForm(today).safeParse({
+      id: adjustment.id,
+      amount,
+      issuedOn,
+      month: chosen,
+      comment,
+      reason,
+    })
+    if (!parsed.success) {
+      setError(parsed.error.issues[0]?.message ?? 'Проверьте поля формы')
+      return
+    }
+    setError(null)
+    mutation.mutate(parsed.data)
+  }
+
+  const clear = () => {
+    setError(null)
+  }
+
+  return (
+    <form
+      onSubmit={onSubmit}
+      noValidate
+      aria-label="Изменить аванс"
+      className="flex flex-col gap-3.5"
+    >
+      <Field id={`${id}-amount`} label="Сумма, сом">
+        <input
+          id={`${id}-amount`}
+          inputMode="numeric"
+          autoComplete="off"
+          value={amount}
+          onChange={(e) => {
+            setAmount(e.target.value)
+            clear()
+          }}
+          className={cn(inputClass, 'font-display text-lg')}
+        />
+      </Field>
+      <div className="grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2">
+        <Field id={`${id}-date`} label="Дата выдачи">
+          <DateInput
+            id={`${id}-date`}
+            value={issuedOn}
+            max={today}
+            onChange={(v) => {
+              setIssuedOn(v)
+              clear()
+            }}
+            className={inputClass}
+          />
+        </Field>
+        <Field id={`${id}-month`} label="В счёт ЗП за">
+          <NativeSelect
+            id={`${id}-month`}
+            value={chosen}
+            onChange={(e) => {
+              setMonth(e.target.value)
+              clear()
+            }}
+          >
+            {months.map((m) => (
+              <option key={m} value={m}>
+                {monthTitle(m)}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+      </div>
+      <Field id={`${id}-comment`} label="Комментарий">
+        <input
+          id={`${id}-comment`}
+          value={comment}
+          maxLength={500}
+          placeholder="необязательно"
+          onChange={(e) => {
+            setComment(e.target.value)
+            clear()
+          }}
+          className={inputClass}
+        />
+      </Field>
+      <Field id={`${id}-reason`} label="Причина исправления">
+        <input
+          id={`${id}-reason`}
+          value={reason}
+          maxLength={500}
+          placeholder="обязательно, например «ошиблись суммой»"
+          onChange={(e) => {
+            setReason(e.target.value)
+            clear()
+          }}
+          className={inputClass}
+        />
+      </Field>
+      {error && <ErrorText>{error}</ErrorText>}
+      <SubmitButton pending={mutation.isPending} className="min-h-12">
+        Сохранить
+      </SubmitButton>
+    </form>
   )
 }
 
@@ -312,7 +555,10 @@ function DeleteAdvanceForm({ adjustment, onDone }: { adjustment: Adjustment; onD
   const mutation = useMutation({
     mutationFn: deleteAdjustment,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: [PAYROLL_KEY] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [PAYROLL_KEY] }),
+        queryClient.invalidateQueries({ queryKey: [AUDIT_KEY] }),
+      ])
       toast.success(`Аванс ${som(adjustment.amount)} удалён`)
       onDone()
     },

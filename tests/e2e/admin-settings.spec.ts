@@ -98,8 +98,10 @@ test('А9: current tariffs, rules, holidays; А9а history panel', async ({ page
   const holidays = page.getByRole('list', { name: 'Праздники' })
   const items = holidays.getByRole('listitem')
   await expect(items.first()).toContainText('День Победы')
-  await expect(items.first()).toContainText('прошёл')
-  await expect(items.first().getByRole('button')).toHaveCount(0)
+  // И81 (#94): a past holiday can be removed too — with a reason
+  await expect(
+    items.first().getByRole('button', { name: /^Удалить: 9 мая · .., День Победы/ }),
+  ).toBeVisible()
   await expect(holidays.getByText('31 дек – 2 янв')).toBeVisible()
   await expect(
     holidays.getByRole('button', { name: /^Удалить: 7 ноября · .., День Октябрьской/ }),
@@ -124,7 +126,9 @@ test('А9: current tariffs, rules, holidays; А9а history panel', async ({ page
   await page.screenshot({ path: testInfo.outputPath('history.png') })
 })
 
-test('holiday: add, refuse a past date, delete with confirm', async ({ page }, testInfo) => {
+test('holiday: add, a past date asks for a reason, delete with confirm', async ({
+  page,
+}, testInfo) => {
   const f = fixtures(testInfo)
   await login(page, KANYKEI)
   await expect(page).toHaveURL(/\/admin$/)
@@ -138,7 +142,8 @@ test('holiday: add, refuse a past date, delete with confirm', async ({ page }, t
   await add.getByLabel('Дата').fill('01.10.2026')
   await add.getByLabel('Название').fill('Тестовый день')
   await add.getByRole('button', { name: 'Добавить' }).click()
-  await expect(add.getByRole('alert')).toHaveText('Прошедшую дату добавить нельзя')
+  // И81 (#94): a past day needs a reason
+  await expect(add.getByRole('alert')).toHaveText('Укажите причину')
 
   await add.getByLabel('Дата').fill(f.holidayRu)
   await add.getByRole('button', { name: 'Добавить' }).click()
@@ -212,8 +217,10 @@ test('plan a new tariff version from a future date, then remove it', async ({ pa
 
   await tariffs.getByRole('button', { name: 'История тарифов' }).click()
   const plannedAgain = versions.filter({ hasText: 'запланирован' })
-  await plannedAgain.getByRole('button', { name: 'Удалить запланированный' }).click()
-  await plannedAgain.getByRole('button', { name: 'Да, удалить' }).click()
+  await plannedAgain.getByRole('button', { name: 'Удалить версию' }).click()
+  const remove = page.getByRole('form', { name: 'Удалить версию' })
+  await remove.getByLabel('Причина').fill('e2e: запланировали зря')
+  await remove.getByRole('button', { name: 'Удалить версию' }).click()
   await expect(versions.filter({ hasText: 'запланирован' })).toHaveCount(0)
 })
 

@@ -1,6 +1,6 @@
 // Б1 «Расчёт ЗП» (docs/design/Payroll.dc.html) and БМ1 on the phone (AccMobilePayroll.dc.html):
-// accountant and admin (И2), read-only. Totals from v_payroll_preview (0011). Closing the period,
-// the comparison with the old scheme and advances are R3 — buttons are disabled with a hint.
+// accountant and admin (И2). Totals from v_payroll_preview (0011), advances (#83), «Закрыть период»
+// / «Открыть период» (#94, И77). The comparison with the old scheme is R3 — disabled with a hint.
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { MonthPickerButton } from '@/components/ui/date-picker'
@@ -8,6 +8,7 @@ import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Fragment, useState, type ReactNode } from 'react'
 import { Avatar } from '@/components/shell/shell-parts'
 import { formatSom } from '@/features/tariffs/model'
+import { useSession } from '@/lib/auth'
 import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
@@ -17,9 +18,12 @@ import {
   AdvanceDialog,
   AdvancesList,
   DeleteAdvanceDialog,
+  EditAdvanceDialog,
   type AdvanceTarget,
 } from './advance-dialog'
+import { ClosePeriodDialog, ReopenPeriodDialog } from './period-dialog'
 import {
+  canClosePeriod,
   hoursCaption,
   minusSom,
   monthNom,
@@ -29,25 +33,38 @@ import {
   payday,
   payrollCaption,
   payrollView,
+  periodChip,
   shiftMonth,
   som,
   STUDENT_LESSON_NOTE,
   toPayCaption,
   type Adjustment,
+  type PayrollPeriod,
   type PayrollRow,
   type PayrollView,
 } from './model'
 
-const R3_HINT = 'Закрытие периода и сверка появятся в R3'
+const R3_HINT = 'Сверка со старой схемой появится в R3'
 
-/** Dialog openers shared by both layouts (#83). */
+/** Dialog openers shared by both layouts (#83, #94). */
 interface AdvanceActions {
   month: string
   /** Rows whose advances history is open. */
   open: ReadonlySet<string>
   toggle: (teacherId: string) => void
-  issue: (row: PayrollRow) => void
-  remove: (row: PayrollRow, a: Adjustment) => void
+  /** Null — the month is closed. */
+  issue: ((row: PayrollRow) => void) | null
+  remove: ((row: PayrollRow, a: Adjustment) => void) | null
+  /** Null — not the admin, or the month is closed. */
+  edit: ((row: PayrollRow, a: Adjustment) => void) | null
+}
+
+/** «Закрыть период» / «Открыть период» — who may and what the button does now. */
+interface PeriodActions {
+  period: PayrollPeriod | null
+  /** Null — the month is not over yet (closing) / not the admin (reopening). */
+  close: (() => void) | null
+  reopen: (() => void) | null
 }
 
 export function PayrollPage({ month }: { month: string }) {
@@ -57,12 +74,34 @@ export function PayrollPage({ month }: { month: string }) {
   const navigate = useNavigate()
 
   usePayrollRealtime()
+  const { roles } = useSession()
+  const isAdmin = roles.includes('admin')
   const source = useQuery(payrollQuery(month, today))
+  const period = source.data?.period ?? null
+  const closed = period !== null
 
   const view = source.data ? payrollView(source.data, month, now) : null
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
   const [issuing, setIssuing] = useState<AdvanceTarget | null>(null)
   const [removing, setRemoving] = useState<{ name: string; adjustment: Adjustment } | null>(null)
+  const [editing, setEditing] = useState<{ name: string; adjustment: Adjustment } | null>(null)
+  const [closing, setClosing] = useState(false)
+  const [reopening, setReopening] = useState(false)
+  const periodActions: PeriodActions = {
+    period,
+    close:
+      source.data && !closed && canClosePeriod(month, today)
+        ? () => {
+            setClosing(true)
+          }
+        : null,
+    reopen:
+      closed && isAdmin
+        ? () => {
+            setReopening(true)
+          }
+        : null,
+  }
   const actions: AdvanceActions = {
     month,
     open,
@@ -73,18 +112,28 @@ export function PayrollPage({ month }: { month: string }) {
         return next
       })
     },
-    issue: (r) => {
-      setIssuing({
-        teacherId: r.teacherId,
-        name: r.name,
-        month,
-        amount: r.amount,
-        advances: r.advances,
-      })
-    },
-    remove: (r, adjustment) => {
-      setRemoving({ name: r.name, adjustment })
-    },
+    issue: closed
+      ? null
+      : (r) => {
+          setIssuing({
+            teacherId: r.teacherId,
+            name: r.name,
+            month,
+            amount: r.amount,
+            advances: r.advances,
+          })
+        },
+    remove: closed
+      ? null
+      : (r, adjustment) => {
+          setRemoving({ name: r.name, adjustment })
+        },
+    edit:
+      closed || !isAdmin
+        ? null
+        : (r, adjustment) => {
+            setEditing({ name: r.name, adjustment })
+          },
   }
   let body: ReactNode
   if (source.isError) {
@@ -93,9 +142,9 @@ export function PayrollPage({ month }: { month: string }) {
     body = <Notice>Считаем зарплату…</Notice>
   } else {
     body = isDesktop ? (
-      <DesktopPayroll view={view} actions={actions} />
+      <DesktopPayroll view={view} actions={actions} period={periodActions} />
     ) : (
-      <MobilePayroll view={view} actions={actions} />
+      <MobilePayroll view={view} actions={actions} period={periodActions} />
     )
   }
 
@@ -118,7 +167,7 @@ export function PayrollPage({ month }: { month: string }) {
                 {isDesktop ? monthTitle(month) : monthNom(month)}
               </MonthPickerButton>
             </h1>
-            {isDesktop && <PeriodChip />}
+            {isDesktop && <PeriodChip period={period} />}
           </div>
           {isDesktop && view && (
             <p className="text-sm font-bold text-ink-muted">{payrollCaption(view, month)}</p>
@@ -136,14 +185,7 @@ export function PayrollPage({ month }: { month: string }) {
               >
                 Сверка со старой схемой
               </button>
-              <button
-                type="button"
-                disabled
-                title={R3_HINT}
-                className="min-h-12 rounded-[14px] bg-ink px-[18px] text-sm font-extrabold text-brand disabled:opacity-50"
-              >
-                Закрыть период
-              </button>
+              <PeriodButton actions={periodActions} />
             </>
           )}
         </div>
@@ -163,6 +205,16 @@ export function PayrollPage({ month }: { month: string }) {
           if (!o) setRemoving(null)
         }}
       />
+      <EditAdvanceDialog
+        adjustment={editing?.adjustment ?? null}
+        name={editing?.name ?? ''}
+        today={today}
+        onOpenChange={(o) => {
+          if (!o) setEditing(null)
+        }}
+      />
+      <ClosePeriodDialog month={month} view={view} open={closing} onOpenChange={setClosing} />
+      <ReopenPeriodDialog month={month} open={reopening} onOpenChange={setReopening} />
     </section>
   )
 }
@@ -175,17 +227,48 @@ function Notice({ children }: { children: ReactNode }) {
   )
 }
 
-// TODO(R3): «Период закрыт DD.MM» once payroll_periods exists — every month is open until then.
-function PeriodChip({ className }: { className?: string }) {
+function PeriodChip({ period, className }: { period: PayrollPeriod | null; className?: string }) {
+  const chip = periodChip(period)
   return (
     <span
+      data-testid="period-chip"
+      title={period?.closedBy ? `Закрыл(а): ${period.closedBy}` : undefined}
       className={cn(
-        'rounded-full bg-present-soft px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-present-strong',
+        'rounded-full px-3 py-1.5 text-xs font-extrabold whitespace-nowrap',
+        chip.closed ? 'bg-stone text-ink' : 'bg-present-soft text-present-strong',
         className,
       )}
     >
-      Период открыт
+      {chip.text}
     </span>
+  )
+}
+
+/** «Закрыть период» (a month that is over) / «Открыть период» (closed, admin). */
+function PeriodButton({ actions, mobileLabel }: { actions: PeriodActions; mobileLabel?: string }) {
+  const base = 'min-h-12 rounded-[14px] px-[18px] text-sm font-extrabold disabled:opacity-50'
+  if (actions.period) {
+    if (!actions.reopen) return null
+    return (
+      <button
+        type="button"
+        onClick={actions.reopen}
+        className={cn(base, 'border-[1.5px] border-line-strong bg-card text-ink')}
+      >
+        Открыть период
+      </button>
+    )
+  }
+  return (
+    <button
+      type="button"
+      disabled={!actions.close}
+      title={actions.close ? undefined : 'Закрыть можно, когда месяц закончится'}
+      onClick={actions.close ?? undefined}
+      className={cn(base, 'bg-ink text-brand')}
+    >
+      {mobileLabel ?? 'Закрыть период'}
+    </button>
   )
 }
 
@@ -220,7 +303,15 @@ const tile = 'flex flex-col gap-1 rounded-[18px] p-[18px]'
 const tileLabel = 'text-xs font-extrabold'
 const tileValue = 'font-display text-[26px] font-bold whitespace-nowrap'
 
-function DesktopPayroll({ view, actions }: { view: PayrollView; actions: AdvanceActions }) {
+function DesktopPayroll({
+  view,
+  actions,
+  period,
+}: {
+  view: PayrollView
+  actions: AdvanceActions
+  period: PeriodActions
+}) {
   const { total } = view
   const { month } = actions
   return (
@@ -336,15 +427,17 @@ function DesktopPayroll({ view, actions }: { view: PayrollView; actions: Advance
                       {pay.overpaid ? pay.text : formatSom(r.toPay)}
                     </td>
                     <td className={cn(td, 'text-right')}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          actions.issue(r)
-                        }}
-                        className="min-h-11 rounded-xl border-[1.5px] border-line-strong bg-card px-3 text-[13px] font-extrabold whitespace-nowrap text-ink"
-                      >
-                        Выдать аванс
-                      </button>
+                      {actions.issue && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            actions.issue?.(r)
+                          }}
+                          className="min-h-11 rounded-xl border-[1.5px] border-line-strong bg-card px-3 text-[13px] font-extrabold whitespace-nowrap text-ink"
+                        >
+                          Выдать аванс
+                        </button>
+                      )}
                     </td>
                   </tr>
                   {open && (
@@ -352,9 +445,8 @@ function DesktopPayroll({ view, actions }: { view: PayrollView; actions: Advance
                       <td colSpan={9} className="border-b border-line bg-band px-6 py-2">
                         <AdvancesList
                           adjustments={r.adjustments}
-                          onDelete={(a) => {
-                            actions.remove(r, a)
-                          }}
+                          onDelete={actions.remove && ((a) => actions.remove?.(r, a))}
+                          onEdit={actions.edit && ((a) => actions.edit?.(r, a))}
                         />
                       </td>
                     </tr>
@@ -383,8 +475,10 @@ function DesktopPayroll({ view, actions }: { view: PayrollView; actions: Advance
 
       <p className="text-[13px] leading-normal font-bold text-ink-muted">
         Начислено = ученико-уроки × цена урока по тарифу × процент учителя. {STUDENT_LESSON_NOTE}{' '}
-        Скидки учеников не влияют. К выплате = начислено − авансы, выплата {payday(month)}. Цифры
-        предварительные: закрытие периода и сверка со старой схемой появятся в R3.
+        Скидки учеников не влияют. К выплате = начислено − авансы, выплата {payday(month)}.{' '}
+        {period.period
+          ? 'Период закрыт — суммы окончательные; правки — только после «Открыть период».'
+          : 'Цифры предварительные, пока период не закрыт.'}
       </p>
     </>
   )
@@ -410,7 +504,15 @@ function Unconfirmed({ count }: { count: number }) {
 
 // ─── БМ1 · phone ────────────────────────────────────────────────────────────
 
-function MobilePayroll({ view, actions }: { view: PayrollView; actions: AdvanceActions }) {
+function MobilePayroll({
+  view,
+  actions,
+  period,
+}: {
+  view: PayrollView
+  actions: AdvanceActions
+  period: PeriodActions
+}) {
   const { total } = view
   const { month } = actions
   const stats = [
@@ -425,7 +527,7 @@ function MobilePayroll({ view, actions }: { view: PayrollView; actions: AdvanceA
           <span className="text-xs font-extrabold tracking-[0.06em] text-brand uppercase">
             К выплате {payday(month)}
           </span>
-          <PeriodChip className="px-2.5 py-1" />
+          <PeriodChip period={period.period} className="px-2.5 py-1" />
         </div>
         <p
           className="font-display text-[34px] leading-none font-extrabold whitespace-nowrap text-brand"
@@ -535,19 +637,20 @@ function MobilePayroll({ view, actions }: { view: PayrollView; actions: AdvanceA
                     </div>
                     <AdvancesList
                       adjustments={r.adjustments}
-                      onDelete={(a) => {
-                        actions.remove(r, a)
-                      }}
+                      onDelete={actions.remove && ((a) => actions.remove?.(r, a))}
+                      onEdit={actions.edit && ((a) => actions.edit?.(r, a))}
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        actions.issue(r)
-                      }}
-                      className="min-h-11 rounded-[14px] border-[1.5px] border-line-strong bg-card px-4 text-sm font-extrabold text-ink"
-                    >
-                      Выдать аванс
-                    </button>
+                    {actions.issue && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          actions.issue?.(r)
+                        }}
+                        className="min-h-11 rounded-[14px] border-[1.5px] border-line-strong bg-card px-4 text-sm font-extrabold text-ink"
+                      >
+                        Выдать аванс
+                      </button>
+                    )}
                   </div>
                 )}
               </li>
@@ -556,15 +659,14 @@ function MobilePayroll({ view, actions }: { view: PayrollView; actions: AdvanceA
         </ul>
       </section>
 
-      <button
-        type="button"
-        disabled
-        title={R3_HINT}
-        className="min-h-12 rounded-[14px] bg-ink px-[18px] text-sm font-extrabold text-brand disabled:opacity-50"
-      >
-        Закрыть {monthNom(month).toLowerCase()}
-      </button>
-      <p className="text-xs font-bold text-ink-muted">{R3_HINT}.</p>
+      <PeriodButton actions={period} mobileLabel={`Закрыть ${monthNom(month).toLowerCase()}`} />
+      <p className="text-xs font-bold text-ink-muted">
+        {period.period
+          ? 'Период закрыт — суммы окончательные; правки — только после «Открыть период».'
+          : period.close
+            ? 'После закрытия занятия месяца блокируются.'
+            : 'Закрыть можно, когда месяц закончится.'}
+      </p>
     </>
   )
 }

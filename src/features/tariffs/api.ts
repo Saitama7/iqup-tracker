@@ -79,7 +79,7 @@ const dateField = z.string().transform((v, ctx) => {
   return iso
 })
 
-const priceField = z
+export const priceField = z
   .string()
   .trim()
   .transform((v) => Number(v.replace(/\s/g, '')))
@@ -112,12 +112,23 @@ export const planTariffsForm = (min: PlanMinDate) =>
 
 export type PlanTariffsInput = z.output<ReturnType<typeof planTariffsForm>>
 
-/** «+ Добавить» праздник: today or later (a past day is history — guard 0006). */
+/**
+ * «+ Добавить» праздник: a past day is allowed (#94) but needs a reason for the journal;
+ * today or later does not.
+ */
 export const holidayForm = (today: string) =>
-  z.object({
-    day: dateField.refine((d) => d >= today, 'Прошедшую дату добавить нельзя'),
-    name: z.string().trim().min(1, 'Введите название').max(100, 'Слишком длинное название'),
-  })
+  z
+    .object({
+      day: dateField,
+      name: z.string().trim().min(1, 'Введите название').max(100, 'Слишком длинное название'),
+      reason: z.string().trim().max(500, 'Причина — не длиннее 500 символов').default(''),
+    })
+    .superRefine((v, ctx) => {
+      if (v.day < today && v.reason === '') {
+        ctx.addIssue({ code: 'custom', path: ['reason'], message: 'Укажите причину' })
+      }
+    })
+    .transform((v) => ({ ...v, reason: v.reason === '' ? null : v.reason }))
 
 export type HolidayInput = z.output<ReturnType<typeof holidayForm>>
 
@@ -130,7 +141,7 @@ export class SettingsApiError extends Error {
   }
 }
 
-function fail(error: { code?: string }, messages: Record<string, string>): never {
+export function fail(error: { code?: string }, messages: Record<string, string>): never {
   throw new SettingsApiError(
     (error.code && messages[error.code]) ??
       'Не удалось сохранить. Проверьте интернет и попробуйте ещё раз.',
@@ -169,29 +180,22 @@ export async function planTariffs(input: PlanTariffsInput, tariffs: readonly Tar
   }
 }
 
-/** Removes a planned version (all its rows). A version in effect is refused by the guard. */
-export async function deleteTariffVersion(validFrom: string) {
-  const { error } = await supabase.from('tariffs').delete().eq('valid_from', validFrom)
+/**
+ * «Применить с сегодняшнего дня» (#94): К6 «с 1-го числа следующего месяца» is lifted for this
+ * version; valid_from is set by the database (plan_tariffs_from_today).
+ */
+export async function planTariffsFromToday(
+  input: PlanTariffsInput,
+  tariffs: readonly Tariff[],
+  today: string,
+) {
+  // valid_from is ignored by the RPC (jsonb_to_recordset without that column).
+  const rows = planRows({ ...input, validFrom: today }, tariffs)
+  const { error } = await supabase.rpc('plan_tariffs_from_today', { p_rows: rows })
   if (error) {
     fail(error, {
-      '23514': 'Тариф уже действует — его можно только заменить новой версией',
-      '23503': 'По этой версии уже куплены абонементы',
+      '23505': 'С сегодняшнего дня тариф уже есть — измените его цены в истории',
+      '42501': 'Менять тарифы может только администратор',
     })
   }
-}
-
-export async function addHoliday(input: HolidayInput) {
-  const { error } = await supabase.from('holidays').insert(input)
-  if (error) {
-    fail(error, {
-      '23505': 'Этот день уже в списке',
-      '23514': 'Прошедшую дату добавить нельзя',
-      '42501': 'Праздники ведёт администратор',
-    })
-  }
-}
-
-export async function deleteHolidays(days: readonly string[]) {
-  const { error } = await supabase.from('holidays').delete().in('day', days)
-  if (error) fail(error, { '23514': 'Прошедший праздник удалить нельзя' })
 }

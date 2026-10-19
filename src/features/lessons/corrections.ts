@@ -92,6 +92,8 @@ export function correctionErrorReason(error: { code?: string; message?: string }
       ? 'лимит заморозок 2 на месяц — отметьте «Не был»'
       : 'лимит заморозок 2 на абонемент — отметьте «Не был»'
   if (m.includes('reason is required')) return 'укажите причину'
+  if (m.includes('reason is too long')) return 'причина — не длиннее 500 символов'
+  if (m.includes('not found')) return 'запрос уже удалён — обновите страницу'
   if (m.includes('not held')) return 'занятие не проведено'
   if (m.includes('is rejected')) return 'запрос уже отклонён'
   if (m.includes('already approved') || m.includes('already decided')) return 'запрос уже применён'

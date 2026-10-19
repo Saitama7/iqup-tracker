@@ -39,6 +39,7 @@ import { debtCaption } from './pay-view'
 import { EnrollmentCard, MobileEnrollment } from './student-card'
 import { AfterschoolPanel } from '@/features/afterschool/afterschool-panel'
 import type { ScheduleRule } from './model'
+import { DeleteStudentDialog, StudentMenu } from './delete-student-dialog'
 import { StudentFormDialog } from './student-form-dialog'
 import { PaymentsSection } from './student-payments'
 
@@ -135,6 +136,7 @@ export function StudentPage({ studentId }: { studentId: string }) {
     [students.data, balances.data, studentId],
   )
   const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [enrolling, setEnrolling] = useState(false)
   const [editingStart, setEditingStart] = useState<EnrollmentView | null>(null)
   const [exiting, setExiting] = useState<{ e: EnrollmentView; action: ExitAction } | null>(null)
@@ -165,6 +167,9 @@ export function StudentPage({ studentId }: { studentId: string }) {
     onEnroll: () => {
       setEnrolling(true)
     },
+    onDelete: () => {
+      setDeleting(true)
+    },
     onEditStart: setEditingStart,
     onAction: (e: EnrollmentView, action: ExitAction) => {
       setExiting({ e, action })
@@ -193,6 +198,14 @@ export function StudentPage({ studentId }: { studentId: string }) {
           onOpenChange={setEditing}
           student={view.student}
           students={students.data?.students ?? []}
+        />
+      )}
+      {deleting && (
+        <DeleteStudentDialog
+          open={deleting}
+          onOpenChange={setDeleting}
+          studentId={studentId}
+          studentName={view.student.full_name}
         />
       )}
       {editingStart && (
@@ -244,6 +257,7 @@ interface ScreenProps {
   paymentsState: 'pending' | 'error' | 'ready'
   onEdit: () => void
   onEnroll: () => void
+  onDelete: () => void
   onEditStart: (e: EnrollmentView) => void
   onAction: (e: EnrollmentView, action: ExitAction) => void
 }
@@ -283,6 +297,7 @@ function DesktopStudent({
   paymentsState,
   onEdit,
   onEnroll,
+  onDelete,
   onEditStart,
   onAction,
 }: ScreenProps) {
@@ -304,6 +319,7 @@ function DesktopStudent({
           <button type="button" onClick={onEdit} className={outlineButton}>
             Изменить
           </button>
+          <StudentMenu name={s.full_name} onDelete={onDelete} />
           <button
             type="button"
             onClick={onEnroll}
@@ -525,6 +541,7 @@ function MobileStudent({
   paymentsState,
   onEdit,
   onEnroll,
+  onDelete,
   onEditStart,
   onAction,
 }: ScreenProps) {
@@ -606,13 +623,20 @@ function MobileStudent({
             label="посещений"
           />
         </div>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="flex min-h-11 items-center justify-center rounded-xl border border-paper/30 px-3 text-[13px] font-extrabold text-paper"
-        >
-          Изменить
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex min-h-11 flex-1 items-center justify-center rounded-xl border border-paper/30 px-3 text-[13px] font-extrabold text-paper"
+          >
+            Изменить
+          </button>
+          <StudentMenu
+            name={s.full_name}
+            onDelete={onDelete}
+            className="border border-paper/30 text-paper hover:bg-paper/10"
+          />
+        </div>
         {phone ? (
           <a
             href={`tel:${phone.replace(/\s/g, '')}`}

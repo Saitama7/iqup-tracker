@@ -385,7 +385,9 @@ export function GroupPage({
           onOpenChange={close}
           groupId={group.id}
           groupName={group.name}
-          lessonsCount={lessons.data?.length ?? 0}
+          onArchive={() => {
+            setDialog({ kind: 'archive' })
+          }}
         />
       )}
       {dialog?.kind === 'archive' && (

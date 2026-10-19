@@ -29,6 +29,15 @@ function makeDeps(
     setAuthRoles: vi.fn(() => Promise.resolve()),
     setProfileActive: vi.fn(() => Promise.resolve()),
     setAuthBanned: vi.fn(() => Promise.resolve()),
+    findProfileContact: vi.fn(() =>
+      Promise.resolve<{ phone: string; full_name: string } | null>({
+        phone: '996555000111',
+        full_name: 'Старое Имя',
+      }),
+    ),
+    teacherPhoneTaken: vi.fn(() => Promise.resolve(false)),
+    setAuthEmail: vi.fn(() => Promise.resolve()),
+    setContact: vi.fn(() => Promise.resolve()),
     today: vi.fn(() => '2026-10-11'),
     ...overrides,
   } satisfies CreateUserDeps
@@ -395,6 +404,77 @@ describe('handleCreateUser', () => {
       )
       expect(res).toMatchObject({ status: 409, body: { error: 'self_lockout' } })
       expect(deps.setAuthBanned).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('update_profile', () => {
+    const USER = '00000000-0000-4000-8000-0000000000bb'
+    const call = (deps: CreateUserDeps, extra: Record<string, unknown> = {}, auth = 'Bearer a') =>
+      handleCreateUser(
+        {
+          authorization: auth,
+          body: {
+            action: 'update_profile',
+            user_id: USER,
+            full_name: '  Новое Имя ',
+            phone: '0555 123 456',
+            ...extra,
+          },
+        },
+        deps,
+      )
+
+    it('changes phone: auth email, then profile and teacher', async () => {
+      const deps = makeDeps(ADMIN)
+      const res = await call(deps)
+      expect(res).toEqual({
+        status: 200,
+        body: { user_id: USER, phone: '996555123456', full_name: 'Новое Имя' },
+      })
+      expect(deps.setAuthEmail).toHaveBeenCalledWith(USER, '996555123456@iqup.local')
+      expect(deps.setContact).toHaveBeenCalledWith(USER, {
+        phone: '996555123456',
+        full_name: 'Новое Имя',
+      })
+    })
+
+    it('name-only change does not touch auth', async () => {
+      const deps = makeDeps(ADMIN)
+      const res = await call(deps, { phone: '996555000111' })
+      expect(res.status).toBe(200)
+      expect(deps.setAuthEmail).not.toHaveBeenCalled()
+      expect(deps.findUserIdByPhone).not.toHaveBeenCalled()
+      expect(deps.setContact).toHaveBeenCalledWith(USER, {
+        phone: '996555000111',
+        full_name: 'Новое Имя',
+      })
+    })
+
+    it('409 when another user or a teacher row holds the phone', async () => {
+      const byUser = makeDeps(ADMIN, { findUserIdByPhone: vi.fn(() => Promise.resolve('other')) })
+      expect(await call(byUser)).toMatchObject({ status: 409, body: { error: 'phone_taken' } })
+      expect(byUser.setAuthEmail).not.toHaveBeenCalled()
+
+      const byTeacher = makeDeps(ADMIN, { teacherPhoneTaken: vi.fn(() => Promise.resolve(true)) })
+      expect(await call(byTeacher)).toMatchObject({ status: 409, body: { error: 'phone_taken' } })
+      expect(byTeacher.setContact).not.toHaveBeenCalled()
+    })
+
+    it('restores the old auth email when the DB update throws', async () => {
+      const deps = makeDeps(ADMIN, {
+        setContact: vi.fn(() => Promise.reject(new Error('db down'))),
+      })
+      await expect(call(deps)).rejects.toThrow('db down')
+      expect(deps.setAuthEmail).toHaveBeenNthCalledWith(1, USER, '996555123456@iqup.local')
+      expect(deps.setAuthEmail).toHaveBeenLastCalledWith(USER, '996555000111@iqup.local')
+    })
+
+    it('404 for unknown user; 403 for non-admin', async () => {
+      const missing = makeDeps(ADMIN, { findProfileContact: vi.fn(() => Promise.resolve(null)) })
+      expect((await call(missing)).status).toBe(404)
+      const deps = makeDeps(TEACHER)
+      expect((await call(deps, {}, 'Bearer t')).status).toBe(403)
+      expect(deps.setContact).not.toHaveBeenCalled()
     })
   })
 })

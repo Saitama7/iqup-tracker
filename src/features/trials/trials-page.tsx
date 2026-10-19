@@ -63,6 +63,7 @@ import {
   type TrialSource,
   type UpcomingRow,
 } from './model'
+import { TrialMenu, useTrialEditor, type TrialAction } from './edit-dialogs'
 import { EnrollTrialDialog, RebookDialog, TrialChip, useCloseTrial } from './parts'
 
 export const TRIAL_TABS = ['upcoming', 'waiting', 'conversion'] as const
@@ -102,6 +103,7 @@ export function TrialsPage({
   const [formOpen, setFormOpen] = useState(!!search.group && !isDesktop)
   const [rebook, setRebook] = useState<Trial | null>(null)
   const [enroll, setEnroll] = useState<Trial | null>(null)
+  const editor = useTrialEditor(today)
 
   const list = useMemo(() => trials.data ?? [], [trials.data])
   const upcoming = useMemo(() => upcomingRows(list, today), [list, today])
@@ -146,6 +148,7 @@ export function TrialsPage({
     today,
     onRebook: setRebook,
     onEnroll: setEnroll,
+    onMenu: editor.open,
   }
 
   const content = trials.isPending ? (
@@ -159,7 +162,7 @@ export function TrialsPage({
   ) : tab === 'waiting' ? (
     <WaitingSection trials={waiting} isDesktop={isDesktop} actions={actions} />
   ) : (
-    <ConversionSection trials={list} today={today} isDesktop={isDesktop} />
+    <ConversionSection trials={list} today={today} isDesktop={isDesktop} actions={actions} />
   )
 
   const form = (
@@ -231,6 +234,7 @@ export function TrialsPage({
         </>
       )}
 
+      {editor.dialogs}
       {rebook && (
         <RebookDialog
           trial={rebook}
@@ -327,6 +331,8 @@ interface RowActions {
   today: string
   onRebook: (t: Trial) => void
   onEnroll: (t: Trial) => void
+  /** «⋯» of a row (#94): «Изменить» / «Вернуть в воронку». */
+  onMenu: (t: Trial, action: TrialAction) => void
 }
 
 function Section({
@@ -417,20 +423,29 @@ function UpcomingSection({
                     onToggle={() => {
                       toggle(r.lessonId)
                     }}
+                    onMenu={actions.onMenu}
                   />
                 ) : (
                   <div className="flex items-center justify-between gap-2">
                     <PhoneLink phone={t.parent_phone} />
-                    <button
-                      type="button"
-                      className={cn(smallBtnPhone, 'text-teal')}
-                      aria-label={`Перенести: ${t.full_name}`}
-                      onClick={() => {
-                        actions.onRebook(t)
-                      }}
-                    >
-                      Перенести
-                    </button>
+                    <div className="flex items-center">
+                      <button
+                        type="button"
+                        className={cn(smallBtnPhone, 'text-teal')}
+                        aria-label={`Перенести: ${t.full_name}`}
+                        onClick={() => {
+                          actions.onRebook(t)
+                        }}
+                      >
+                        Перенести
+                      </button>
+                      <TrialMenu
+                        trial={t}
+                        onAction={(a) => {
+                          actions.onMenu(t, a)
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
               </li>
@@ -507,23 +522,31 @@ function UpcomingSection({
                         Группа →
                       </Link>
                     ) : (
-                      <button
-                        type="button"
-                        className="text-xs font-extrabold whitespace-nowrap text-teal"
-                        aria-label={`Перенести: ${t.full_name}`}
-                        onClick={() => {
-                          actions.onRebook(t)
-                        }}
-                      >
-                        Перенести
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          className="text-xs font-extrabold whitespace-nowrap text-teal"
+                          aria-label={`Перенести: ${t.full_name}`}
+                          onClick={() => {
+                            actions.onRebook(t)
+                          }}
+                        >
+                          Перенести
+                        </button>
+                        <TrialMenu
+                          trial={t}
+                          onAction={(a) => {
+                            actions.onMenu(t, a)
+                          }}
+                        />
+                      </div>
                     )}
                   </td>
                 </tr>
                 {batch && expanded && (
                   <tr className="bg-trial-soft">
                     <td colSpan={6} className={cn(tdClass, 'pt-1.5')}>
-                      <BatchList trials={r.trials} open onToggle={null} />
+                      <BatchList trials={r.trials} open onToggle={null} onMenu={actions.onMenu} />
                     </td>
                   </tr>
                 )}
@@ -541,10 +564,12 @@ function BatchList({
   trials,
   open,
   onToggle,
+  onMenu,
 }: {
   trials: readonly Trial[]
   open: boolean
   onToggle: (() => void) | null
+  onMenu: (t: Trial, action: TrialAction) => void
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -566,9 +591,16 @@ function BatchList({
           {trials.map((t) => (
             <span
               key={t.id}
-              className="rounded-full border border-trial/30 bg-card px-2.5 py-1 text-xs font-bold whitespace-nowrap"
+              className="inline-flex items-center gap-1 rounded-full border border-trial/30 bg-card py-0.5 pl-2.5 text-xs font-bold whitespace-nowrap"
             >
               {t.full_name} · {phoneCaption(t.parent_phone)}
+              <TrialMenu
+                trial={t}
+                className="size-11 min-[900px]:size-8"
+                onAction={(a) => {
+                  onMenu(t, a)
+                }}
+              />
             </span>
           ))}
         </>
@@ -669,6 +701,13 @@ function WaitingSection({
       >
         {t.status === 'attended' ? 'Отказ' : 'Закрыть'}
       </button>
+      <TrialMenu
+        trial={t}
+        className={isDesktop ? 'size-9' : undefined}
+        onAction={(a) => {
+          actions.onMenu(t, a)
+        }}
+      />
     </div>
   )
 
@@ -767,10 +806,12 @@ function ConversionSection({
   trials,
   today,
   isDesktop,
+  actions,
 }: {
   trials: readonly Trial[]
   today: string
   isDesktop: boolean
+  actions: RowActions
 }) {
   const [month, setMonth] = useState(`${today.slice(0, 7)}-01`)
   const conv = monthConversion(trials, month)
@@ -879,7 +920,7 @@ function ConversionSection({
                 </span>
                 <span
                   className={cn(
-                    'font-extrabold whitespace-nowrap',
+                    'flex items-center gap-1 font-extrabold whitespace-nowrap',
                     t.status === 'enrolled' ? 'text-present-strong' : 'text-ink-muted',
                   )}
                 >
@@ -890,6 +931,13 @@ function ConversionSection({
                         ? 'Не пришёл(ла) · закрыто'
                         : 'Отменено'
                     : RESULT_LABEL[t.status]}
+                  <TrialMenu
+                    trial={t}
+                    className={isDesktop ? 'size-9' : undefined}
+                    onAction={(a) => {
+                      actions.onMenu(t, a)
+                    }}
+                  />
                 </span>
               </li>
             ))}

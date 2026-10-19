@@ -107,13 +107,23 @@ describe('holidayForm', () => {
     expect(form.parse({ day: '11.10.2026', name: ' День учителя ' })).toEqual({
       day: '2026-10-11',
       name: 'День учителя',
+      reason: null,
     })
   })
 
-  it('rejects a past day and an empty name', () => {
+  it('a past day needs a reason; today and later do not', () => {
     expect(form.safeParse({ day: '10.10.2026', name: 'X' }).error?.issues[0]?.message).toBe(
-      'Прошедшую дату добавить нельзя',
+      'Укажите причину',
     )
+    expect(form.parse({ day: '10.10.2026', name: 'X', reason: ' забыли ' })).toEqual({
+      day: '2026-10-10',
+      name: 'X',
+      reason: 'забыли',
+    })
+    expect(form.parse({ day: '12.10.2026', name: 'X' }).reason).toBeNull()
+  })
+
+  it('rejects an empty name', () => {
     expect(form.safeParse({ day: '12.10.2026', name: '  ' }).error?.issues[0]?.message).toBe(
       'Введите название',
     )

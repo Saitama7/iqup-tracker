@@ -431,17 +431,20 @@ export type Database = {
         Row: {
           created_at: string
           day: string
+          id: string
           name: string
         }
         ComputedFields: never
         Insert: {
           created_at?: string
           day: string
+          id?: string
           name: string
         }
         Update: {
           created_at?: string
           day?: string
+          id?: string
           name?: string
         }
         Relationships: []
@@ -661,6 +664,39 @@ export type Database = {
             columns: ['teacher_id']
             isOneToOne: false
             referencedRelation: 'teachers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      payroll_periods: {
+        Row: {
+          closed_at: string
+          closed_by: string | null
+          comment: string | null
+          id: string
+          month: string
+        }
+        ComputedFields: never
+        Insert: {
+          closed_at?: string
+          closed_by?: string | null
+          comment?: string | null
+          id?: string
+          month: string
+        }
+        Update: {
+          closed_at?: string
+          closed_by?: string | null
+          comment?: string | null
+          id?: string
+          month?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'payroll_periods_closed_by_fkey'
+            columns: ['closed_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
         ]
@@ -1568,6 +1604,7 @@ export type Database = {
         Args: { p_lesson_id: string; p_student_id: string }
         Returns: boolean
       }
+      close_payroll_period: { Args: { p_comment?: string; p_month: string }; Returns: number }
       confirm_lesson: { Args: { p_lesson_id: string; p_marks: Json }; Returns: string }
       correct_attendance: {
         Args: { p_lesson_id: string; p_marks: Json; p_reason: string }
@@ -1609,6 +1646,10 @@ export type Database = {
         Returns: Database['public']['Enums']['role'][]
       }
       current_teacher_id: { Args: Record<PropertyKey, never>; Returns: string }
+      delete_correction_request: {
+        Args: { p_reason: string; p_request_id: string }
+        Returns: undefined
+      }
       delete_enrollment: {
         Args: {
           p_enrollment_id: string
@@ -1624,9 +1665,15 @@ export type Database = {
           money: number
         }[]
       }
-      delete_group: { Args: { p_group_id: string }; Returns: number }
+      delete_group:
+        | { Args: { p_group_id: string }; Returns: number }
+        | { Args: { p_group_id: string; p_reason: string }; Returns: number }
+      delete_holidays: { Args: { p_days: string[]; p_reason?: string }; Returns: number }
       delete_payment: { Args: { p_payment_id: string; p_reason: string }; Returns: string }
       delete_payroll_adjustment: { Args: { p_id: string; p_reason: string }; Returns: undefined }
+      delete_student: { Args: { p_reason: string; p_student_id: string }; Returns: undefined }
+      delete_subject: { Args: { p_reason: string; p_subject_id: string }; Returns: undefined }
+      delete_tariff_version: { Args: { p_reason: string; p_valid_from: string }; Returns: number }
       deleted_subscription_enrollment: { Args: { p_subscription_id: string }; Returns: string }
       enroll_student: {
         Args: {
@@ -1722,8 +1769,43 @@ export type Database = {
       }
       ensure_lessons: { Args: { p_until: string }; Returns: number }
       generate_lessons: { Args: { p_group_id: string; p_until: string }; Returns: number }
+      generate_lessons_on: { Args: { p_day: string }; Returns: number }
       group_delete_blockers: { Args: { p_group_id: string }; Returns: string[] }
+      group_delete_preview: {
+        Args: { p_group_id: string }
+        Returns: {
+          blockers: string[]
+          consumed_marks: number
+          enrollments: number
+          held_lessons: number
+          lessons: number
+          locked_lessons: number
+          marks: number
+          payments: number
+          payments_som: number
+          trials: number
+        }[]
+      }
+      group_payroll_impact: {
+        Args: { p_group_id: string }
+        Returns: {
+          amount: number
+          marks: number
+          month: string
+          teacher_id: string
+          teacher_name: string
+        }[]
+      }
       group_title: { Args: { p_group_id: string }; Returns: string }
+      holiday_lessons: {
+        Args: { p_day: string }
+        Returns: {
+          held: number
+          locked: number
+          planned: number
+          restored: number
+        }[]
+      }
       hour_price: {
         Args: {
           p_lesson: Omit<
@@ -1757,7 +1839,20 @@ export type Database = {
         Returns: string
       }
       leads_group: { Args: { p_group_id: string }; Returns: boolean }
+      lesson_edit_payroll_impact: {
+        Args: { p_date: string; p_lesson_id: string; p_teacher_id: string }
+        Returns: {
+          amount: number
+          month: string
+          teacher_id: string
+          teacher_name: string
+        }[]
+      }
       lesson_pay_exact: { Args: { p_lesson_id: string }; Returns: number }
+      lesson_pay_exact_as: {
+        Args: { p_date: string; p_lesson_id: string; p_teacher_id: string }
+        Returns: number
+      }
       lesson_payroll_impact: {
         Args: { p_lesson_id: string }
         Returns: {
@@ -1779,9 +1874,21 @@ export type Database = {
         }
         Returns: number
       }
+      marks_payroll_drop: {
+        Args: { p_attendance_ids: string[] }
+        Returns: {
+          amount: number
+          marks: number
+          month: string
+          teacher_id: string
+          teacher_name: string
+        }[]
+      }
       payment_time: { Args: { p_paid_on: string }; Returns: string }
+      payroll_month_closed: { Args: { p_date: string }; Returns: boolean }
       payroll_month_locked: { Args: { p_month: string; p_teacher_id: string }; Returns: boolean }
       person_name_key: { Args: { p_name: string }; Returns: string }
+      plan_tariffs_from_today: { Args: { p_rows: Json }; Returns: number }
       record_payment: {
         Args: {
           p_amount: number
@@ -1813,6 +1920,11 @@ export type Database = {
           subscriptions_deleted: number
         }[]
       }
+      reopen_payroll_period: { Args: { p_month: string; p_reason: string }; Returns: number }
+      reopen_trial: {
+        Args: { p_reason: string; p_trial_id: string }
+        Returns: Database['public']['Enums']['trial_status']
+      }
       reschedule_group: {
         Args: {
           p_group_id: string
@@ -1826,6 +1938,7 @@ export type Database = {
           lessons_deleted: number
         }[]
       }
+      save_holiday: { Args: { p_day: string; p_name: string; p_reason?: string }; Returns: number }
       server_now: { Args: Record<PropertyKey, never>; Returns: string }
       set_afterschool_plan: {
         Args: {
@@ -1851,6 +1964,31 @@ export type Database = {
           lessons_deleted: number
         }[]
       }
+      student_delete_preview: {
+        Args: { p_student_id: string }
+        Returns: {
+          active_enrollments: number
+          blockers: string[]
+          consumed_marks: number
+          enrollments: number
+          locked_marks: number
+          marks: number
+          paid_som: number
+          payments: number
+          refunded_som: number
+          trials: number
+        }[]
+      }
+      student_payroll_impact: {
+        Args: { p_student_id: string }
+        Returns: {
+          amount: number
+          marks: number
+          month: string
+          teacher_id: string
+          teacher_name: string
+        }[]
+      }
       subscription_settlement: {
         Args: { p_enrollment_id: string }
         Returns: {
@@ -1873,6 +2011,7 @@ export type Database = {
         Args: { p_group_type: Database['public']['Enums']['group_type'] }
         Returns: string
       }
+      teacher_month_pay_exact: { Args: { p_month: string; p_teacher_id: string }; Returns: number }
       teaches_enrollment: { Args: { p_enrollment_id: string }; Returns: boolean }
       teaches_group: { Args: { p_group_id: string }; Returns: boolean }
       teaches_lesson: { Args: { p_lesson_id: string }; Returns: boolean }
@@ -1926,6 +2065,18 @@ export type Database = {
         Returns: number
       }
       unconfirm_lesson: { Args: { p_lesson_id: string; p_reason: string }; Returns: undefined }
+      update_lesson: {
+        Args: {
+          p_date: string
+          p_duration_min: number
+          p_lesson_id: string
+          p_reason: string
+          p_start: string
+          p_substitute_teacher_id: string
+          p_teacher_id: string
+        }
+        Returns: undefined
+      }
       update_payment: {
         Args: {
           p_amount: number
@@ -1934,6 +2085,34 @@ export type Database = {
           p_paid_on: string
           p_payment_id: string
           p_reason: string
+        }
+        Returns: undefined
+      }
+      update_payroll_adjustment: {
+        Args: {
+          p_amount: number
+          p_comment: string
+          p_id: string
+          p_issued_on: string
+          p_month: string
+          p_reason: string
+        }
+        Returns: undefined
+      }
+      update_tariff_version: {
+        Args: { p_hour_price: number; p_prices: Json; p_reason: string; p_valid_from: string }
+        Returns: number
+      }
+      update_trial: {
+        Args: {
+          p_full_name: string
+          p_grade: number
+          p_lesson_id: string
+          p_note: string
+          p_parent_phone: string
+          p_reason: string
+          p_source: Database['public']['Enums']['trial_source']
+          p_trial_id: string
         }
         Returns: undefined
       }

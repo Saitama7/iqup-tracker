@@ -63,6 +63,7 @@ import {
   type LessonState,
 } from './select'
 import { trialsSuffix } from './trials-view'
+import { LessonMenu } from './edit-lesson'
 import { UnconfirmLesson } from './unconfirm-lesson'
 import { useConfirmLesson } from './use-confirm-lesson'
 
@@ -102,6 +103,8 @@ interface SheetModel {
   corrections: Corrections
   /** The admin's «Отменить проведение» of a held lesson (#95); null — not offered. */
   unconfirm: ReactNode
+  /** The admin's «⋯ → Изменить занятие» (#94); null — not offered. */
+  menu: ReactNode
   /** The marks are being sent — buttons wait for the database. */
   busy: boolean
   /** Offline: the confirm waits for the network (TanStack paused mutation). */
@@ -222,6 +225,7 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
           onDone={replaceBySource}
         />
       ) : null,
+    menu: isAdmin && !correcting ? <LessonMenu sheet={sheet} /> : null,
     busy: mutation.isPending || corrections.busy,
     paused: mutation.isPaused,
     canConfirm: editable && counts.unmarked === 0 && !mutation.isPending,
@@ -472,9 +476,12 @@ function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
       <header className="-mx-5 -mt-[max(1.5rem,calc(env(safe-area-inset-top)+0.75rem))] flex flex-col gap-3 rounded-b-[28px] bg-brand px-5 pt-[max(1rem,calc(env(safe-area-inset-top)+0.75rem))] pb-3.5">
         <div className="flex items-center justify-between gap-2">
           <BackButton tone="brand" />
-          <span className="min-w-0 truncate rounded-full bg-ink px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-brand">
-            {stateChip(sheet, m.state, now)}
-          </span>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate rounded-full bg-ink px-3 py-1.5 text-xs font-extrabold whitespace-nowrap text-brand">
+              {stateChip(sheet, m.state, now)}
+            </span>
+            {m.menu}
+          </div>
         </div>
         <div className="flex flex-col gap-0.5">
           <h1 className="font-display text-[22px] leading-[1.15] font-bold">
@@ -630,6 +637,7 @@ function DesktopSheet({ m, now }: { m: SheetModel; now: number }) {
               <span className="size-2 rounded-full bg-brand" aria-hidden />
               {stateChip(sheet, m.state, now)}
             </span>
+            {m.menu}
           </div>
           <p className="text-sm font-bold text-ink-muted">{caption}</p>
         </div>

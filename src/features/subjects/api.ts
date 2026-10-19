@@ -71,3 +71,27 @@ export async function updateSubject(id: string, patch: { name?: string; is_activ
   const { error } = await supabase.from('subjects').update(patch).eq('id', id)
   if (error) fail(error)
 }
+
+/** «Удалить» a subject no group uses (delete_subject, #94); a reason goes to the journal. */
+export const deleteSubjectForm = z.object({
+  id: z.uuid(),
+  reason: z.string().trim().min(1, 'Укажите причину').max(500, 'Причина — не длиннее 500 символов'),
+})
+export type DeleteSubjectInput = z.output<typeof deleteSubjectForm>
+
+/** Postgres error of delete_subject → admin-facing text. */
+export function deleteSubjectErrorMessage(error: { code?: string; message?: string }): string {
+  if (error.code === '23503') return 'Предмет используется в группах — его можно только скрыть'
+  if (error.code === '42501') return 'Предметы ведёт администратор'
+  if (error.code === 'P0002') return 'Предмет уже удалён — обновите страницу'
+  if (error.code === '23514' && error.message?.includes('reason')) return 'Укажите причину'
+  return 'Не удалось удалить. Проверьте интернет и попробуйте ещё раз.'
+}
+
+export async function deleteSubject(input: DeleteSubjectInput) {
+  const { error } = await supabase.rpc('delete_subject', {
+    p_subject_id: input.id,
+    p_reason: input.reason,
+  })
+  if (error) throw new SubjectsApiError(deleteSubjectErrorMessage(error))
+}

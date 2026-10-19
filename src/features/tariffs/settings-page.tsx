@@ -1,18 +1,17 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, X } from 'lucide-react'
-import { useId, useMemo, useState, type SubmitEvent } from 'react'
-import { toast } from 'sonner'
+import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
 import { PageHeader } from '@/components/page'
-import { DateInput } from '@/components/ui/date-picker'
 import { useNow } from '@/lib/now'
 import { bishkekDate } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import { SubjectsSection } from '@/features/subjects/subjects-section'
-import { addHoliday, deleteHolidays, holidayForm, settingsQuery } from './api'
+import { settingsQuery } from './api'
 import { tariffHourPrice } from '@/features/afterschool/model'
 import { lessonPrice, teacherShare } from './current'
-import { HistorySheet, PlanTariffsDialog } from './history-sheet'
+import { HistorySheet } from './history-sheet'
+import { HolidaysSection } from './holidays-section'
+import { PlanTariffsDialog } from './plan-dialog'
 import {
   buildVersions,
   currentTariffs,
@@ -23,20 +22,9 @@ import {
   holidayItems,
   RULES,
   seatsLabel,
-  type HolidayItem,
   type Tariff,
 } from './model'
-import {
-  cardClass,
-  ErrorText,
-  Field,
-  inputClass,
-  numClass,
-  SmallDialog,
-  SubmitButton,
-  tdClass,
-  thClass,
-} from './parts'
+import { cardClass, numClass, tdClass, thClass } from './parts'
 
 const sectionHead =
   'flex flex-wrap items-center justify-between gap-2.5 border-b border-line px-[18px] py-3.5'
@@ -119,7 +107,7 @@ export function SettingsPage() {
             )}
           >
             <Rules />
-            <Holidays items={holidays} today={today} />
+            <HolidaysSection items={holidays} today={today} />
           </div>
 
           <SubjectsSection />
@@ -272,229 +260,5 @@ function Rules() {
         Скидки влияют только на цену для ученика. ЗП учителя всегда считается от полной цены тарифа.
       </p>
     </section>
-  )
-}
-
-// ─── Holidays ───────────────────────────────────────────────────────────────
-
-function useInvalidateSettings() {
-  const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: settingsQuery().queryKey })
-}
-
-function Holidays({ items, today }: { items: HolidayItem[]; today: string }) {
-  const [adding, setAdding] = useState(false)
-  // Kept after closing so the dialog does not go blank during its exit animation.
-  const [deleting, setDeleting] = useState<HolidayItem | null>(null)
-  const [deleteOpen, setDeleteOpen] = useState(false)
-
-  return (
-    <section aria-label="Праздники и выходные центра" className={cn(cardClass, 'flex flex-col')}>
-      <div className={cn(sectionHead, 'flex-nowrap')}>
-        <div>
-          <h2 className={sectionTitle}>Праздники и выходные центра</h2>
-          <p className={sectionCaption}>
-            в эти дни занятия не создаются; уже созданные — отменяются
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            setAdding(true)
-          }}
-          className="flex min-h-11 shrink-0 items-center gap-1 rounded-[10px] border-[1.5px] border-line-strong bg-card px-3.5 text-xs font-extrabold whitespace-nowrap"
-        >
-          <Plus className="size-3.5" aria-hidden />
-          Добавить
-        </button>
-      </div>
-      {items.length === 0 ? (
-        <p className="px-[18px] py-4 text-sm font-bold text-ink-muted">Праздников пока нет</p>
-      ) : (
-        <ul aria-label="Праздники">
-          {items.map((h) => (
-            <li
-              key={h.days[0]}
-              className={cn(
-                'flex min-h-12 items-center justify-between gap-3 border-b border-line py-1.5 pr-2 pl-[18px] text-sm last:border-0',
-                h.past && 'text-ink-muted',
-              )}
-            >
-              <span className="font-extrabold whitespace-nowrap">{h.label}</span>
-              <span className="flex min-w-0 items-center gap-1">
-                <span className="line-clamp-2 text-right font-bold text-ink-muted">{h.name}</span>
-                {h.past ? (
-                  <span className="w-11 shrink-0 text-center text-[11px] font-bold text-sand">
-                    прошёл
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    aria-label={`Удалить: ${h.label}, ${h.name}`}
-                    onClick={() => {
-                      setDeleting(h)
-                      setDeleteOpen(true)
-                    }}
-                    className="flex size-11 shrink-0 items-center justify-center rounded-full text-ink-muted hover:text-burned-strong"
-                  >
-                    <X className="size-4" aria-hidden />
-                  </button>
-                )}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <AddHolidayDialog open={adding} onOpenChange={setAdding} today={today} />
-      <DeleteHolidayDialog
-        item={deleting}
-        open={deleteOpen}
-        onClose={() => {
-          setDeleteOpen(false)
-        }}
-      />
-    </section>
-  )
-}
-
-function AddHolidayDialog({
-  open,
-  onOpenChange,
-  today,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  today: string
-}) {
-  const invalidate = useInvalidateSettings()
-  const dayId = useId()
-  const nameId = useId()
-  const [day, setDay] = useState('')
-  const [name, setName] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const mutation = useMutation({
-    mutationFn: addHoliday,
-    onSuccess: async () => {
-      await invalidate()
-      toast.success('Праздник добавлен')
-      setDay('')
-      setName('')
-      onOpenChange(false)
-    },
-    onError: (e) => {
-      setError(e.message)
-    },
-  })
-
-  function onSubmit(e: SubmitEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const parsed = holidayForm(today).safeParse({ day, name })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Проверьте поля формы')
-      return
-    }
-    setError(null)
-    mutation.mutate(parsed.data)
-  }
-
-  return (
-    <SmallDialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) setError(null)
-        onOpenChange(o)
-      }}
-      title="Новый праздник"
-      description="В этот день занятия не создаются."
-    >
-      <form
-        onSubmit={onSubmit}
-        noValidate
-        aria-label="Новый праздник"
-        className="flex flex-col gap-3.5"
-      >
-        <Field id={dayId} label="Дата">
-          <DateInput
-            id={dayId}
-            className={inputClass}
-            value={day}
-            min={today}
-            onChange={(v) => {
-              setDay(v)
-            }}
-          />
-        </Field>
-        <Field id={nameId} label="Название">
-          <input
-            id={nameId}
-            placeholder="Нооруз"
-            autoComplete="off"
-            className={inputClass}
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value)
-            }}
-          />
-        </Field>
-        {error && <ErrorText>{error}</ErrorText>}
-        <SubmitButton pending={mutation.isPending}>Добавить</SubmitButton>
-      </form>
-    </SmallDialog>
-  )
-}
-
-function DeleteHolidayDialog({
-  item,
-  open,
-  onClose,
-}: {
-  item: HolidayItem | null
-  open: boolean
-  onClose: () => void
-}) {
-  const invalidate = useInvalidateSettings()
-  const [error, setError] = useState<string | null>(null)
-  const mutation = useMutation({
-    mutationFn: deleteHolidays,
-    onSuccess: async () => {
-      await invalidate()
-      toast.success('Праздник удалён')
-      onClose()
-    },
-    onError: (e) => {
-      setError(e.message)
-    },
-  })
-
-  return (
-    <SmallDialog
-      open={open && item !== null}
-      onOpenChange={(o) => {
-        if (!o) {
-          setError(null)
-          onClose()
-        }
-      }}
-      title="Удалить праздник?"
-      description={item ? `${item.label} — ${item.name}` : ''}
-    >
-      {error && <ErrorText>{error}</ErrorText>}
-      <div className="flex gap-2">
-        <SubmitButton variant="outline" className="flex-1" onClick={onClose}>
-          Отмена
-        </SubmitButton>
-        <SubmitButton
-          variant="danger"
-          className="flex-1"
-          pending={mutation.isPending}
-          onClick={() => {
-            if (item) mutation.mutate(item.days)
-          }}
-        >
-          Удалить
-        </SubmitButton>
-      </div>
-    </SmallDialog>
   )
 }

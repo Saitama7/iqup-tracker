@@ -1,5 +1,5 @@
 // Edge Function create-user (Deno). Admin-only: create a phone login, reset its password,
-// change roles / percent, deactivate (issue #6).
+// change roles / percent / name / phone, deactivate (issue #6).
 // Logic lives in handler.ts; this file wires Supabase clients and HTTP.
 import { createClient } from '@supabase/supabase-js'
 import { type CreateUserDeps, handleCreateUser } from './handler.ts'
@@ -129,6 +129,33 @@ const deps: CreateUserDeps = {
       ban_duration: banned ? '876000h' : 'none',
     })
     check(error)
+  },
+  async findProfileContact(userId) {
+    const { data, error } = await admin
+      .from('profiles')
+      .select('phone, full_name')
+      .eq('id', userId)
+      .maybeSingle()
+    check(error)
+    return data
+  },
+  async teacherPhoneTaken(phone, exceptUserId) {
+    const { data, error } = await admin.from('teachers').select('id, user_id').eq('phone', phone)
+    check(error)
+    return (data ?? []).some((t) => t.user_id !== exceptUserId)
+  },
+  async setAuthEmail(userId, email) {
+    const { error } = await admin.auth.admin.updateUserById(userId, { email, email_confirm: true })
+    check(error)
+  },
+  async setContact(userId, contact) {
+    const { error } = await admin.from('profiles').update(contact).eq('id', userId)
+    check(error)
+    const { error: teacherError } = await admin
+      .from('teachers')
+      .update(contact)
+      .eq('user_id', userId)
+    check(teacherError)
   },
   today: () => new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10), // Asia/Bishkek, UTC+6, no DST
 }

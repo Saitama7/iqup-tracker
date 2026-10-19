@@ -156,11 +156,30 @@ async function deletedSubscriptions(ids: readonly string[]) {
     ids.length === 0,
   )
   const enrollmentIds = [...new Set(snapshots.map((r) => r.before.enrollment_id))]
-  const enrollments = await select(
+  const liveEnrollments = await select(
     () => supabase.from('enrollments').select('id, student_id, group_id').in('id', enrollmentIds),
     enrollmentSchema,
     enrollmentIds.length === 0,
   )
+  // delete_student / delete_group took the enrollment too: its delete snapshot still names both
+  const goneIds = enrollmentIds.filter((id) => !liveEnrollments.some((e) => e.id === id))
+  const goneEnrollments = await select(
+    () =>
+      supabase
+        .from('v_audit_feed')
+        .select('entity_id, before')
+        .eq('entity', 'enrollments')
+        .eq('action', 'delete')
+        .in('entity_id', goneIds),
+    z
+      .object({
+        entity_id: z.uuid(),
+        before: z.object({ student_id: z.uuid(), group_id: z.uuid() }),
+      })
+      .transform((r) => ({ id: r.entity_id, ...r.before })),
+    goneIds.length === 0,
+  )
+  const enrollments = [...liveEnrollments, ...goneEnrollments]
   return snapshots.flatMap((r) => {
     const enrollment = enrollments.find((e) => e.id === r.before.enrollment_id)
     return enrollment
@@ -174,6 +193,31 @@ async function deletedSubscriptions(ids: readonly string[]) {
         ]
       : []
   })
+}
+
+/**
+ * Names of students / groups deleted by delete_student / delete_group (#94): the rows that went
+ * with them (marks, enrollments, lessons) still name them, from the delete snapshot in the feed.
+ */
+async function deletedNames(
+  entity: 'students' | 'groups',
+  key: 'full_name' | 'name',
+  ids: readonly string[],
+): Promise<Record<string, string>> {
+  const rows = await select(
+    () =>
+      supabase
+        .from('v_audit_feed')
+        .select('entity_id, before')
+        .eq('entity', entity)
+        .eq('action', 'delete')
+        .in('entity_id', [...ids]),
+    z.object({ entity_id: z.uuid(), before: z.record(z.string(), z.unknown()) }),
+    ids.length === 0,
+  )
+  return Object.fromEntries(
+    rows.flatMap((r) => (typeof r.before[key] === 'string' ? [[r.entity_id, r.before[key]]] : [])),
+  )
 }
 
 /** Names behind the page's rows. Two steps: lessons / enrollments first, then who and which group. */
@@ -294,10 +338,31 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
     ),
   ])
 
+  const [goneStudents, goneGroups] = await Promise.all([
+    deletedNames(
+      'students',
+      'full_name',
+      studentIds.filter((id) => !students.some((s) => s.id === id)),
+    ),
+    deletedNames(
+      'groups',
+      'name',
+      groupIds.filter((id) => !groups.some((g) => g.id === id)),
+    ),
+  ])
+
   return {
-    students: Object.fromEntries(students.map((s) => [s.id, s.full_name])),
+    students: {
+      ...goneStudents,
+      ...Object.fromEntries(students.map((s) => [s.id, s.full_name])),
+    },
     teachers: Object.fromEntries(teachers.map((t) => [t.id, t.full_name])),
-    groups: Object.fromEntries(groups.map((g) => [g.id, { name: g.name, subject: g.subject }])),
+    groups: {
+      ...Object.fromEntries(
+        Object.entries(goneGroups).map(([id, name]) => [id, { name, subject: '' }]),
+      ),
+      ...Object.fromEntries(groups.map((g) => [g.id, { name: g.name, subject: g.subject }])),
+    },
     lessons: Object.fromEntries(
       lessons.map((l) => [
         l.id,

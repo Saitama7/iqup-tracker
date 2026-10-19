@@ -196,7 +196,7 @@ test('смена учителя с даты: занятия уходят из «
   ).toBeVisible()
 })
 
-test('удалить пустую группу и отказ для группы с отметками', async ({ page }, testInfo) => {
+test('удалить пустую группу и группу с отметками без оплат (#94)', async ({ page }, testInfo) => {
   const n = names(testInfo)
   const groupName = n.group.d
   const studentName = n.student.d
@@ -207,19 +207,16 @@ test('удалить пустую группу и отказ для группы
   await holdLessons(marked, e.studentId, 1, 'present')
 
   await login(page, KANYKEI)
-  // refusal: marks and an enrollment
+  // И84 (#94): marks and enrollments no longer block — the dialog shows the payroll taken back
   await page.goto(`/admin/groups/${marked}`)
   await page.getByRole('button', { name: 'Изменить' }).click()
   await page.getByRole('button', { name: 'Удалить группу' }).click()
-  const refusal = page.getByRole('dialog')
-  await expect(refusal.getByText('есть занятия с отметками')).toBeVisible()
-  await expect(refusal.getByText('есть зачисления')).toBeVisible()
-  await expect(
-    refusal.getByText('Архивируйте группу вместо удаления', { exact: false }),
-  ).toBeVisible()
-  await expect(refusal.getByRole('button', { name: 'Удалить группу' })).toHaveCount(0)
+  const impact = page.getByTestId('group-delete-impact')
+  await expect(impact).toContainText('(1 проведённых)')
+  await expect(impact).toContainText(/учителю Бекзат −.+ сом/)
   await shot(page, 'delete-refusal', testInfo)
-  await refusal.getByRole('button', { name: 'Закрыть' }).click()
+  await page.getByRole('button', { name: 'Не сейчас' }).click()
+  await expect(impact).toBeHidden()
 
   // «был» no longer blocks «Записан по ошибке» (#81): the dialog shows the payroll it takes back
   await page.getByRole('button', { name: `Действия: ${studentName}` }).click()
@@ -237,8 +234,9 @@ test('удалить пустую группу и отказ для группы
   await expect(
     confirm.getByRole('heading', { name: `Удалить группу «${n.group.empty}»?` }),
   ).toBeVisible()
-  await expect(confirm.getByText(/Расписание и \d+ занятий будут удалены/)).toBeVisible()
+  await expect(confirm.getByTestId('group-delete-impact')).toContainText(/^Удалится: \d+ занятий/)
   await shot(page, 'delete-confirm', testInfo)
+  await confirm.getByLabel('Причина').fill('e2e: создали по ошибке')
   await confirm.getByRole('button', { name: 'Удалить группу' }).click()
   await expect(page).toHaveURL(/\/admin\/groups$/)
 
