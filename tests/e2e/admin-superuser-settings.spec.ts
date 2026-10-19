@@ -38,7 +38,9 @@ async function cleanup(testInfo: TestInfo) {
   await db.from('tariffs').delete().eq('valid_from', f.plan)
 }
 
+// eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
 test.beforeEach(async ({}, testInfo) => cleanup(testInfo))
+// eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
 test.afterEach(async ({}, testInfo) => cleanup(testInfo))
 
 test('А9: админ удаляет прошедший праздник — причина обязательна', async ({ page }, testInfo) => {
@@ -173,6 +175,6 @@ test('А8: админ меняет имя пользователя', async ({ pa
   } finally {
     const { data } = await db.from('profiles').select('id').eq('phone', phone).maybeSingle()
     await db.from('teachers').delete().eq('phone', phone)
-    if (data) await db.auth.admin.deleteUser(String(data.id))
+    if (data) await db.auth.admin.deleteUser(data.id)
   }
 })

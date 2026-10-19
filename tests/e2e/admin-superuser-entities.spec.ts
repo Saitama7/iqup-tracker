@@ -29,7 +29,9 @@ async function wipe(testInfo: TestInfo) {
   await cleanup([n.group], [n.student])
 }
 
+// eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
 test.beforeEach(async ({}, testInfo) => wipe(testInfo))
+// eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
 test.afterEach(async ({}, testInfo) => wipe(testInfo))
 
 test('А11: админ правит закрытое пробное и возвращает его в воронку', async ({ page }, testInfo) => {

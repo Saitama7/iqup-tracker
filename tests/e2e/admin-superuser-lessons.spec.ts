@@ -27,10 +27,12 @@ const names = (testInfo: TestInfo) => ({
   student: `Е2е Суперюзер ${size(testInfo)}`,
 })
 
+// eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
 test.beforeEach(async ({}, testInfo) => {
   const n = names(testInfo)
   await cleanup([n.group], [n.student])
 })
+// eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument
 test.afterEach(async ({}, testInfo) => {
   const n = names(testInfo)
   await cleanup([n.group], [n.student])
