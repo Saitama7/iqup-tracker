@@ -174,3 +174,18 @@ export async function rejectRequest(requestId: string, reason: string) {
   })
   if (error) throw fail(error)
 }
+
+export const deleteRequestForm = z.object({
+  requestId: z.uuid(),
+  reason: z.string().trim().min(1, 'Укажите причину').max(500, 'Причина — не длиннее 500 символов'),
+})
+export type DeleteRequestInput = z.output<typeof deleteRequestForm>
+
+/** #94 · Admin: delete a mistaken request with a reason (0028 delete_correction_request, audited). */
+export async function deleteCorrectionRequest(input: DeleteRequestInput) {
+  const { error } = await supabase.rpc('delete_correction_request', {
+    p_request_id: input.requestId,
+    p_reason: input.reason,
+  })
+  if (error) throw fail(error)
+}

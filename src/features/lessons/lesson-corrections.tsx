@@ -7,6 +7,7 @@ import { useId, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { LessonSheet } from './api'
+import { RequestMenu } from './delete-request'
 import type { Mark, RosterRow } from './attendance'
 import {
   applyRequest,
@@ -279,7 +280,10 @@ function RequestReview({
       aria-label="Запрос учителя"
       className="flex flex-col gap-2 rounded-2xl bg-warn-soft p-3.5 text-warn-strong"
     >
-      <h3 className="text-sm font-extrabold">Учитель просит исправить отметки</h3>
+      <div className="-my-1 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-extrabold">Учитель просит исправить отметки</h3>
+        <RequestMenu requestId={request.id} />
+      </div>
       <Changes changes={pending.changes} empty="Уже исправлено — отметки совпадают с запросом" />
       <p className="text-[13px] font-bold">«{request.comment}»</p>
       {c.locked && (
