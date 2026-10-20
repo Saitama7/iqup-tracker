@@ -617,7 +617,7 @@ function durationChange(row: AuditRow): Part[] {
   ]
 }
 
-/** groups are audited on start_date / teacher_id / lesson_duration_min update and on delete (0017, 0020, 0029): «старт группы перенесён с 18.09 на 01.09». */
+/** groups are audited on start_date / teacher_id / lesson_duration_min update and on delete (0017, 0020, 0031): «старт группы перенесён с 18.09 на 01.09». */
 function describeGroup(row: AuditRow, l: AuditLookups): Described {
   const name = l.groups[row.entityId]
     ? groupName(row.entityId, l)
