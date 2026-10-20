@@ -64,12 +64,17 @@ test('админ: «предупредил» заранее → учитель �
   const groupId = await makeGroup(n.group, await teacherId('Гульзат%'), '2026-10-01')
   const warned = await makeEnrollment(n.warned, groupId, '2026-10-01')
   const missed = await makeEnrollment(n.missed, groupId, '2026-10-01')
+  // The lesson the dialog offers first (upcomingLessonsQuery): today's planned one counts too, even
+  // if it has started — on a ВТ/ЧТ that is today's 19:00 (#104).
   const { data: next } = await service()
     .from('lessons')
     .select('id, lesson_date')
     .eq('group_id', groupId)
-    .gt('lesson_date', today)
+    .eq('status', 'planned')
+    .eq('is_locked', false)
+    .gte('lesson_date', today)
     .order('lesson_date')
+    .order('planned_start')
     .limit(1)
     .single()
   const lessonId = next?.id ?? ''
