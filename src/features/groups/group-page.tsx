@@ -42,6 +42,7 @@ import {
 } from './group-dialogs'
 import {
   currentRules,
+  groupDuration,
   lessonViews,
   monthName,
   monthProgress,
@@ -374,6 +375,7 @@ export function GroupPage({
           holidays={data.holidays}
           today={today}
           teachers={data.teachers}
+          tariffs={data.tariffs}
           onDelete={() => {
             setDialog({ kind: 'delete' })
           }}
@@ -451,7 +453,7 @@ function headerCaption(group: GroupRow, data: GroupsSource, today: string): stri
   const percent = teacher ? percentOn(teacher, today) : null
   const schedule = scheduleLong(
     currentRules(group.schedule_rules, today),
-    tariff?.lesson_duration_min ?? null,
+    groupDuration(group, today, data.tariffs),
   )
   const price = tariff
     ? tariffCaption(group.group_type, tariff).split(' · ').slice(1).join(' · ')

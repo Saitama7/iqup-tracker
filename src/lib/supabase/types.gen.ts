@@ -376,6 +376,7 @@ export type Database = {
           grade: number | null
           group_type: Database['public']['Enums']['group_type']
           id: string
+          lesson_duration_min: number | null
           name: string
           room: string | null
           start_date: string
@@ -390,6 +391,7 @@ export type Database = {
           grade?: number | null
           group_type: Database['public']['Enums']['group_type']
           id?: string
+          lesson_duration_min?: number | null
           name: string
           room?: string | null
           start_date: string
@@ -403,6 +405,7 @@ export type Database = {
           grade?: number | null
           group_type?: Database['public']['Enums']['group_type']
           id?: string
+          lesson_duration_min?: number | null
           name?: string
           room?: string | null
           start_date?: string
@@ -1617,6 +1620,7 @@ export type Database = {
       }
       create_group: {
         Args: {
+          p_duration_min?: number
           p_grade: number
           p_group_type: Database['public']['Enums']['group_type']
           p_name: string
@@ -1789,6 +1793,7 @@ export type Database = {
           trials: number
         }[]
       }
+      group_lesson_duration: { Args: { p_date: string; p_group_id: string }; Returns: number }
       group_payroll_impact: {
         Args: { p_group_id: string }
         Returns: {
@@ -1959,6 +1964,10 @@ export type Database = {
       set_enrollment_start: {
         Args: { p_enrollment_id: string; p_start_date: string }
         Returns: undefined
+      }
+      set_group_duration: {
+        Args: { p_from: string; p_group_id: string; p_minutes: number }
+        Returns: number
       }
       set_group_start: {
         Args: { p_group_id: string; p_start_date: string }

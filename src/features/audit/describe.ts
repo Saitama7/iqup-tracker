@@ -587,15 +587,37 @@ function describePreset(row: AuditRow, l: AuditLookups): Described {
 }
 
 const TEACHER_REASON = 'change_group_teacher:'
+const DURATION_REASON = 'set_group_duration:'
 /** Service reasons of the undo RPCs (0020) are not a human «Причина». */
 const isServiceReason = (r: string) =>
   r === 'confirm_lesson' ||
   r === 'remove_enrollment' ||
   r === 'transfer_enrollment' ||
   r === 'delete_group' ||
-  r.startsWith(TEACHER_REASON)
+  r.startsWith(TEACHER_REASON) ||
+  r.startsWith(DURATION_REASON)
 
-/** groups are audited on start_date / teacher_id update and on delete (0017, 0020): «старт группы перенесён с 18.09 на 01.09». */
+/**
+ * «Длительность занятий: 60 → 90 мин с 25.10» (#100). The reason
+ * «set_group_duration:YYYY-MM-DD:<before>:<after>» carries the date and the minutes in effect then
+ * (null in the row — «по тарифу», the tariff's minutes are in the reason).
+ */
+function durationChange(row: AuditRow): Part[] {
+  const [from = '', was = '', now = ''] = row.reason?.startsWith(DURATION_REASON)
+    ? row.reason.slice(DURATION_REASON.length).split(':')
+    : []
+  const before = num(row.before, 'lesson_duration_min')
+  const after = num(row.after, 'lesson_duration_min')
+  return [
+    'Длительность занятий: ',
+    `${before ?? (was || 'по тарифу')} → `,
+    strong(`${after ?? (now || 'по тарифу')} мин`),
+    after === null ? ' (по тарифу)' : '',
+    ...(/^\d{4}-\d{2}-\d{2}$/.test(from) ? [` с ${dayMonth(from)}`] : []),
+  ]
+}
+
+/** groups are audited on start_date / teacher_id / lesson_duration_min update and on delete (0017, 0020, 0029): «старт группы перенесён с 18.09 на 01.09». */
 function describeGroup(row: AuditRow, l: AuditLookups): Described {
   const name = l.groups[row.entityId]
     ? groupName(row.entityId, l)
@@ -606,6 +628,13 @@ function describeGroup(row: AuditRow, l: AuditLookups): Described {
       badge: { label: 'Группа', tone: 'teal' },
       link,
       parts: [strong(name), ' — старт группы перенесён', ...moved(row, 'start_date')],
+    }
+  }
+  if (row.action === 'update' && changed(row, 'lesson_duration_min')) {
+    return {
+      badge: { label: 'Группа', tone: 'teal' },
+      link,
+      parts: [strong(name), ' — ', ...durationChange(row)],
     }
   }
   if (row.action === 'update' && changed(row, 'teacher_id')) {

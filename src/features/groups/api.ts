@@ -26,6 +26,7 @@ const groupSchema = z.object({
   start_date: z.string(),
   end_date: z.string().nullable(),
   room: z.string().nullable(),
+  lesson_duration_min: z.number().int().nullable(),
   teacher_id: z.uuid(),
   teacher: z.object({ full_name: z.string() }).nullable(),
   schedule_rules: z.array(ruleSchema),
@@ -65,7 +66,7 @@ export const groupsQuery = () =>
         supabase
           .from('groups')
           .select(
-            'id, name, subject_id, subject:subjects(name), grade, group_type, status, start_date, end_date, room, teacher_id, teacher:teachers(full_name), schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(status)',
+            'id, name, subject_id, subject:subjects(name), grade, group_type, status, start_date, end_date, room, lesson_duration_min, teacher_id, teacher:teachers(full_name), schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(status)',
           ),
         supabase
           .from('tariffs')
@@ -159,6 +160,10 @@ export function groupsErrorMessage(error: { code?: string; message?: string }): 
     return 'В это время у группы уже есть занятие'
   }
   if (error.code === '23514') {
+    if (m.includes('closed period')) return 'С этой даты есть занятия в закрытом периоде'
+    if (m.includes('after-school group has no lesson duration'))
+      return 'У продлёнки нет своей длительности — часы по графику ученика'
+    if (m.includes('out of 15')) return 'Длительность — от 15 до 600 минут'
     if (m.includes('on the group start')) return 'На дату старта нет тарифа для этого типа группы'
     if (m.includes('no tariff')) return 'На эту дату нет тарифа для этого типа группы'
     if (m.includes('held or cancelled lessons before'))
@@ -199,6 +204,19 @@ const dateField = z.string().transform((v, ctx) => {
   return iso
 })
 
+/** Lesson length, minutes (#100): 15…600; the form's step is 15. */
+const durationField = z
+  .string()
+  .trim()
+  .transform((v, ctx) => {
+    const n = Number(v)
+    if (v === '' || !Number.isInteger(n) || n < 15 || n > 600) {
+      ctx.addIssue({ code: 'custom', message: 'Длительность — от 15 до 600 минут' })
+      return z.NEVER
+    }
+    return n
+  })
+
 const weekdaysField = z
   .array(z.number().int().min(1).max(7))
   .min(1, 'Выберите хотя бы один день недели')
@@ -223,6 +241,8 @@ export const groupForm = z.object({
   teacherId: z.uuid({ error: 'Выберите учителя' }),
   weekdays: weekdaysField,
   time: timeField,
+  /** null — as in the tariff (after-school always). */
+  durationMin: durationField.nullable(),
   startDate: dateField,
   room: z
     .string()
@@ -241,6 +261,14 @@ export const rescheduleForm = z.object({
 })
 
 export type RescheduleInput = z.output<typeof rescheduleForm>
+
+/** «Длительность занятий» (А4, #100): new length of the planned lessons from a date. */
+export const durationForm = z.object({
+  minutes: durationField,
+  from: dateField,
+})
+
+export type DurationInput = z.output<typeof durationForm>
 
 /** «Доп. урок» (А4): date and time set by the admin, optionally for a cancelled lesson. */
 export const extraLessonForm = z.object({
@@ -280,6 +308,7 @@ export async function createGroup(input: GroupInput, until: string) {
     p_start_date: input.startDate,
     p_room: input.room as string,
     p_until: until,
+    ...(input.durationMin !== null ? { p_duration_min: input.durationMin } : {}),
   })
   if (error) fail(error)
   const row = z
@@ -362,4 +391,19 @@ export async function setGroupStart(groupId: string, startDate: string) {
     .array(z.object({ lessons_created: z.number().int(), lessons_deleted: z.number().int() }))
     .parse(data)[0]
   return { created: row?.lessons_created ?? 0, deleted: row?.lessons_deleted ?? 0 }
+}
+
+/**
+ * «Длительность занятий» (#100, И88): the group's own length (null — back to the tariff) and the
+ * planned lessons from `from`; held and cancelled ones keep theirs. Returns lessons changed.
+ */
+export async function setGroupDuration(groupId: string, minutes: number | null, from: string) {
+  const { data, error } = await supabase.rpc('set_group_duration', {
+    p_group_id: groupId,
+    // null resets the group to its tariff; the generated Args type says number
+    p_minutes: minutes as number,
+    p_from: from,
+  })
+  if (error) fail(error)
+  return z.number().int().parse(data)
 }

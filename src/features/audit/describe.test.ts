@@ -1063,6 +1063,30 @@ describe('admin undo (#73)', () => {
     expect(describeAuditRow(r, undo).note).toBeNull()
   })
 
+  it('group lesson length carries the date and the tariff minutes from the reason (#100)', () => {
+    const g = { id: GROUP, name: '8 класс Б', lesson_duration_min: null }
+    const r = row({
+      entity: 'groups',
+      entityId: GROUP,
+      before: g,
+      after: { ...g, lesson_duration_min: 90 },
+      reason: 'set_group_duration:2026-10-25:60:90',
+    })
+    expect(text(r, undo)).toBe('Математика · 8 класс Б — Длительность занятий: 60 → 90 мин с 25.10')
+    expect(describeAuditRow(r, undo).badge.label).toBe('Группа')
+    expect(describeAuditRow(r, undo).note).toBeNull()
+    const back = row({
+      entity: 'groups',
+      entityId: GROUP,
+      before: { ...g, lesson_duration_min: 90 },
+      after: g,
+      reason: 'set_group_duration:2026-11-01:90:60',
+    })
+    expect(text(back, undo)).toBe(
+      'Математика · 8 класс Б — Длительность занятий: 90 → 60 мин (по тарифу) с 01.11',
+    )
+  })
+
   it('deleted group', () => {
     expect(
       text(

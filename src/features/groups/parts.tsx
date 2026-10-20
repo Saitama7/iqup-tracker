@@ -22,26 +22,23 @@ export function GroupStatusChip({
   )
 }
 
-/** «Дни недели»: ПН … СБ toggles (А3); Sunday only when `withSunday`. */
+/** «Дни недели»: ПН … ВС toggles (А3; Sunday — weekend groups, #100). */
 export function WeekdayPicker({
   id,
   value,
   onChange,
-  withSunday = false,
 }: {
   id: string
   value: readonly number[]
   onChange: (next: number[]) => void
-  withSunday?: boolean
 }) {
-  const days = withSunday ? WEEKDAYS : WEEKDAYS.slice(0, 6)
   return (
     <div className="flex flex-col gap-1.5">
       <span id={id} className={labelClass}>
         Дни недели
       </span>
       <div role="group" aria-labelledby={id} className="flex gap-1.5">
-        {days.map((label, i) => {
+        {WEEKDAYS.map((label, i) => {
           const day = i + 1
           const on = value.includes(day)
           return (

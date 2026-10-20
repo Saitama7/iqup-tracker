@@ -101,7 +101,9 @@ test('старт группы и дата зачисления задним чи
     const edit = page.getByRole('form', { name: 'Изменить группу' })
     const start = edit.getByLabel('Старт группы')
     await expect(start).toHaveValue('18.09.2026')
-    await expect(edit.getByLabel('Действует с')).toBeVisible()
+    await expect(
+      edit.getByRole('group', { name: 'Новое расписание' }).getByLabel('Действует с'),
+    ).toBeVisible()
     await expect(edit.getByText('Можно задним числом — занятия достроятся')).toBeVisible()
     await expect(edit.getByText(/^Не раньше сегодня — /)).toBeVisible()
     await start.fill('')

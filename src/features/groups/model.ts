@@ -32,6 +32,8 @@ export interface GroupRow {
   start_date: string
   end_date: string | null
   room: string | null
+  /** The group's own lesson length (#100, И88); null — the tariff's. */
+  lesson_duration_min: number | null
   teacher_id: string
   teacher: { full_name: string } | null
   schedule_rules: ScheduleRule[]
@@ -276,6 +278,22 @@ export function scheduleLong(rules: readonly ScheduleRule[], durationMin: number
     .join('; ')
 }
 
+/**
+ * Length of the group's new lessons on `day` (#100, И88): its own, else the tariff's —
+ * group_lesson_duration (0029). Existing lessons carry their own lessons.duration_min.
+ */
+export function groupDuration(
+  group: { group_type: GroupType; lesson_duration_min: number | null },
+  day: string,
+  tariffs: readonly Pick<TariffRow, 'group_type' | 'valid_from' | 'lesson_duration_min'>[],
+): number | null {
+  return (
+    group.lesson_duration_min ??
+    tariffFor(group.group_type, day, tariffs)?.lesson_duration_min ??
+    null
+  )
+}
+
 // ─── Teachers ───────────────────────────────────────────────────────────────
 
 /** Teacher's percent on `day` (latest valid_from ≤ day) — payroll/calc.ts rateOn. */
@@ -325,7 +343,7 @@ export function teacherConflicts(
   const out: Conflict[] = []
   for (const g of groups) {
     if (g.teacher_id !== teacherId || g.status === 'archived' || g.id === exceptGroupId) continue
-    const duration = tariffFor(g.group_type, from, tariffs)?.lesson_duration_min ?? 60
+    const duration = groupDuration(g, from, tariffs) ?? 60
     for (const r of g.schedule_rules) {
       if (r.valid_to !== null && r.valid_to < from) continue
       if (!slot.weekdays.includes(r.weekday)) continue

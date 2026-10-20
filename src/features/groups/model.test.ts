@@ -21,6 +21,7 @@ import {
   scheduleShort,
   tariffCaption,
   teacherConflicts,
+  groupDuration,
   weekdaysCaption,
   type GroupRow,
   type LessonRow,
@@ -70,6 +71,7 @@ const group = (over: Partial<GroupRow> = {}): GroupRow => ({
   start_date: '2026-09-01',
   end_date: null,
   room: '1',
+  lesson_duration_min: null,
   teacher_id: 't1',
   teacher: { full_name: 'Гульзат Асанова' },
   schedule_rules: [rule(2), rule(4), rule(6)],
@@ -177,6 +179,44 @@ describe('teachers', () => {
       teacherConflicts({ ...slot, start: '10:00' }, 't1', '2026-10-12', groups, tariffs),
     ).toEqual([])
     expect(teacherConflicts(slot, 't1', '2026-10-12', groups, tariffs, 'g1')).toEqual([])
+  })
+
+  it("conflicts use the group's own length over the tariff (#100)", () => {
+    // g1: ВТ 09:00, 90 min — 10:00 overlaps it, though the tariff says 60
+    const g = group({ lesson_duration_min: 90 })
+    const slot = { weekdays: [2], start: '10:00', durationMin: 60 }
+    expect(teacherConflicts(slot, 't1', '2026-10-12', [group()], tariffs)).toEqual([])
+    expect(teacherConflicts(slot, 't1', '2026-10-12', [g], tariffs).map((c) => c.group.id)).toEqual(
+      ['g1'],
+    )
+    expect(teacherConflicts({ ...slot, start: '10:30' }, 't1', '2026-10-12', [g], tariffs)).toEqual(
+      [],
+    )
+    // the new group's length (the form's field): 08:00 for 90 min reaches 09:00
+    expect(
+      teacherConflicts(
+        { ...slot, start: '08:00', durationMin: 90 },
+        't1',
+        '2026-10-12',
+        [group()],
+        tariffs,
+      ),
+    ).toHaveLength(1)
+    expect(
+      teacherConflicts(
+        { ...slot, start: '08:00', durationMin: 60 },
+        't1',
+        '2026-10-12',
+        [group()],
+        tariffs,
+      ),
+    ).toEqual([])
+  })
+
+  it("groupDuration: the group's own, else the tariff's on the day", () => {
+    expect(groupDuration(group(), '2026-10-12', tariffs)).toBe(60)
+    expect(groupDuration(group({ lesson_duration_min: 90 }), '2026-10-12', tariffs)).toBe(90)
+    expect(groupDuration(group({ group_type: 'pair' }), '2026-10-12', [])).toBeNull()
   })
 
   it('conflicts ignore rules that ended before the start date', () => {
