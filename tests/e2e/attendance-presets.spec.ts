@@ -52,20 +52,25 @@ test('админ: «предупредил» заранее → учитель �
 }, testInfo) => {
   const n = names(testInfo)
   const today = bishkekToday()
-  const groupId = await makeGroup(n.group, await teacherId('Гульзат%'), '2026-10-01')
+  // No lesson of the group today (#104): the dialog offers today's one only until it starts (И56),
+  // so on a lesson day the spec and the dialog disagreed on «the next lesson» around 19:00.
+  const weekday = new Date(`${today}T00:00:00Z`).getUTCDay()
+  const weekdays = [2, 4].includes(weekday) ? [1, 3] : [2, 4]
+  const groupId = await makeGroup(
+    n.group,
+    await teacherId('Гульзат%'),
+    '2026-10-01',
+    'mini',
+    weekdays,
+  )
   const warned = await makeEnrollment(n.warned, groupId, '2026-10-01')
   const missed = await makeEnrollment(n.missed, groupId, '2026-10-01')
-  // The lesson the dialog offers first (upcomingLessonsQuery): today's planned one counts too, even
-  // if it has started — on a ВТ/ЧТ that is today's 19:00 (#104).
   const { data: next } = await service()
     .from('lessons')
     .select('id, lesson_date')
     .eq('group_id', groupId)
-    .eq('status', 'planned')
-    .eq('is_locked', false)
-    .gte('lesson_date', today)
+    .gt('lesson_date', today)
     .order('lesson_date')
-    .order('planned_start')
     .limit(1)
     .single()
   const lessonId = next?.id ?? ''

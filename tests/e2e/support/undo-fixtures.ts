@@ -25,12 +25,13 @@ export const teacherId = async (like: string): Promise<string> => {
 
 type GroupType = Database['public']['Enums']['group_type']
 
-/** ВТ/ЧТ 19:00 from `start`, lessons generated up to the end of October. */
+/** ВТ/ЧТ (or `weekdays`, 1 = ПН) 19:00 from `start`, lessons generated up to the end of October. */
 export async function makeGroup(
   name: string,
   teacher: string,
   start = '2026-09-01',
   type: GroupType = 'mini',
+  weekdays: number[] = [2, 4],
 ) {
   const db = service()
   const { data: subject } = await db.from('subjects').select('id').eq('name', 'Математика').single()
@@ -40,7 +41,7 @@ export async function makeGroup(
     p_grade: 11,
     p_group_type: type,
     p_teacher_id: teacher,
-    p_weekdays: [2, 4],
+    p_weekdays: weekdays,
     p_start_time: '19:00',
     p_start_date: start,
     p_room: '2',

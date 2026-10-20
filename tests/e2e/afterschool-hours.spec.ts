@@ -241,6 +241,8 @@ test('продлёнка: график ПН 2 / СР 1 / ПТ 2 → счёт з�
     })
     const teacher = await teacherContext.newPage()
     await signIn(teacher, NURGUL)
+    // the post-login redirect lands on «Сегодня» — a goto before it is interrupted by it (#104)
+    await slow(teacher).toHaveURL(/\/today$/)
     await teacher.goto(`/lessons/${lesson.id}`)
     const students = teacher.getByRole('list', { name: 'Ученики' }).getByRole('listitem')
     await expect(students).toHaveCount(1)
