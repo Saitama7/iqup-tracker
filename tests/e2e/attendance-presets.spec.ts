@@ -1,5 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
-import { GULZAT, KANYKEI, login, type Credentials } from './support/auth'
+import { GULZAT, KANYKEI, login, switchUser } from './support/auth'
 import { lockSeed } from './support/seed-lock'
 import { cleanup, makeEnrollment, makeGroup, service, teacherId } from './support/undo-fixtures'
 
@@ -25,15 +25,6 @@ const names = (testInfo: TestInfo) => {
 
 /** Today in Asia/Bishkek (UTC+6, no DST). */
 const bishkekToday = () => new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10)
-
-async function switchUser(page: Page, user: Credentials) {
-  await page.goto('/login')
-  await page.evaluate(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-  })
-  await login(page, user)
-}
 
 async function markOf(lessonId: string, studentId: string) {
   const { data } = await service()
