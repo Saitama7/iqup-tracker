@@ -3,6 +3,10 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { GULZAT, KANYKEI, login } from './support/auth'
+import { lockSeed } from './support/seed-lock'
+
+// Enrolls a pupil into the seed's 8 класс А for a while — the roster other specs count (#104).
+lockSeed('write')
 
 // Needs the local stack + `pnpm seed:users` (seed: 8 класс А as on А4 / А5).
 

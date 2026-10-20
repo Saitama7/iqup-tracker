@@ -317,6 +317,7 @@ export function PaymentsPage({
       key={search.student ?? 'none'}
       source={students.data}
       balances={balances.data ?? []}
+      balancesReady={balances.data !== undefined}
       today={today}
       initialStudent={search.student}
       isDesktop={isDesktop}
@@ -797,12 +798,14 @@ const targetValue = (t: Target) =>
 function RecordPanel({
   source,
   balances,
+  balancesReady,
   today,
   initialStudent,
   isDesktop,
 }: {
   source: StudentsSource | undefined
   balances: readonly StudentBalance[]
+  balancesReady: boolean
   today: string
   initialStudent: string | undefined
   isDesktop: boolean
@@ -921,6 +924,10 @@ function RecordPanel({
         )
       : []
   const blocked = warning.length > 0 && !confirmed
+  // #104: until the balances and the payments are in, the target falls back to «новый абонемент»
+  // (no current subscription seen) and «Похоже на повтор» stays silent — a click then bought a
+  // second package instead of paying the open one
+  const loading = !balancesReady || allPayments.isPending
 
   /** «8 класс А», «абонемент с 01.10» / «счёт за октябрь» — the toast. */
   const paidFor = (): [string | null, string] => {
@@ -976,6 +983,7 @@ function RecordPanel({
 
   function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (loading) return
     if (!student) {
       setError('Выберите ученика')
       return
@@ -1373,7 +1381,7 @@ function RecordPanel({
       {student && target && (
         <SubmitButton
           pending={pending}
-          disabled={blocked}
+          disabled={blocked || loading}
           describedBy={blocked ? `${id}-repeat` : undefined}
           variant={refund ? 'danger' : 'primary'}
           className="min-h-12"

@@ -2,6 +2,10 @@ import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import { KANYKEI, login, submitLogin } from './support/auth'
+import { lockSeed } from './support/seed-lock'
+
+// А8 counts Гульзат's groups («Математика · 4 группы»): no fixture group of hers while it reads (#104).
+lockSeed('read')
 
 // Needs the local stack + seed users + `supabase functions serve` (create-user).
 

@@ -29,3 +29,20 @@ export async function login(page: Page, user: Credentials) {
   await expect(page.getByRole('heading', { name: 'Вход' })).toHaveCount(0)
   await expect(page.getByRole('main')).toBeVisible()
 }
+
+/**
+ * Signs the page out and in as `user`. The session goes first, where the page already is: `/login`
+ * opened with a live session redirects to the home screen, and under load that redirect interrupted
+ * page.goto (#104).
+ */
+export async function switchUser(page: Page, user: Credentials) {
+  const clear = () =>
+    page.evaluate(() => {
+      localStorage.clear()
+      sessionStorage.clear()
+    })
+  if (page.url().startsWith('http')) await clear()
+  await page.goto('/login')
+  await clear()
+  await login(page, user)
+}
