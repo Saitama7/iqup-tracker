@@ -25,6 +25,8 @@ export interface TeacherGroup {
   group_type: GroupType
   status: 'forming' | 'active' | 'archived'
   room: string | null
+  /** The group's own lesson length (#100); null — the tariff's. */
+  lesson_duration_min: number | null
   schedule_rules: ScheduleRule[]
   enrollments: EnrollmentSource[]
   /** Lessons of the current month only. */

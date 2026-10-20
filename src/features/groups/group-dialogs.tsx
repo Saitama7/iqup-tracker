@@ -5,6 +5,7 @@ import { STUDENTS_KEY } from '@/features/students/api'
 import { firstName, formatDayMonth, formatLessonWhen } from '@/features/students/model'
 import { FormDialog, NativeSelect } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, labelClass, SubmitButton } from '@/features/tariffs/parts'
+import { tariffFor } from '@/features/tariffs/current'
 import { DateInput } from '@/components/ui/date-picker'
 import { maskTimeInput } from '@/lib/date-input'
 import { formatDateRu, parseDateRu } from '@/lib/time'
@@ -13,11 +14,13 @@ import {
   archiveGroup,
   cancelLesson,
   createExtraLesson,
+  durationForm,
   extraLessonForm,
   GROUPS_KEY,
   lessonsKey,
   rescheduleForm,
   rescheduleGroup,
+  setGroupDuration,
   setGroupStart,
   setGroupStatus,
   setSubstitute,
@@ -26,12 +29,14 @@ import {
   CANCEL_REASON_LABEL,
   currentRules,
   extraLessonDateError,
+  groupDuration,
   groupStartNote,
   horizon,
   MANUAL_CANCEL_REASONS,
   planLessonDates,
   type GroupRow,
   type LessonRow,
+  type TariffRow,
   type TeacherRow,
 } from './model'
 import { GroupTeacherSection } from './group-teacher-section'
@@ -378,6 +383,7 @@ export function EditGroupDialog({
   holidays,
   today,
   teachers,
+  tariffs,
   onDelete,
 }: {
   open: boolean
@@ -386,6 +392,7 @@ export function EditGroupDialog({
   holidays: readonly string[]
   today: string
   teachers: readonly TeacherRow[]
+  tariffs: readonly TariffRow[]
   /** «Удалить группу» (#73) — the page closes this dialog and opens the confirmation. */
   onDelete: () => void
 }) {
@@ -396,6 +403,9 @@ export function EditGroupDialog({
     time: useId(),
     from: useId(),
     fromHint: useId(),
+    duration: useId(),
+    durationFrom: useId(),
+    durationHint: useId(),
   }
   const queryClient = useQueryClient()
   const rules = currentRules(group.schedule_rules, today)
@@ -410,6 +420,13 @@ export function EditGroupDialog({
   const [from, setFrom] = useState(
     formatDateRu(group.start_date > today ? group.start_date : today),
   )
+  // #100: after-school has no length of its own (hours from the students' plans, И58)
+  const ownDuration = group.group_type !== 'afterschool'
+  const initialDuration = groupDuration(group, today, tariffs)
+  const [duration, setDuration] = useState(initialDuration !== null ? String(initialDuration) : '')
+  const [durationFrom, setDurationFrom] = useState(
+    formatDateRu(group.start_date > today ? group.start_date : today),
+  )
   const [teacherId, setTeacherId] = useState(group.teacher_id)
   const [teacherFrom, setTeacherFrom] = useState(formatDateRu(group.start_date))
   const [error, setError] = useState<string | null>(null)
@@ -419,6 +436,7 @@ export function EditGroupDialog({
   const startIso = parseDateRu(start)
   const startNote = startIso ? groupStartNote(group, startIso, holidaySet) : null
   const scheduleChanged = !sameDays(weekdays, initialDays) || time.trim() !== initialTime
+  const durationChanged = ownDuration && duration.trim() !== String(initialDuration ?? '')
   const fromIso = parseDateRu(from)
   const count =
     fromIso && weekdays.length > 0
@@ -436,10 +454,29 @@ export function EditGroupDialog({
       }
       const moved = startIso !== group.start_date ? await setGroupStart(group.id, startIso) : null
       if (status !== group.status) await setGroupStatus(group.id, status)
-      if (!scheduleChanged) return { moved, rescheduled: null }
-      const parsed = rescheduleForm.safeParse({ weekdays, time, validFrom: from })
-      if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Проверьте поля')
-      return { moved, rescheduled: await rescheduleGroup(group.id, parsed.data, until) }
+      let rescheduled = null
+      if (scheduleChanged) {
+        const parsed = rescheduleForm.safeParse({ weekdays, time, validFrom: from })
+        if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Проверьте поля')
+        rescheduled = await rescheduleGroup(group.id, parsed.data, until)
+      }
+      // after the schedule: the lessons it generated get the new length too
+      let lengthened = null
+      if (durationChanged) {
+        const parsed = durationForm.safeParse({ minutes: duration, from: durationFrom })
+        if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? 'Проверьте поля')
+        if (parsed.data.from < today) throw new Error('Длительность — с сегодняшнего дня или позже')
+        const tariffMin = tariffFor(
+          group.group_type,
+          parsed.data.from,
+          tariffs,
+        )?.lesson_duration_min
+        // the tariff's own length is not pinned: the group follows the tariff again (null)
+        const minutes = parsed.data.minutes === tariffMin ? null : parsed.data.minutes
+        const changed = await setGroupDuration(group.id, minutes, parsed.data.from)
+        lengthened = { minutes: parsed.data.minutes, from: parsed.data.from, changed }
+      }
+      return { moved, rescheduled, lengthened }
     },
     onSettled: async () => {
       // the start may be saved even if the schedule step fails — show what is in the database
@@ -453,7 +490,7 @@ export function EditGroupDialog({
           queryClient.invalidateQueries({ queryKey: [TEACHER_GROUPS_KEY] }),
         ])
     },
-    onSuccess: ({ moved, rescheduled }) => {
+    onSuccess: ({ moved, rescheduled, lengthened }) => {
       toast.success(
         [
           teacherId !== group.teacher_id ? 'Учитель группы изменён' : null,
@@ -464,6 +501,9 @@ export function EditGroupDialog({
             : null,
           rescheduled
             ? `Расписание изменено · удалено ${rescheduled.deleted}, создано ${rescheduled.created}`
+            : null,
+          lengthened
+            ? `Длительность — ${lengthened.minutes} мин с ${formatDayMonth(lengthened.from)} · изменено занятий: ${lengthened.changed}`
             : null,
         ]
           .filter(Boolean)
@@ -598,6 +638,46 @@ export function EditGroupDialog({
               </p>
             )}
         </fieldset>
+        {ownDuration && (
+          <fieldset className="flex min-w-0 flex-col gap-3.5 rounded-2xl border-[1.5px] border-line-strong p-3.5">
+            <legend className="px-1.5 text-[13px] font-extrabold">Длительность занятий</legend>
+            <div className="grid grid-cols-2 gap-2.5">
+              <Field id={ids.duration} label="Длительность, мин">
+                <input
+                  id={ids.duration}
+                  className={inputClass}
+                  type="number"
+                  inputMode="numeric"
+                  min={15}
+                  max={600}
+                  step={15}
+                  autoComplete="off"
+                  value={duration}
+                  onChange={(e) => {
+                    setDuration(e.target.value)
+                    setError(null)
+                  }}
+                />
+              </Field>
+              <Field id={ids.durationFrom} label="Действует с">
+                <DateInput
+                  id={ids.durationFrom}
+                  className={inputClass}
+                  value={durationFrom}
+                  min={today}
+                  aria-describedby={ids.durationHint}
+                  onChange={(v) => {
+                    setDurationFrom(v)
+                    setError(null)
+                  }}
+                />
+              </Field>
+            </div>
+            <p id={ids.durationHint} className="-mt-2 text-xs font-bold text-ink-muted">
+              Изменятся только запланированные занятия с этой даты
+            </p>
+          </fieldset>
+        )}
         {error && <ErrorText>{error}</ErrorText>}
         <SubmitButton pending={mutation.isPending}>Сохранить</SubmitButton>
         <SubmitButton variant="danger" onClick={onDelete}>

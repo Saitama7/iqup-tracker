@@ -20,7 +20,14 @@ import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
 import { lessonsQuery } from './api'
 import { ExtraLessonDialog } from './group-dialogs'
-import { currentRules, dayShort, lessonViews, scheduleLong, type LessonTone } from './model'
+import {
+  currentRules,
+  dayShort,
+  groupDuration,
+  lessonViews,
+  scheduleLong,
+  type LessonTone,
+} from './model'
 import { teacherGroupsQuery } from './teacher-api'
 import {
   capacity,
@@ -331,7 +338,7 @@ function todayLesson(group: TeacherGroup, today: string, now: number) {
 }
 
 function durationOf(group: TeacherGroup, source: TeacherGroupsSource, today: string) {
-  return tariffFor(group.group_type, today, source.tariffs)?.lesson_duration_min ?? null
+  return groupDuration(group, today, source.tariffs)
 }
 
 function MarkTodayLink({
@@ -691,7 +698,10 @@ function DesktopDetail({
   const tariff = tariffFor(group.group_type, today, source.tariffs)
   const caption = [
     GROUP_TYPE_LABEL[group.group_type],
-    scheduleLong(currentRules(group.schedule_rules, today), tariff?.lesson_duration_min ?? null),
+    scheduleLong(
+      currentRules(group.schedule_rules, today),
+      groupDuration(group, today, source.tariffs),
+    ),
     group.room ? `каб. ${group.room}` : null,
     tariff
       ? `${formatSom(tariff.package_price)} сом / ${lessonsWord(tariff.lessons_in_package)}`

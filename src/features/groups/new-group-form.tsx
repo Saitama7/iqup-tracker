@@ -68,6 +68,8 @@ export function NewGroupForm({
     teacher: useId(),
     days: useId(),
     time: useId(),
+    duration: useId(),
+    durationHint: useId(),
     start: useId(),
     room: useId(),
   }
@@ -81,6 +83,8 @@ export function NewGroupForm({
   const [teacherId, setTeacherId] = useState('')
   const [weekdays, setWeekdays] = useState<number[]>([])
   const [time, setTime] = useState('16:00')
+  // null until the admin edits it — then the tariff's length no longer fills it (#100)
+  const [durationInput, setDurationInput] = useState<string | null>(null)
   const [start, setStart] = useState(formatDateRu(today))
   const [room, setRoom] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -100,6 +104,11 @@ export function NewGroupForm({
   const startIso = parseDateRu(start)
   const timeOk = /^([01]?\d|2[0-3]):[0-5]\d$/.test(time.trim())
   const tariff = startIso ? tariffFor(groupType, startIso, data.tariffs) : null
+  // after-school: hours come from the students' plans (И58) — no length of its own
+  const ownDuration = groupType !== 'afterschool'
+  const tariffMin = tariff?.lesson_duration_min ?? null
+  const duration = durationInput ?? (tariffMin !== null ? String(tariffMin) : '')
+  const durationMin = ownDuration && /^\d+$/.test(duration.trim()) ? Number(duration) : null
   const dates =
     startIso && weekdays.length > 0
       ? planLessonDates({ weekdays, from: startIso, until, holidays: new Set(data.holidays) })
@@ -110,7 +119,7 @@ export function NewGroupForm({
           {
             weekdays,
             start: time.trim().padStart(5, '0'),
-            durationMin: tariff?.lesson_duration_min ?? 60,
+            durationMin: durationMin ?? tariffMin ?? 60,
           },
           teacher.id,
           startIso,
@@ -179,6 +188,8 @@ export function NewGroupForm({
       teacherId,
       weekdays,
       time,
+      // the tariff's own length is not pinned to the group: it follows the tariff (null)
+      durationMin: ownDuration && duration.trim() !== String(tariffMin) ? duration : null,
       startDate: start,
       room,
     })
@@ -211,6 +222,21 @@ export function NewGroupForm({
                 .join('; ')}.`,
           `Будет создано ${dates.length} ${plural(dates.length)} до ${formatDayMonth(until)}, праздники пропущены.`,
         ].join(' ')
+
+  const roomField = (
+    <Field id={ids.room} label="Кабинет">
+      <input
+        id={ids.room}
+        className={inputClass}
+        placeholder="1"
+        autoComplete="off"
+        value={room}
+        onChange={(e) => {
+          setRoom(e.target.value)
+        }}
+      />
+    </Field>
+  )
 
   return (
     <form
@@ -350,6 +376,30 @@ export function NewGroupForm({
             }}
           />
         </Field>
+        {ownDuration && (
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Field id={ids.duration} label="Длительность, мин">
+              <input
+                id={ids.duration}
+                className={inputClass}
+                type="number"
+                inputMode="numeric"
+                min={15}
+                max={600}
+                step={15}
+                autoComplete="off"
+                aria-describedby={ids.durationHint}
+                value={duration}
+                onChange={(e) => {
+                  setDurationInput(e.target.value)
+                }}
+              />
+            </Field>
+            <p id={ids.durationHint} className="text-xs font-bold text-ink-muted">
+              {tariffMin !== null ? `по тарифу — ${tariffMin} мин` : 'нет тарифа на дату'}
+            </p>
+          </div>
+        )}
         <Field id={ids.start} label="Первое занятие">
           <DateInput
             id={ids.start}
@@ -360,19 +410,9 @@ export function NewGroupForm({
             }}
           />
         </Field>
+        {ownDuration && roomField}
       </div>
-      <Field id={ids.room} label="Кабинет">
-        <input
-          id={ids.room}
-          className={inputClass}
-          placeholder="1"
-          autoComplete="off"
-          value={room}
-          onChange={(e) => {
-            setRoom(e.target.value)
-          }}
-        />
-      </Field>
+      {!ownDuration && roomField}
       <p
         role="status"
         aria-label="Предпросмотр"

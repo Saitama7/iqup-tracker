@@ -76,6 +76,7 @@ const group: TeacherGroup = {
   group_type: 'group',
   status: 'active',
   room: '2',
+  lesson_duration_min: null,
   schedule_rules: RULES,
   enrollments: [
     enrollment('Айжан Бекова', sub('a', [...times(7, 'present'), 'absent_frozen'])),

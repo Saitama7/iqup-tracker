@@ -23,6 +23,7 @@ const sourceSchema = z.object({
       group_type: GROUP_TYPE,
       status: z.enum(['forming', 'active', 'archived']),
       room: z.string().nullable(),
+      lesson_duration_min: z.number().int().nullable(),
       schedule_rules: z.array(
         z.object({
           weekday: z.number().int(),
@@ -72,7 +73,7 @@ export const teacherGroupsQuery = (userId: string, today: string) =>
         supabase
           .from('teachers')
           .select(
-            `rates:teacher_rates(percent, valid_from), groups(id, name, subject:subjects(name), group_type, status, room, schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(${ENROLLMENT_FIELDS}), lessons(id, lesson_date, planned_start, duration_min, status, ${PAY_ATTENDANCE_FIELDS}))`,
+            `rates:teacher_rates(percent, valid_from), groups(id, name, subject:subjects(name), group_type, status, room, lesson_duration_min, schedule_rules(weekday, start_time, valid_from, valid_to), enrollments(${ENROLLMENT_FIELDS}), lessons(id, lesson_date, planned_start, duration_min, status, ${PAY_ATTENDANCE_FIELDS}))`,
           )
           .eq('user_id', userId)
           .neq('groups.status', 'archived')
