@@ -10,7 +10,14 @@ describe('enrollForm', () => {
   it('parses the date and keeps the discount', () => {
     expect(
       enrollForm('2026-09-01').parse({ studentId, groupId, startDate: '12.10.2026', discount: 15 }),
-    ).toEqual({ studentId, groupId, startDate: '2026-10-12', discount: 15 })
+    ).toEqual({ studentId, groupId, startDate: '2026-10-12', discount: 15, lessons: null })
+  })
+
+  it('keeps «Уроков» (И89) and refuses a non-whole size', () => {
+    const base = { studentId, groupId, startDate: '12.10.2026', discount: 0 }
+    expect(enrollForm(null).parse({ ...base, lessons: 8 }).lessons).toBe(8)
+    expect(enrollForm(null).safeParse({ ...base, lessons: Number.NaN }).success).toBe(false)
+    expect(enrollForm(null).safeParse({ ...base, lessons: 0 }).success).toBe(false)
   })
 
   it('requires a group', () => {

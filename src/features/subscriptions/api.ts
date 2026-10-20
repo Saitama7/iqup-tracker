@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { supabase } from '@/lib/supabase/client'
 import { parseDateRu } from '@/lib/time'
-import { discountByPct } from './model'
+import { discountByPct, lessonsErrorMessage, subscriptionLessons } from './model'
 
 const tariffTermsSchema = z.object({
   group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
@@ -38,7 +38,7 @@ export const tariffsQuery = () =>
 
 // ─── Form input ─────────────────────────────────────────────────────────────
 
-/** «Зачислить в группу»: group, start date (ДД.ММ.ГГГГ), discount 0 / 5 / 15. */
+/** «Зачислить в группу»: group, start date (ДД.ММ.ГГГГ), discount 0 / 5 / 15, package size (И89). */
 export const enrollForm = (groupStart: string | null) =>
   z.object({
     studentId: z.uuid({ error: 'Выберите ученика' }),
@@ -56,6 +56,8 @@ export const enrollForm = (groupStart: string | null) =>
       return iso
     }),
     discount: z.union([z.literal(0), z.literal(5), z.literal(15)]),
+    /** «Уроков» (И89); null — the tariff's package; after-school ignores it. */
+    lessons: subscriptionLessons.default(null),
   })
 
 export type EnrollInput = z.output<ReturnType<typeof enrollForm>> & {
@@ -85,6 +87,7 @@ export function enrollErrorMessage(error: { code?: string; message?: string }): 
     if (m.includes('15 %')) return '15 % — только на первый абонемент бывшего ученика'
     if (m.includes('5 %')) return '5 % — один абонемент за каждого приведённого друга'
     if (m.includes('no tariff')) return 'На эту дату нет тарифа для группы'
+    if (m.includes('lessons must be')) return lessonsErrorMessage(m)
     if (m.includes('no planned hours'))
       return 'По графику нет часов ни в этом, ни в следующем месяце'
     if (m.includes('no hours') || m.includes('hours must'))
@@ -103,6 +106,7 @@ export async function enrollStudent(input: EnrollInput) {
     p_discount_pct: discount.pct,
     p_discount_reason: discount.reason,
     ...(input.plan ? { p_plan: input.plan } : {}),
+    p_lessons: input.lessons ?? undefined,
   })
   if (error) throw new EnrollError(enrollErrorMessage(error))
   const row = resultSchema.parse(data)[0]

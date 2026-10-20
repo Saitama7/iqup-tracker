@@ -274,6 +274,30 @@ describe('record panel', () => {
       'Откроется 20 уроков · 3 урока уйдут на погашение долга, доступно 17 · полная цена 7\u00a0400 · ЗП учителя считается от полной цены',
     )
   })
+  it('И89: a new 8-lesson package — presets and «откроет» from 4 800', () => {
+    expect(amountPresets('new', 4800, null)).toEqual([
+      { label: '2\u00a0400 · половина', amount: 2400 },
+      { label: '4\u00a0800 · полностью', amount: 4800 },
+    ])
+    expect(
+      paymentHint('new', 4800, { lessonsTotal: 8, priceFinal: 4800, priceFull: 4800 }, null),
+    ).toBe('Откроется 8 уроков · полная цена 4\u00a0800 · ЗП учителя считается от полной цены')
+    expect(
+      paymentHint('new', 2400, { lessonsTotal: 8, priceFinal: 4800, priceFull: 4800 }, null),
+    ).toMatch(/^Откроется 4 урока/)
+    // the toast: «… · абонемент 8 уроков с 20.10»
+    expect(subscriptionCaption({ started_at: '2026-10-20', lessons_total: 8 })).toBe(
+      'абонемент 8 уроков с 20.10',
+    )
+    expect(
+      recordedToast(
+        'Айжан Б.',
+        4800,
+        '8 класс А',
+        subscriptionCaption({ started_at: '2026-10-20', lessons_total: 8 }),
+      ),
+    ).toBe('Оплата записана: Айжан Б. · 4\u00a0800 сом · 8 класс А · абонемент 8 уроков с 20.10')
+  })
   it('a payment on the current one: what is opened', () => {
     const current = balance({ paidSom: 1600, paidLessons: 6, lessonsUsed: 2 })
     expect(
@@ -443,6 +467,39 @@ describe('«Похоже на повтор» (#93)', () => {
         '2026-10-18',
       ),
     ).toHaveLength(2)
+  })
+
+  it('И89: an 8-lesson package — «осталось 5 из 8», a new one not needed yet', () => {
+    const eight = balance({
+      subscriptionId: SUB,
+      lessonsTotal: 8,
+      pricedTotal: 8,
+      priceFinal: 4800,
+      paidSom: 4800,
+      paidLessons: 8,
+      lessonsUsed: 3,
+      lessonsLeft: 5,
+    })
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'new', groupId: G8A, balance: eight },
+        [pay({ paid_at: '2026-10-10T04:00:00Z', amount: 4800 })],
+        '2026-10-18',
+      ),
+    ).toEqual([
+      'Оплата 4\u00a0800 сом уже внесена 10.10 (абонемент с 01.10, осталось 5 из 8)',
+      'Текущий абонемент оплачен, осталось 5 уроков — новый ещё не нужен',
+    ])
+    // 2 left of 8 — time to buy the next one
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'new', groupId: G8A, balance: { ...eight, lessonsUsed: 6, lessonsLeft: 2 } },
+        [],
+        '2026-10-18',
+      ),
+    ).toEqual([])
   })
 
   it('an after-school invoice already paid', () => {

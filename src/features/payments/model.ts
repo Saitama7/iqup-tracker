@@ -411,9 +411,12 @@ export const REPEAT_DAYS = 14
 export function subscriptionCaption(s: {
   started_at?: string | null
   period_month?: string | null
+  /** «абонемент 8 уроков с 20.10» — the toast of a new package (И89). */
+  lessons_total?: number | null
 }): string {
   if (s.period_month) return `счёт за ${monthAccusative(s.period_month)}`
-  return s.started_at ? `абонемент с ${dayMonth(s.started_at)}` : 'абонемент'
+  const size = s.lessons_total ? ` ${s.lessons_total} ${pluralRu(s.lessons_total, LESSONS)}` : ''
+  return s.started_at ? `абонемент${size} с ${dayMonth(s.started_at)}` : `абонемент${size}`
 }
 
 /** The student's subscriptions by id — payment rows do not carry started_at. */

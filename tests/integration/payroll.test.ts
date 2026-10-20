@@ -9,6 +9,7 @@ import type { Database } from '../../src/lib/supabase/types.gen'
 import { phoneToEmail } from '../../supabase/functions/_shared/phone'
 import { localSupabase } from '../../scripts/local-supabase'
 import { ensureAfterschoolFixture, FIXTURE } from './afterschool-fixture'
+import { ensureSizeFixture, SIZE_FIXTURE } from './size-fixture'
 
 const env = localSupabase()
 
@@ -61,7 +62,10 @@ async function source(supabase: Client) {
   return { byKey, rates: rates.data }
 }
 
-beforeAll(ensureAfterschoolFixture)
+beforeAll(async () => {
+  await ensureAfterschoolFixture()
+  await ensureSizeFixture()
+})
 
 describe('v_payroll_preview ↔ calcMonth on the seed', () => {
   it('every teacher and month: the same lessons, hours, student-lessons and sum', async () => {
@@ -119,6 +123,21 @@ describe('v_payroll_preview ↔ calcMonth on the seed', () => {
       studentHours: 0,
       amount: 38_160,
     })
+  })
+})
+
+describe('subscription size (#101 fixture): pay by price_full / lessons_total (К6)', () => {
+  it('8 / 2 400 → 300 a lesson: 12 student-lessons × 300 × 45 % = 1 620', async () => {
+    const supabase = await signIn('0555 300 300')
+    const rows = await viewRows(supabase)
+    const june = rows.find((r) => r.teacher_id === SIZE_FIXTURE.teacher && r.month === '2025-06-01')
+    expect(june).toMatchObject({ lessons_held: 6, student_lessons: 12, base_amount: 1620 })
+    const { byKey, rates } = await source(supabase)
+    const ts = calcMonth(
+      byKey.get(`${SIZE_FIXTURE.teacher}|2025-06-01`) ?? [],
+      rates.filter((r) => r.teacher_id === SIZE_FIXTURE.teacher),
+    )
+    expect(ts.amount).toBe(1620)
   })
 })
 
