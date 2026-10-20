@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import { devices, expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
@@ -14,6 +13,7 @@ import {
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { KANYKEI, submitLogin, type Credentials } from './support/auth'
 import { lockSeed } from './support/seed-lock'
+import { wipeFixtures } from './support/undo-fixtures'
 
 // #82 · продлёнка по часам on the phone (390) and the desktop (1280): the admin enrolls a pupil in an
 // after-school group with the plan ПН 2 / СР 1 / ПТ 2 → the first month's invoice in hours × hour
@@ -78,35 +78,9 @@ const formatDayMonth = (iso: string) =>
   `${Number(iso.slice(8, 10))} ${GEN[Number(iso.slice(5, 7)) - 1]}`
 const ru = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`
 
-/** Everything the test made — as superuser with triggers off (payments are immutable, И41). */
+/** Everything the test made (#104: one shared wipe, errors surface). */
 function cleanup(groupName: string, pupil: string) {
-  const g = `(select id from public.groups where name = '${groupName}')`
-  const s = `(select id from public.students where full_name = '${pupil}')`
-  const e = `(select id from public.enrollments where student_id in ${s} or group_id in ${g})`
-  execFileSync(
-    'psql',
-    [
-      localSupabase().dbUrl,
-      '-v',
-      'ON_ERROR_STOP=1',
-      '-c',
-      [
-        'begin',
-        'set local session_replication_role = replica',
-        `delete from public.attendance where lesson_id in (select id from public.lessons where group_id in ${g}) or student_id in ${s}`,
-        `delete from public.payments where subscription_id in (select id from public.subscriptions where enrollment_id in ${e})`,
-        `delete from public.subscriptions where enrollment_id in ${e}`,
-        `delete from public.afterschool_plans where enrollment_id in ${e}`,
-        `delete from public.enrollments where id in ${e}`,
-        `delete from public.lessons where group_id in ${g}`,
-        `delete from public.schedule_rules where group_id in ${g}`,
-        `delete from public.groups where id in ${g}`,
-        `delete from public.students where id in ${s}`,
-        'commit',
-      ].join('; '),
-    ],
-    { stdio: 'ignore' },
-  )
+  wipeFixtures([groupName], [pupil])
 }
 
 test('продлёнка: график ПН 2 / СР 1 / ПТ 2 → счёт за месяц → оплата → отметка → ЗП учителя', async ({

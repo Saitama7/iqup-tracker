@@ -13,10 +13,13 @@ const GULZAT_ID = '00000000-0000-4000-a000-000000000001'
 const COMMENT = 'e2e superuser аванс'
 const isDesktop = (page: Page) => (page.viewportSize()?.width ?? 0) >= 900
 
+// A closed August left by a failed run would refuse the next close (#104): errors surface.
 async function cleanup() {
   const db = service()
-  await db.from('payroll_adjustments').delete().eq('comment', COMMENT)
-  await db.from('payroll_periods').delete().eq('month', '2026-08-01')
+  const advances = await db.from('payroll_adjustments').delete().eq('comment', COMMENT)
+  if (advances.error) throw advances.error
+  const periods = await db.from('payroll_periods').delete().eq('month', '2026-08-01')
+  if (periods.error) throw periods.error
 }
 
 test.beforeEach(cleanup)

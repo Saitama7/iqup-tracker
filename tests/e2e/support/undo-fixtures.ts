@@ -127,57 +127,68 @@ export async function holdLessons(
   }
 }
 
-// Payments are immutable (И41): removed as superuser with triggers off.
-function deletePayments(subIds: string[]) {
-  execFileSync(
-    'psql',
-    [
-      localSupabase().dbUrl,
-      '-v',
-      'ON_ERROR_STOP=1',
-      '-c',
-      'set session_replication_role = replica',
-      '-c',
-      `delete from public.payments where subscription_id in (${subIds.map((id) => `'${id}'::uuid`).join(', ')})`,
-    ],
-    { stdio: 'ignore' },
-  )
+const literal = (text: string) => `'${text.replaceAll("'", "''")}'`
+const textArray = (items: string[]) => `array[${items.map(literal).join(', ')}]::text[]`
+
+/**
+ * Removes the fixtures' groups and pupils with everything hanging on them, in one transaction as
+ * superuser, and throws if anything is left (#104). A1 / А3 run ensure_lessons for every running
+ * group: with a second worker on the dashboard it used to refill a group's lessons between their
+ * delete and the group's, the group delete failed on the FK unseen, and the group stayed for every
+ * later spec (Гульзат's «Мои группы», «Сегодня», «Не подтверждено»). Now the schedule goes first and
+ * the groups are locked — a concurrent ensure_lessons waits and then finds no group.
+ * Payments are immutable (И41): only their delete runs with triggers off.
+ */
+export function wipeFixtures(groupNames: string[], studentNames: string[]) {
+  const sql = `
+begin;
+create temp table w_groups on commit drop as
+  select id from public.groups where name = any(${textArray(groupNames)});
+create temp table w_students on commit drop as
+  select id from public.students where full_name = any(${textArray(studentNames)});
+delete from public.schedule_rules where group_id in (select id from w_groups);
+select 1 from public.groups where id in (select id from w_groups) for update;
+create temp table w_enrollments on commit drop as
+  select id from public.enrollments
+  where group_id in (select id from w_groups) or student_id in (select id from w_students);
+create temp table w_subscriptions on commit drop as
+  select id from public.subscriptions where enrollment_id in (select id from w_enrollments);
+create temp table w_lessons on commit drop as
+  select id from public.lessons where group_id in (select id from w_groups);
+delete from public.trials
+  where group_id in (select id from w_groups) or student_id in (select id from w_students)
+     or enrollment_id in (select id from w_enrollments) or lesson_id in (select id from w_lessons);
+delete from public.attendance
+  where lesson_id in (select id from w_lessons) or student_id in (select id from w_students)
+     or subscription_id in (select id from w_subscriptions);
+set local session_replication_role = replica;
+delete from public.payments where subscription_id in (select id from w_subscriptions);
+set local session_replication_role = origin;
+delete from public.subscriptions where id in (select id from w_subscriptions);
+delete from public.enrollments where id in (select id from w_enrollments);
+update public.lessons set makes_up_for_lesson_id = null
+  where makes_up_for_lesson_id in (select id from w_lessons);
+delete from public.lessons where group_id in (select id from w_groups);
+delete from public.groups where id in (select id from w_groups);
+update public.students set referred_by_student_id = null
+  where referred_by_student_id in (select id from w_students);
+delete from public.students where id in (select id from w_students);
+commit;
+`
+  try {
+    execFileSync('psql', [localSupabase().dbUrl, '-q', '-v', 'ON_ERROR_STOP=1', '-c', sql], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    })
+  } catch (err) {
+    const stderr = (err as { stderr?: Buffer }).stderr?.toString().trim()
+    throw new Error(`wipeFixtures(${groupNames.join(', ')}) failed: ${stderr ?? String(err)}`)
+  }
 }
 
-export async function cleanup(groupNames: string[], studentNames: string[]) {
-  const db = service()
-  const { data: students } = await db.from('students').select('id').in('full_name', studentNames)
-  const { data: groups } = await db.from('groups').select('id').in('name', groupNames)
-  const studentIds = (students ?? []).map((s) => s.id)
-  const groupIds = (groups ?? []).map((g) => g.id)
-  const byStudent =
-    studentIds.length > 0
-      ? await db.from('enrollments').select('id').in('student_id', studentIds)
-      : null
-  const byGroup =
-    groupIds.length > 0 ? await db.from('enrollments').select('id').in('group_id', groupIds) : null
-  const enrollmentIds = [
-    ...new Set([...(byStudent?.data ?? []), ...(byGroup?.data ?? [])].map((e) => e.id)),
-  ]
-  const { data: lessons } = await db.from('lessons').select('id').in('group_id', groupIds)
-  const lessonIds = (lessons ?? []).map((l) => l.id)
-  if (lessonIds.length > 0) await db.from('attendance').delete().in('lesson_id', lessonIds)
-  if (enrollmentIds.length > 0) {
-    const { data: subs } = await db
-      .from('subscriptions')
-      .select('id')
-      .in('enrollment_id', enrollmentIds)
-    const subIds = (subs ?? []).map((s) => s.id)
-    if (subIds.length > 0) {
-      deletePayments(subIds)
-      await db.from('subscriptions').delete().in('id', subIds)
-    }
-    await db.from('enrollments').delete().in('id', enrollmentIds)
-  }
-  if (lessonIds.length > 0) await db.from('lessons').delete().in('id', lessonIds)
-  await db.from('schedule_rules').delete().in('group_id', groupIds)
-  await db.from('groups').delete().in('id', groupIds)
-  await db.from('students').delete().in('id', studentIds)
+/** The specs' beforeEach / afterEach: `wipeFixtures`, awaitable. */
+export function cleanup(groupNames: string[], studentNames: string[]): Promise<void> {
+  wipeFixtures(groupNames, studentNames)
+  return Promise.resolve()
 }
 
 /** A client signed in as the admin (Каныкей) — for RPCs that check `is_admin()`. */
