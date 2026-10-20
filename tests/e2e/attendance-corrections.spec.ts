@@ -1,5 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
-import { GULZAT, KANYKEI, login, type Credentials } from './support/auth'
+import { GULZAT, KANYKEI, login, switchUser } from './support/auth'
 import { lockSeed } from './support/seed-lock'
 import {
   cleanup,
@@ -27,15 +27,6 @@ const shot = async (page: Page, name: string, testInfo: TestInfo) => {
 const names = (testInfo: TestInfo) => {
   const w = size(testInfo)
   return { group: `e2e исправление ${w}`, student: `Е2е Исправление ${w}` }
-}
-
-async function switchUser(page: Page, user: Credentials) {
-  await page.goto('/login')
-  await page.evaluate(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-  })
-  await login(page, user)
 }
 
 /** Group of Гульзат from 1 Oct with one pupil, the first lesson held with «Был». */

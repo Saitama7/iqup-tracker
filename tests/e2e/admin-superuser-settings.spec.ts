@@ -34,8 +34,10 @@ const freshPhone = () => `7${String(Math.floor(Math.random() * 1e8)).padStart(8,
 async function cleanup(testInfo: TestInfo) {
   const f = fixtures(testInfo)
   const db = service()
-  await db.from('holidays').delete().eq('day', f.holiday)
-  await db.from('tariffs').delete().eq('valid_from', f.plan)
+  const holidays = await db.from('holidays').delete().eq('day', f.holiday)
+  if (holidays.error) throw holidays.error
+  const tariffs = await db.from('tariffs').delete().eq('valid_from', f.plan)
+  if (tariffs.error) throw tariffs.error
 }
 
 // eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument

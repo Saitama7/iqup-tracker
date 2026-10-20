@@ -4,6 +4,7 @@ import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { KANYKEI, login } from './support/auth'
 import { lockSeed } from './support/seed-lock'
+import { wipeFixtures } from './support/undo-fixtures'
 
 // #60: a group created with start 18.09 is moved back to 01.09 from «Изменить группу», its student's
 // enrollment too (А6 «Изменить дату зачисления»); both moves are in the journal.
@@ -32,34 +33,9 @@ const serviceClient = () => {
   })
 }
 
-async function cleanup(groupName: string, studentName: string) {
-  const service = serviceClient()
-  const { data: students } = await service
-    .from('students')
-    .select('id')
-    .eq('full_name', studentName)
-  for (const { id } of students ?? []) {
-    const { data: enrollments } = await service
-      .from('enrollments')
-      .select('id')
-      .eq('student_id', id)
-    for (const e of enrollments ?? []) {
-      await service.from('subscriptions').delete().eq('enrollment_id', e.id)
-      await service.from('enrollments').delete().eq('id', e.id)
-    }
-    await service.from('students').delete().eq('id', id)
-  }
-  const { data: groups } = await service.from('groups').select('id').eq('name', groupName)
-  for (const { id } of groups ?? []) {
-    await service.from('lessons').delete().eq('group_id', id)
-    await service.from('schedule_rules').delete().eq('group_id', id)
-    await service.from('groups').delete().eq('id', id)
-  }
-}
-
 test('старт группы и дата зачисления задним числом: 18.09 → 01.09', async ({ page }, testInfo) => {
   const f = fixture(testInfo)
-  await cleanup(f.group, f.student)
+  wipeFixtures([f.group], [f.student])
   const service = serviceClient()
   try {
     // ВТ/ЧТ 19:00 from Friday 18 Sep 2026 — as Каныкей created the real groups on prod
@@ -204,6 +180,6 @@ test('старт группы и дата зачисления задним чи
     ).toBeVisible()
     if (isDesktop(page)) await page.screenshot({ path: testInfo.outputPath('audit.png') })
   } finally {
-    await cleanup(f.group, f.student)
+    wipeFixtures([f.group], [f.student])
   }
 })

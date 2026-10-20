@@ -1,5 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
-import { GULZAT, KANYKEI, login, type Credentials } from './support/auth'
+import { GULZAT, KANYKEI, login, switchUser } from './support/auth'
 import { lockSeed } from './support/seed-lock'
 import { cleanup, makeEnrollment, makeGroup, service, teacherId } from './support/undo-fixtures'
 
@@ -25,15 +25,6 @@ const names = (testInfo: TestInfo) => {
 
 /** Today in Asia/Bishkek (UTC+6, no DST). */
 const bishkekToday = () => new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10)
-
-async function switchUser(page: Page, user: Credentials) {
-  await page.goto('/login')
-  await page.evaluate(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-  })
-  await login(page, user)
-}
 
 async function markOf(lessonId: string, studentId: string) {
   const { data } = await service()
@@ -61,7 +52,17 @@ test('админ: «предупредил» заранее → учитель �
 }, testInfo) => {
   const n = names(testInfo)
   const today = bishkekToday()
-  const groupId = await makeGroup(n.group, await teacherId('Гульзат%'), '2026-10-01')
+  // No lesson of the group today (#104): the dialog offers today's one only until it starts (И56),
+  // so on a lesson day the spec and the dialog disagreed on «the next lesson» around 19:00.
+  const weekday = new Date(`${today}T00:00:00Z`).getUTCDay()
+  const weekdays = [2, 4].includes(weekday) ? [1, 3] : [2, 4]
+  const groupId = await makeGroup(
+    n.group,
+    await teacherId('Гульзат%'),
+    '2026-10-01',
+    'mini',
+    weekdays,
+  )
   const warned = await makeEnrollment(n.warned, groupId, '2026-10-01')
   const missed = await makeEnrollment(n.missed, groupId, '2026-10-01')
   const { data: next } = await service()

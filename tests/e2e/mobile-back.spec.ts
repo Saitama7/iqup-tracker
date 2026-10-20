@@ -3,6 +3,10 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { GULZAT, KANYKEI, login } from './support/auth'
+import { lockSeed } from './support/seed-lock'
+
+// Walks the seed's screens by position: no fixture group in the lists meanwhile (#104).
+lockSeed('read')
 
 // #57: one «‹ Родитель» button on every phone screen off the tab bar; sheets close on the system
 // back. Needs the local stack + `pnpm seed:users`. Read-only on the seed.
