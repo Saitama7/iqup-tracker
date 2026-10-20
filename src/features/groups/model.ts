@@ -280,7 +280,7 @@ export function scheduleLong(rules: readonly ScheduleRule[], durationMin: number
 
 /**
  * Length of the group's new lessons on `day` (#100, И88): its own, else the tariff's —
- * group_lesson_duration (0029). Existing lessons carry their own lessons.duration_min.
+ * group_lesson_duration (0031). Existing lessons carry their own lessons.duration_min.
  */
 export function groupDuration(
   group: { group_type: GroupType; lesson_duration_min: number | null },

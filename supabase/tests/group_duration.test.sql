@@ -1,4 +1,4 @@
--- #100 · groups.lesson_duration_min / set_group_duration (0029): the group's own length wins over the
+-- #100 · groups.lesson_duration_min / set_group_duration (0031): the group's own length wins over the
 -- tariff for new lessons (create_group, generate_lessons, generate_lessons_on, create_extra_lesson);
 -- set_group_duration — admin only, planned lessons from a date, held / cancelled untouched, closed
 -- period and after-school refused, the journal. Self-contained fixtures in 2004, rolled back.
