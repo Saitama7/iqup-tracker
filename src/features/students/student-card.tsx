@@ -5,6 +5,7 @@ import { availableLessons, debtOverLimit, payState } from '@/features/payments/b
 import { formatSom } from '@/features/tariffs/model'
 import { cardClass, chipClass } from '@/features/tariffs/parts'
 import { EnrollmentMenu, type ExitAction } from '@/features/subscriptions/enrollment-exit'
+import { pluralRu } from '@/features/lessons/select'
 import { cn } from '@/lib/utils'
 import {
   discountCaption,
@@ -130,8 +131,8 @@ function RefundedBody({ e }: { e: EnrollmentView }) {
   return (
     <p className="text-sm font-bold text-ink-muted">
       Абонемент возвращён
-      {e.refunded ? ` · ${e.refunded.subscription.lessons_total} уроков` : ''}. Новый создаётся при
-      оплате или зачислении.
+      {e.refunded ? ` · ${lessonsCaption(e.refunded.subscription.lessons_total)}` : ''}. Новый
+      создаётся при оплате или зачислении.
     </p>
   )
 }
@@ -227,7 +228,7 @@ export function EnrollmentCard({
           <div className="grid grid-cols-2 gap-2.5 min-[1200px]:grid-cols-4">
             <Tile
               label="Абонемент"
-              value={`${sub.lessons_total} уроков`}
+              value={lessonsCaption(sub.lessons_total)}
               caption={priceCaption(sub)}
             />
             <Tile
@@ -302,7 +303,7 @@ export function MobileEnrollment({
       </div>
       <p className="text-xs font-bold text-ink-muted">
         {sub
-          ? `${b?.unit === 'hour' ? `${formatHours(b.lessonsTotal)} ч${b.periodMonth ? ` за ${monthAccusative(b.periodMonth)}` : ''}` : `${sub.lessons_total} уроков`} · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
+          ? `${b?.unit === 'hour' ? `${formatHours(b.lessonsTotal)} ч${b.periodMonth ? ` за ${monthAccusative(b.periodMonth)}` : ''}` : lessonsCaption(sub.lessons_total)} · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
           : enrollmentCaption(e, today)}
       </p>
       {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
@@ -326,3 +327,6 @@ export function MobileEnrollment({
     </section>
   )
 }
+
+/** «12 уроков», «4 урока» — the package size (И89: any 1 … 2 × package). */
+const lessonsCaption = (n: number) => `${n} ${pluralRu(n, ['урок', 'урока', 'уроков'])}`

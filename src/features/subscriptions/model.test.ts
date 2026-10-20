@@ -1,10 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import type { TariffTerms } from '@/features/tariffs/current'
-import { defaultDiscount, discountAvailability, priceFinal, quoteSubscription } from './model'
+import {
+  defaultDiscount,
+  discountAvailability,
+  lessonSizePresets,
+  lessonsErrorMessage,
+  maxSubscriptionLessons,
+  priceFinal,
+  quoteSubscription,
+} from './model'
 
 const tariffs: TariffTerms[] = [
   { group_type: 'group', valid_from: '2025-09-01', lessons_in_package: 12, package_price: 3000 },
   { group_type: 'group', valid_from: '2026-09-01', lessons_in_package: 12, package_price: 3200 },
+  {
+    group_type: 'individual',
+    valid_from: '2026-09-01',
+    lessons_in_package: 12,
+    package_price: 7200,
+  },
   {
     group_type: 'afterschool',
     valid_from: '2026-09-01',
@@ -44,6 +58,48 @@ describe('quoteSubscription', () => {
       lessonsTotal: 20,
       priceFinal: 7400,
     })
+  })
+
+  it('И89: a size at the same lesson price — 8 of 7 200 / 12 = 4 800', () => {
+    expect(quoteSubscription('individual', '2026-10-20', tariffs, 0, 8)).toMatchObject({
+      lessonsTotal: 8,
+      priceFull: 4800,
+      priceFinal: 4800,
+    })
+    // the discount (В5) is from the sized price
+    expect(quoteSubscription('individual', '2026-10-20', tariffs, 15, 8)).toMatchObject({
+      priceFull: 4800,
+      priceFinal: 4080,
+    })
+    // 3 200 / 12 × 8 = 2 133,33 → 2 133; 4 → 1 067
+    expect(quoteSubscription('group', '2026-10-20', tariffs, 0, 8)?.priceFull).toBe(2133)
+    expect(quoteSubscription('group', '2026-10-20', tariffs, 0, 4)?.priceFull).toBe(1067)
+    // up to 2 × package
+    expect(quoteSubscription('group', '2026-10-20', tariffs, 0, 24)?.priceFull).toBe(6400)
+  })
+
+  it('И89: null / out of 1 … 2 × package — the tariff package', () => {
+    for (const n of [null, 0, 25, 2.5, Number.NaN]) {
+      expect(quoteSubscription('individual', '2026-10-20', tariffs, 0, n)).toMatchObject({
+        lessonsTotal: 12,
+        priceFull: 7200,
+      })
+    }
+  })
+
+  it('size chips: the package, 8, 4; «другое» up to 2 × package', () => {
+    const individual: TariffTerms = {
+      group_type: 'individual',
+      valid_from: '2026-09-01',
+      lessons_in_package: 12,
+      package_price: 7200,
+    }
+    expect(lessonSizePresets(individual)).toEqual([12, 8, 4])
+    expect(maxSubscriptionLessons(individual)).toBe(24)
+    expect(
+      lessonSizePresets({ ...individual, lessons_in_package: 8, package_price: 4800 }),
+    ).toEqual([8, 4])
+    expect(lessonsErrorMessage('lessons must be 1 … 24')).toBe('Уроков в абонементе — от 1 до 24')
   })
 
   it('no tariff before the first version', () => {

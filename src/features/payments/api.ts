@@ -5,7 +5,11 @@ import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { supabase } from '@/lib/supabase/client'
 import { parseDateRu } from '@/lib/time'
-import { discountByPct } from '@/features/subscriptions/model'
+import {
+  discountByPct,
+  lessonsErrorMessage,
+  subscriptionLessons,
+} from '@/features/subscriptions/model'
 import type { SubscriptionBalance } from './balance'
 
 export const PAYMENTS_KEY = 'payments'
@@ -283,6 +287,8 @@ export const paymentForm = (today: string) =>
       target: z.literal('new'),
       enrollmentId: z.uuid({ error: 'Выберите группу' }),
       discount: z.union([z.literal(0), z.literal(5), z.literal(15)]),
+      /** Package size (И89); null — the tariff's package. Bounds — subscriptionLessons. */
+      lessons: subscriptionLessons,
       amount,
       method: z.enum(['cash', 'mbank']),
       paidOn: paidOn(today),
@@ -332,6 +338,7 @@ export function paymentErrorMessage(error: { code?: string; message?: string }):
     if (m.includes('finished')) return 'Ученик уже не занимается в этой группе'
     if (m.includes('15 %')) return '15 % — только на первый абонемент бывшего ученика'
     if (m.includes('5 %')) return '5 % — один абонемент за каждого приведённого друга'
+    if (m.includes('lessons must be')) return lessonsErrorMessage(m)
     if (m.includes('no tariff')) return 'На сегодня нет тарифа для группы'
     if (m.includes('between 0')) return 'Возврат — не больше, чем оплачено'
     return 'Проверьте сумму и дату'
@@ -362,6 +369,7 @@ export async function recordPayment(input: PaymentInput): Promise<void> {
     p_comment: nullable(input.comment) ?? undefined,
     p_discount_pct: discount.pct,
     p_discount_reason: discount.reason,
+    p_lessons: input.lessons ?? undefined,
   })
   if (error) throw new PaymentError(paymentErrorMessage(error))
 }
