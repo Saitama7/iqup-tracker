@@ -21,7 +21,7 @@ export const FIXTURE = {
 
 const ADMIN_PHONE = '0555 775 772' // Алишка
 
-async function admin() {
+export async function admin() {
   const supabase = createClient<Database>(env.apiUrl, env.anonKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
@@ -33,14 +33,14 @@ async function admin() {
   return supabase
 }
 
-function ok<T>({ data, error }: { data: T; error: unknown }): NonNullable<T> {
+export function ok<T>({ data, error }: { data: T; error: unknown }): NonNullable<T> {
   if (error) throw error instanceof Error ? error : new Error(JSON.stringify(error))
   if (data === null || data === undefined) throw new Error('fixture: no data')
   return data
 }
 
 /** A call returning nothing (insert without select, void RPC). */
-function done({ error }: { error: unknown }): void {
+export function done({ error }: { error: unknown }): void {
   if (error) throw error instanceof Error ? error : new Error(JSON.stringify(error))
 }
 

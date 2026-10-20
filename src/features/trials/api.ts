@@ -5,7 +5,7 @@ import { queryOptions, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { z } from 'zod'
 import { subjectName } from '@/features/subjects/api'
-import { discountByPct } from '@/features/subscriptions/model'
+import { discountByPct, lessonsErrorMessage } from '@/features/subscriptions/model'
 import { normalizePhone } from '@/lib/phone'
 import { supabase } from '@/lib/supabase/client'
 import type { TablesInsert } from '@/lib/supabase/types.gen'
@@ -142,6 +142,7 @@ export function trialErrorMessage(error: { code?: string; message?: string }): s
   if (m.includes('archived')) return 'Группа в архиве'
   if (m.includes('outside the group dates')) return 'Дата начала — вне дат группы'
   if (m.includes('no tariff')) return 'На эту дату нет тарифа для группы'
+  if (m.includes('lessons must be')) return lessonsErrorMessage(m)
   if (error.code === '42501') return 'Недостаточно прав'
   return 'Не удалось сохранить. Проверьте интернет и попробуйте ещё раз.'
 }
@@ -246,6 +247,8 @@ export interface EnrollTrialInput {
   /** YYYY-MM-DD */
   startDate: string
   discount: 0 | 5 | 15
+  /** «Уроков» (И89); null — the tariff's package. */
+  lessons?: number | null
 }
 
 /** «Оплатил → зачислить» (Ж5): lead → student, enrollment + subscription, trial → enrolled. */
@@ -256,6 +259,7 @@ export async function enrollTrial(input: EnrollTrialInput) {
     p_start_date: input.startDate,
     p_discount_pct: discount.pct,
     p_discount_reason: discount.reason,
+    p_lessons: input.lessons ?? undefined,
   })
   if (error) fail(error)
   const row = z

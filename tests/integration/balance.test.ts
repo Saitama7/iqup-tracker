@@ -13,6 +13,7 @@ import type { Database } from '../../src/lib/supabase/types.gen'
 import { phoneToEmail } from '../../supabase/functions/_shared/phone'
 import { localSupabase } from '../../scripts/local-supabase'
 import { ensureAfterschoolFixture, FIXTURE } from './afterschool-fixture'
+import { ensureSizeFixture, SIZE_FIXTURE } from './size-fixture'
 
 const env = localSupabase()
 
@@ -75,17 +76,23 @@ async function tsBalances(supabase: Client) {
   return [...byStudentGroup.values()].flatMap((subs) => subscriptionBalances(subs))
 }
 
-/** Subscription ids of the #82 fixture group — kept out of the seed's own numbers. */
-async function fixtureSubscriptions(supabase: Client) {
+/** Subscription ids of the fixture groups (#82, #101) — kept out of the seed's own numbers. */
+async function fixtureSubscriptions(
+  supabase: Client,
+  groups = [FIXTURE.group, SIZE_FIXTURE.group],
+) {
   const { data, error } = await supabase
     .from('subscriptions')
     .select('id, enrollment:enrollments!inner(group_id)')
-    .eq('enrollment.group_id', FIXTURE.group)
+    .in('enrollment.group_id', groups)
   if (error) throw error
   return new Set(data.map((s) => s.id))
 }
 
-beforeAll(ensureAfterschoolFixture)
+beforeAll(async () => {
+  await ensureAfterschoolFixture()
+  await ensureSizeFixture()
+})
 
 const asView = (b: SubscriptionBalance) => ({
   subscription_id: b.subscriptionId,
@@ -135,7 +142,7 @@ describe('after-school by hours (#82 fixture)', () => {
     const [view, ts, fixture] = await Promise.all([
       viewRows(supabase),
       tsBalances(supabase),
-      fixtureSubscriptions(supabase),
+      fixtureSubscriptions(supabase, [FIXTURE.group]),
     ])
     const own = ts.filter((b) => fixture.has(b.subscriptionId))
     expect(own).toHaveLength(3)
@@ -186,6 +193,47 @@ describe('after-school by hours (#82 fixture)', () => {
     expect(virtual).toEqual([
       { student_id: FIXTURE.f2, debt_lessons: 6, debt_som: 702, unbilled: true },
     ])
+  })
+})
+
+describe('subscription size (#101 fixture): 8 lessons at the same lesson price', () => {
+  it('8 / 2 400: paid → 8 of 8, 6 used → refund 2 × 300; half paid → debt 2 × 300', async () => {
+    const supabase = await signIn('0555 300 300')
+    const [view, ts] = await Promise.all([viewRows(supabase), tsBalances(supabase)])
+    const ids = await fixtureSubscriptions(supabase, [SIZE_FIXTURE.group])
+    const { data: subs, error } = await supabase
+      .from('subscriptions')
+      .select(
+        'id, lessons_total, price_full, price_final, enrollment:enrollments!inner(student_id)',
+      )
+      .in('id', [...ids])
+    if (error) throw error
+    expect(subs.map((s) => [s.lessons_total, s.price_full, s.price_final])).toEqual([
+      [8, 2400, 2400],
+      [8, 2400, 2400],
+    ])
+    const of = (student: string) => {
+      const id = subs.find((s) => s.enrollment.student_id === student)?.id
+      const b = ts.find((x) => x.subscriptionId === id)
+      if (!b) throw new Error('no fixture balance')
+      expect(view.get(b.subscriptionId)).toEqual(asView(b))
+      return b
+    }
+    expect(of(SIZE_FIXTURE.z1)).toMatchObject({
+      lessonsTotal: 8,
+      paidLessons: 8,
+      lessonsUsed: 6,
+      lessonsLeft: 2,
+      debtLessons: 0,
+      refundSuggested: 600,
+    })
+    expect(of(SIZE_FIXTURE.z2)).toMatchObject({
+      paidLessons: 4,
+      lessonsUsed: 6,
+      debtLessons: 2,
+      debtSom: 600,
+      refundSuggested: 0,
+    })
   })
 })
 
@@ -277,7 +325,7 @@ describe('delete_payment / update_payment (#92): the view and balance.ts still a
   it('an extra payment on an hour invoice with credit is deleted (#82 fixture)', async () => {
     const supabase = await signIn('0555 775 772')
     const before = await expectAgree(supabase)
-    const fixture = await fixtureSubscriptions(supabase)
+    const fixture = await fixtureSubscriptions(supabase, [FIXTURE.group])
     const invoice = [...before.values()].find(
       (r) => r.subscription_id && fixture.has(r.subscription_id) && (r.paid_som ?? 0) > 0,
     )

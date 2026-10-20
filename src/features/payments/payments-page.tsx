@@ -21,10 +21,12 @@ import {
 import { NativeSelect } from '@/features/students/parts'
 import { StudentPicker, type StudentPickerOption } from '@/features/students/student-picker'
 import { tariffsQuery } from '@/features/subscriptions/api'
+import { LessonsField, lessonsValid } from '@/features/subscriptions/lessons-field'
 import {
   DISCOUNTS,
   defaultDiscount,
   discountAvailability,
+  maxSubscriptionLessons,
   quoteSubscription,
   type DiscountPct,
 } from '@/features/subscriptions/model'
@@ -822,6 +824,8 @@ function RecordPanel({
   const [picked, setTarget] = useState<Target | null>(null)
   const [amount, setAmount] = useState('')
   const [pickedDiscount, setDiscount] = useState<DiscountPct | null>(null)
+  /** «Уроков» of a new package (И89); null — the tariff's package. */
+  const [lessons, setLessons] = useState<number | null>(null)
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [paidOn, setPaidOn] = useState(formatDateRu(today))
   const [comment, setComment] = useState('')
@@ -900,6 +904,7 @@ function RecordPanel({
           today,
           tariffs.data,
           target.kind === 'new' ? discount : 0,
+          target.kind === 'new' ? lessons : null,
         )
       : null
 
@@ -910,6 +915,7 @@ function RecordPanel({
     setError(null)
     setTarget(null)
     setDiscount(null)
+    setLessons(null)
     setConfirmed(false)
   }
 
@@ -944,7 +950,10 @@ function RecordPanel({
     const start = [today, e?.start_date ?? '', ...(e?.subscriptions.map((x) => x.started_at) ?? [])]
       .sort()
       .at(-1)
-    return [g?.name ?? null, subscriptionCaption({ started_at: start })]
+    return [
+      g?.name ?? null,
+      subscriptionCaption({ started_at: start, lessons_total: quote?.lessonsTotal }),
+    ]
   }
 
   const onDone = async (text: string) => {
@@ -1009,6 +1018,10 @@ function RecordPanel({
       back.mutate(parsed.data)
       return
     }
+    if (target.kind === 'new' && quote && !lessonsValid(quote.tariff, lessons)) {
+      setError(`Уроков в абонементе — от 1 до ${maxSubscriptionLessons(quote.tariff)}`)
+      return
+    }
     const parsed = paymentForm(today).safeParse(
       target.kind === 'current'
         ? {
@@ -1023,6 +1036,7 @@ function RecordPanel({
             target: 'new',
             enrollmentId: target.enrollmentId,
             discount,
+            lessons,
             amount,
             method,
             paidOn,
@@ -1162,6 +1176,7 @@ function RecordPanel({
                   : { kind: 'new', enrollmentId: ref },
               )
               setDiscount(null)
+              setLessons(null)
               setAmount('')
               setError(null)
               setConfirmed(false)
@@ -1280,6 +1295,19 @@ function RecordPanel({
               </Field>
             )}
           </div>
+          {target.kind === 'new' && !refund && quote && (
+            <LessonsField
+              key={targetValue(target)}
+              id={`${id}-lessons`}
+              tariff={quote.tariff}
+              value={lessons}
+              onChange={(n) => {
+                setLessons(n)
+                setAmount('')
+                setError(null)
+              }}
+            />
+          )}
           {refund && current && (
             <p className="text-xs font-bold text-ink-muted">{refundHint(current)}</p>
           )}

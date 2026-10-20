@@ -205,7 +205,12 @@ export function EnrollTrialDialog({
       description={`${trial.full_name} · был(а) на пробном · абонемент со следующего занятия`}
       notice={warning}
       submit={(input) =>
-        enrollTrial({ trialId: trial.id, startDate: input.startDate, discount: input.discount })
+        enrollTrial({
+          trialId: trial.id,
+          startDate: input.startDate,
+          discount: input.discount,
+          lessons: input.lessons,
+        })
       }
       onEnrolled={() => {
         void invalidate(true)

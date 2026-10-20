@@ -427,6 +427,27 @@ describe('subscriptions', () => {
     expect(e.link).toMatchObject({ to: '/admin/students/$studentId', params: { studentId: ALINA } })
   })
 
+  it('И89: an 8-lesson package — «новый абонемент 8 уроков, 4 800 сом»', () => {
+    const e = describeAuditRow(
+      row({
+        entity: 'subscriptions',
+        kind: 'payment',
+        action: 'insert',
+        after: {
+          ...sub,
+          lessons_total: 8,
+          price_full: 4800,
+          price_final: 4800,
+          discount_percent: 0,
+        },
+      }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Алина Исакова · Математика · 8 класс Б — новый абонемент 8 уроков, 4 800 сом',
+    )
+  })
+
   it('refund and exhausted', () => {
     const refund = row({
       entity: 'subscriptions',

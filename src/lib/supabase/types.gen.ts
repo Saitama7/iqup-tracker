@@ -1569,6 +1569,7 @@ export type Database = {
           p_discount_pct?: number
           p_discount_reason?: Database['public']['Enums']['discount_reason']
           p_enrollment_id: string
+          p_lessons?: number
           p_method: Database['public']['Enums']['payment_method']
           p_paid_on?: string
         }
@@ -1680,6 +1681,7 @@ export type Database = {
           p_discount_pct?: number
           p_discount_reason?: Database['public']['Enums']['discount_reason']
           p_group_id: string
+          p_lessons?: number
           p_plan?: number[]
           p_start_date: string
           p_student_id: string
@@ -1693,6 +1695,7 @@ export type Database = {
         Args: {
           p_discount_pct?: number
           p_discount_reason?: Database['public']['Enums']['discount_reason']
+          p_lessons?: number
           p_start_date: string
           p_trial_id: string
         }
@@ -2002,6 +2005,7 @@ export type Database = {
           used_som: number
         }[]
       }
+      subscription_size_price: { Args: { p_lessons: number; p_tariff_id: string }; Returns: number }
       tariff_duration: {
         Args: { p_date: string; p_group_type: Database['public']['Enums']['group_type'] }
         Returns: number

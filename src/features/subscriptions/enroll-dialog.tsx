@@ -24,12 +24,14 @@ import {
   validPlan,
 } from '@/features/afterschool/model'
 import { PlanEditor } from '@/features/afterschool/plan-editor'
+import { LessonsField, lessonsValid } from './lessons-field'
 import { tariffFor } from '@/features/tariffs/current'
 import { enrollForm, enrollStudent, tariffsQuery, type EnrollInput, type TariffRow } from './api'
 import {
   defaultDiscount,
   discountAvailability,
   discountByPct,
+  maxSubscriptionLessons,
   quoteSubscription,
   type DiscountHistory,
   type DiscountPct,
@@ -94,6 +96,8 @@ export function EnrollDialog({
   const [discount, setDiscount] = useState<DiscountPct>(() =>
     student ? defaultDiscount(student) : 0,
   )
+  /** «Уроков» (И89); null — the tariff's package. */
+  const [lessons, setLessons] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const group = groups.find((g) => g.id === groupId) ?? null
@@ -113,7 +117,13 @@ export function EnrollDialog({
   )
   const quote =
     group && startIso && tariffs.data
-      ? quoteSubscription(group.group_type, startIso, tariffs.data, discount)
+      ? quoteSubscription(
+          group.group_type,
+          startIso,
+          tariffs.data,
+          discount,
+          afterschool ? null : lessons,
+        )
       : null
   const hourBill =
     afterschool && startIso && lessonDates.data && tariffs.data
@@ -143,6 +153,7 @@ export function EnrollDialog({
       groupId,
       startDate: date,
       discount,
+      lessons: afterschool ? null : lessons,
     })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Проверьте поля формы')
@@ -150,6 +161,10 @@ export function EnrollDialog({
     }
     if (!quote) {
       setError('На эту дату нет тарифа для группы')
+      return
+    }
+    if (!afterschool && !lessonsValid(quote.tariff, lessons)) {
+      setError(`Уроков в абонементе — от 1 до ${maxSubscriptionLessons(quote.tariff)}`)
       return
     }
     if (afterschool && !validPlan(hours)) {
@@ -210,6 +225,7 @@ export function EnrollDialog({
             onChange={(e) => {
               setGroupId(e.target.value)
               setPlan(null)
+              setLessons(null)
               setError(null)
             }}
           >
@@ -273,6 +289,19 @@ export function EnrollDialog({
             })}
           </div>
         </div>
+
+        {!afterschool && quote && (
+          <LessonsField
+            key={groupId}
+            id={`${ids.group}-lessons`}
+            tariff={quote.tariff}
+            value={lessons}
+            onChange={(n) => {
+              setLessons(n)
+              setError(null)
+            }}
+          />
+        )}
 
         {afterschool && !submit && (
           <PlanEditor hours={hours} onChange={setPlan} groupWeekdays={weekdays} />
