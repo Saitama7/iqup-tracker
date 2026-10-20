@@ -58,7 +58,8 @@ pnpm test:integration    # supabase-js + create-user против локальн
 pnpm gen:types           # supabase gen types typescript --local > src/lib/supabase/types.gen.ts
 pnpm test                # vitest
 pnpm e2e                 # playwright webkit 390 + 1280; нужен supabase start + pnpm seed:users; E2E_PORT=… если 4173 занят
-                         # payroll.spec сверяет сид (сентябрь проведён, 38 160 у Гульзат); спеки, временно меняющие сентябрь/октябрь, берут lockSeed('write') из tests/e2e/support/seed-lock.ts
+                         # payroll.spec сверяет сид (сентябрь проведён, 38 160 у Гульзат); спеки, временно меняющие сид (группы/ученики/занятия, тарифы, праздники), берут lockSeed('write'), пинящие его числа — lockSeed('read') (tests/e2e/support/seed-lock.ts)
+                         # фикстуры групп/учеников чистит wipeFixtures (support/undo-fixtures.ts, одна транзакция, ошибки наружу), смена пользователя — switchUser (support/auth.ts); CI идёт в 2 воркера
 pnpm build               # деплой — push в main (Cloudflare Pages)
 ```
 

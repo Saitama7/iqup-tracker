@@ -5,6 +5,11 @@ import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { GULZAT, KANYKEI, login } from './support/auth'
 import { groupTeacher } from './support/db'
+import { lockSeed } from './support/seed-lock'
+
+// Pins Гульзат's seed day (lessons, «Не подтверждено», 8 pupils in 8 класс А): no spec may add or
+// hold rows of the seed while it reads (#104).
+lockSeed('read')
 
 // Needs the local stack + `pnpm seed:users`. Seed: Гульзат teaches 8 класс А 09:00, 6 класс 11:00,
 // 8 класс Б 14:00 on ВТ/ЧТ/СБ and 5 класс 15:00 on ПН/СР/ПТ (lessons from 1 Sep, ensure_lessons).

@@ -1,5 +1,5 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
-import { GULZAT, KANYKEI, login, type Credentials } from './support/auth'
+import { GULZAT, KANYKEI, login, switchUser } from './support/auth'
 import { lockSeed } from './support/seed-lock'
 import {
   cleanup,
@@ -48,15 +48,6 @@ const names = (testInfo: TestInfo) => {
       d: student('Отметка'),
     },
   }
-}
-
-async function switchUser(page: Page, user: Credentials) {
-  await page.goto('/login')
-  await page.evaluate(() => {
-    localStorage.clear()
-    sessionStorage.clear()
-  })
-  await login(page, user)
 }
 
 // eslint-disable-next-line no-empty-pattern -- Playwright wants a destructured fixtures argument

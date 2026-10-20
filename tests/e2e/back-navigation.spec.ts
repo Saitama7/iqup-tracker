@@ -3,6 +3,10 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { GULZAT, KANYKEI, login } from './support/auth'
+import { lockSeed } from './support/seed-lock'
+
+// Walks the seed's groups and lessons by position: no fixture group in the lists meanwhile (#104).
+lockSeed('read')
 
 // #89: «назад» from a lesson returns where it was opened — the admin's group on «Занятия», А2 on
 // the same week — through the history, and from the URL after a reload or in a fresh tab.

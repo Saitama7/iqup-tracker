@@ -2,6 +2,10 @@ import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import { KANYKEI, login } from './support/auth'
+import { lockSeed } from './support/seed-lock'
+
+// Tariff versions and holidays are global, like admin-superuser-settings (#104).
+lockSeed('write')
 
 // Needs the local stack + `pnpm seed:users`. Screenshots of the seed: run with --workers=1,
 // otherwise the other project's planned tariff / holiday may show up in them.
