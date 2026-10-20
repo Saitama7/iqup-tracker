@@ -642,7 +642,7 @@ export function EditGroupDialog({
           <fieldset className="flex min-w-0 flex-col gap-3.5 rounded-2xl border-[1.5px] border-line-strong p-3.5">
             <legend className="px-1.5 text-[13px] font-extrabold">Длительность занятий</legend>
             <div className="grid grid-cols-2 gap-2.5">
-              <Field id={ids.duration} label="Длительность, мин">
+              <Field id={ids.duration} label="Минут">
                 <input
                   id={ids.duration}
                   className={inputClass}
