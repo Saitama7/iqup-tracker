@@ -712,8 +712,10 @@ function DesktopStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
     >
       <span className="flex items-center gap-3">
         <MarkAvatar row={row} mark={mark} className="size-9 text-xs" />
-        <span className="text-[15px] font-extrabold">{row.fullName}</span>
-        <UnmarkedBadge row={row} mark={mark} />
+        <span className="flex min-w-0 flex-col items-start gap-1">
+          <span className="text-[15px] font-extrabold">{row.fullName}</span>
+          <UnmarkedBadge row={row} mark={mark} />
+        </span>
       </span>
       <span className="flex flex-col gap-0.5">
         <span className={cn('text-[13px] font-bold', TONE[meta.tone])}>{meta.text}</span>
