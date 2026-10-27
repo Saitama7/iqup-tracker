@@ -53,6 +53,7 @@ const groupSchema = z.object({
   status: z.enum(['forming', 'active', 'archived']),
   start_date: z.string(),
   end_date: z.string().nullable(),
+  lesson_duration_min: z.number().int().nullable(),
   teacher: z.object({ full_name: z.string() }).nullable(),
   schedule_rules: z.array(
     z.object({

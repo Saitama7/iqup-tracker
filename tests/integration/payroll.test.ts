@@ -174,8 +174,9 @@ describe('К11 (#109 fixture): update_subscription moves the pay by price_full /
     })
     if (pe) throw pe
     expect(preview).toHaveLength(1)
-    expect(preview?.[0]).toMatchObject({ marks: 1, mark_before: 300, mark_after: 450 })
-    expect((preview?.[0]?.amount_after ?? 0) - (preview?.[0]?.amount_before ?? 0)).toBe(150)
+    const [row] = preview
+    expect(row).toMatchObject({ marks: 1, mark_before: 300, mark_after: 450 })
+    expect(row.amount_after - row.amount_before).toBe(150)
     const { error } = await a.rpc('update_subscription', {
       p_id: id,
       p_lessons: 8,
