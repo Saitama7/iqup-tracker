@@ -25,13 +25,17 @@ import {
 } from '@/features/afterschool/model'
 import { PlanEditor } from '@/features/afterschool/plan-editor'
 import { LessonsField, lessonsValid } from './lessons-field'
+import { PriceField } from './price-field'
 import { tariffFor } from '@/features/tariffs/current'
 import { enrollForm, enrollStudent, tariffsQuery, type EnrollInput, type TariffRow } from './api'
 import {
   defaultDiscount,
   discountAvailability,
   discountByPct,
+  hoursCaption,
   maxSubscriptionLessons,
+  priceErrorMessage,
+  priceValid,
   quoteSubscription,
   type DiscountHistory,
   type DiscountPct,
@@ -96,8 +100,10 @@ export function EnrollDialog({
   const [discount, setDiscount] = useState<DiscountPct>(() =>
     student ? defaultDiscount(student) : 0,
   )
-  /** «Уроков» (И89); null — the tariff's package. */
+  /** «Уроков» (И89); null — the default size (К11). */
   const [lessons, setLessons] = useState<number | null>(null)
+  /** «Цена, сом» (К12); null — by the tariff. */
+  const [price, setPrice] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const group = groups.find((g) => g.id === groupId) ?? null
@@ -123,6 +129,7 @@ export function EnrollDialog({
           tariffs.data,
           discount,
           afterschool ? null : lessons,
+          { groupMinutes: group.lesson_duration_min, price: afterschool ? null : price },
         )
       : null
   const hourBill =
@@ -154,6 +161,7 @@ export function EnrollDialog({
       startDate: date,
       discount,
       lessons: afterschool ? null : lessons,
+      price: afterschool ? null : price,
     })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Проверьте поля формы')
@@ -165,6 +173,10 @@ export function EnrollDialog({
     }
     if (!afterschool && !lessonsValid(quote.tariff, lessons)) {
       setError(`Уроков в абонементе — от 1 до ${maxSubscriptionLessons(quote.tariff)}`)
+      return
+    }
+    if (!afterschool && !priceValid(price)) {
+      setError(priceErrorMessage)
       return
     }
     if (afterschool && !validPlan(hours)) {
@@ -226,6 +238,7 @@ export function EnrollDialog({
               setGroupId(e.target.value)
               setPlan(null)
               setLessons(null)
+              setPrice(null)
               setError(null)
             }}
           >
@@ -291,16 +304,30 @@ export function EnrollDialog({
         </div>
 
         {!afterschool && quote && (
-          <LessonsField
-            key={groupId}
-            id={`${ids.group}-lessons`}
-            tariff={quote.tariff}
-            value={lessons}
-            onChange={(n) => {
-              setLessons(n)
-              setError(null)
-            }}
-          />
+          <>
+            <LessonsField
+              key={groupId}
+              id={`${ids.group}-lessons`}
+              tariff={quote.tariff}
+              byDefault={quote.defaultLessons}
+              value={lessons}
+              onChange={(n) => {
+                setLessons(n)
+                setError(null)
+              }}
+            />
+            <PriceField
+              key={`${groupId}-price`}
+              id={`${ids.group}-price`}
+              defaultPrice={quote.defaultPrice}
+              value={price}
+              onChange={(p) => {
+                setPrice(p)
+                setError(null)
+              }}
+              caption={hoursCaption(quote)}
+            />
+          </>
         )}
 
         {afterschool && !submit && (
@@ -368,13 +395,19 @@ export function EnrollDialog({
                 </span>
               </div>
               <div className="flex justify-between gap-3">
-                <span className="text-ink-muted">Тариф · {GROUP_TYPE_LABEL[group.group_type]}</span>
+                <span className="text-ink-muted">
+                  {quote.customPrice
+                    ? 'Своя цена'
+                    : `Тариф · ${GROUP_TYPE_LABEL[group.group_type]}`}
+                </span>
                 <span className="text-right whitespace-nowrap">
                   {formatSom(quote.priceFull)} сом
                 </span>
               </div>
               <p className="text-xs text-ink-muted">
-                действует с {formatDateLong(quote.tariff.valid_from)}
+                {quote.customPrice
+                  ? `по тарифу ${formatSom(quote.defaultPrice)} сом`
+                  : `действует с ${formatDateLong(quote.tariff.valid_from)}`}
               </p>
               {discount > 0 && (
                 <div className="flex justify-between gap-3">

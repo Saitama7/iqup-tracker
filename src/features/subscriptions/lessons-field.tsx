@@ -4,7 +4,7 @@ import type { TariffTerms } from '@/features/tariffs/current'
 import { cn } from '@/lib/utils'
 import { lessonSizePresets, maxSubscriptionLessons } from './model'
 
-/** «Уроков» of a new package is a whole 1 … 2 × lessons_in_package (И89); null — the tariff's. */
+/** «Уроков» of a new package is a whole 1 … 2 × lessons_in_package (И89); null — the default size. */
 export function lessonsValid(tariff: TariffTerms, lessons: number | null): boolean {
   return (
     lessons === null ||
@@ -14,24 +14,27 @@ export function lessonsValid(tariff: TariffTerms, lessons: number | null): boole
 
 /**
  * «Уроков» (И89): `12 · 8 · 4 · другое` — the package size bought at the same lesson price.
- * `value` null — the tariff's package; «другое» — a number 1 … 2 × package (NaN while empty).
+ * `value` null — the default size (`byDefault`: the tariff's package; individual — the tariff's hours
+ * in lessons of the group, К11); «другое» — a number 1 … 2 × package (NaN while empty).
  */
 export function LessonsField({
   id,
   tariff,
+  byDefault = tariff.lessons_in_package,
   value,
   onChange,
 }: {
   id: string
   tariff: TariffTerms
+  byDefault?: number
   value: number | null
   onChange: (lessons: number | null) => void
 }) {
-  const presets = lessonSizePresets(tariff)
+  const presets = lessonSizePresets(tariff, byDefault)
   const max = maxSubscriptionLessons(tariff)
   const [other, setOther] = useState(value !== null && !presets.includes(value))
   const [text, setText] = useState(other && value !== null ? String(value) : '')
-  const selected = value ?? tariff.lessons_in_package
+  const selected = value ?? byDefault
   const invalid = other && !lessonsValid(tariff, value)
 
   const chip = (on: boolean) =>
@@ -56,7 +59,7 @@ export function LessonsField({
             aria-checked={!other && selected === n}
             onClick={() => {
               setOther(false)
-              onChange(n === tariff.lessons_in_package ? null : n)
+              onChange(n === byDefault ? null : n)
             }}
             className={chip(!other && selected === n)}
           >

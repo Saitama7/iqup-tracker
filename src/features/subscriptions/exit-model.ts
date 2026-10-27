@@ -64,6 +64,20 @@ export function settlementLines(s: Settlement): MoneyLine[] {
   ]
 }
 
+/**
+ * The transfer with the admin's price of the new package (К12): to pay / surplus as transfer_preview
+ * counts them (0033) — `price` null keeps the default one.
+ */
+export function withTransferPrice(p: TransferPreview, price: number | null): TransferPreview {
+  if (price === null || p.wholeMove) return p
+  return {
+    ...p,
+    price,
+    toPay: Math.max(0, price - p.remainder),
+    surplus: Math.max(0, p.remainder - price),
+  }
+}
+
 /** «3 800 − 1 800 = 2 000 сом» / «3 800 + долг 600 = 4 400 сом» — to pay in the new group. */
 export function toPayCaption(p: TransferPreview): string {
   if (p.price === null) return 'Нет тарифа на эту дату'

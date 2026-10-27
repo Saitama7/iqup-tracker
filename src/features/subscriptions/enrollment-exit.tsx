@@ -22,6 +22,9 @@ import {
   type DeleteMoney,
   type Settlement,
 } from './exit-api'
+import { priceErrorMessage, priceValid } from './model'
+import { PriceField } from './price-field'
+import { SubscriptionEditBody } from './subscription-edit'
 import {
   AFTERSCHOOL_NO_TRANSFER,
   impactCaption,
@@ -32,15 +35,18 @@ import {
   transferTargets,
   withdrawDefaultDate,
   withdrawMinDate,
+  withTransferPrice,
 } from './exit-model'
 
 // #81: the «⋯» of an enrollment on А6 and on the group page — «Перевести в другую группу», «Ушёл из
 // группы», «Записан по ошибке — удалить». Each dialog shows the money (and the payroll) before the
 // button; the database recomputes and checks everything (0024).
 
-export type ExitAction = 'transfer' | 'withdraw' | 'delete'
+export type ExitAction = 'edit' | 'transfer' | 'withdraw' | 'delete'
 
 const ACTION_TITLE: Record<ExitAction, string> = {
+  // #109: size and price of the current package (К12)
+  edit: 'Изменить абонемент',
   transfer: 'Перевести в другую группу',
   withdraw: 'Ушёл из группы',
   delete: 'Записан по ошибке — удалить',
@@ -208,7 +214,10 @@ export function EnrollmentExitDialog({
   ...props
 }: Omit<ExitProps, 'onDone'> & { action: ExitAction; onOpenChange: (open: boolean) => void }) {
   const queryClient = useQueryClient()
-  const settlement = useQuery(settlementQuery(props.enrollmentId))
+  const settlement = useQuery({
+    ...settlementQuery(props.enrollmentId),
+    enabled: action !== 'edit',
+  })
   const label = props.group ? groupLabel(props.group) : 'группа'
   const onDone = (message: string) => {
     toast.success(message)
@@ -218,7 +227,9 @@ export function EnrollmentExitDialog({
   }
 
   let body: ReactNode
-  if (settlement.isPending) {
+  if (action === 'edit') {
+    body = <SubscriptionEditBody enrollmentId={props.enrollmentId} onDone={onDone} />
+  } else if (settlement.isPending) {
     body = <div className="h-24 animate-pulse rounded-xl bg-muted" aria-label="Загрузка" />
   } else if (settlement.isError) {
     body = <ErrorText>{settlement.error.message}</ErrorText>
@@ -261,6 +272,8 @@ function TransferBody({
   const [typed, setTyped] = useState<string | null>(null)
   const [refundSurplus, setRefundSurplus] = useState(false)
   const [method, setMethod] = useState<PaymentMethod | null>(null)
+  /** «Цена, сом» of the new package (К12); null — the target group's default. */
+  const [price, setPrice] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const target = targets.find((g) => g.id === groupId) ?? null
   const typedIso = typed !== null ? parseDateRu(typed) : null
@@ -268,7 +281,8 @@ function TransferBody({
     ...transferPreviewQuery(enrollmentId, groupId, typedIso),
     enabled: !!target,
   })
-  const p = preview.data
+  const byDefault = preview.data
+  const p = byDefault && withTransferPrice(byDefault, priceValid(price) ? price : null)
   const date = typed ?? (p ? formatDateRu(p.startDate) : '')
 
   const mutation = useMutation({
@@ -292,6 +306,10 @@ function TransferBody({
       setError('Дата в формате ДД.ММ.ГГГГ')
       return
     }
+    if (!priceValid(price)) {
+      setError(priceErrorMessage)
+      return
+    }
     const refund = !!p && p.surplus > 0 && refundSurplus
     if (refund && !method) {
       setError('Выберите способ возврата')
@@ -304,6 +322,7 @@ function TransferBody({
       startDate: iso,
       refundSurplus: refund,
       method: refund ? method : null,
+      price,
     })
   }
 
@@ -324,6 +343,7 @@ function TransferBody({
             onChange={(e) => {
               setGroupId(e.target.value)
               setTyped(null)
+              setPrice(null)
               setError(null)
             }}
           >
@@ -358,8 +378,21 @@ function TransferBody({
           оплатами ({som(s.moneySom)}).
         </Note>
       )}
-      {target && p && !p.wholeMove && (
+      {target && byDefault && p && !p.wholeMove && (
         <>
+          {byDefault.price !== null && (
+            <PriceField
+              key={groupId}
+              id={`${ids.group}-price`}
+              defaultPrice={byDefault.price}
+              value={price}
+              onChange={(v) => {
+                setPrice(v)
+                setError(null)
+              }}
+              caption={`${byDefault.lessonsTotal ?? 0} ур. в новом абонементе`}
+            />
+          )}
           <MoneyBlock
             s={s}
             extra={

@@ -462,6 +462,25 @@ describe('subscriptions', () => {
       text(row({ entity: 'subscriptions', before: sub, after: { ...sub, status: 'exhausted' } })),
     ).toBe('Алина Исакова · Математика · 8 класс Б — абонемент 12 уроков израсходован')
   })
+
+  it('#109: size and price edited with a reason (update_subscription)', () => {
+    const before = { ...sub, lessons_total: 12, price_full: 7200, price_final: 7200 }
+    const e = describeAuditRow(
+      row({
+        entity: 'subscriptions',
+        kind: 'retro',
+        before,
+        after: { ...before, lessons_total: 8 },
+        reason: '12 часов = 8 занятий по 1,5 ч',
+      }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Алина Исакова · Математика · 8 класс Б — абонемент изменён: 12 уроков / 7 200 → 8 / 7 200',
+    )
+    expect(e.badge.label).toBe('Абонемент')
+    expect(e.note).toBe('Причина: «12 часов = 8 занятий по 1,5 ч»')
+  })
 })
 
 describe('enrollments', () => {

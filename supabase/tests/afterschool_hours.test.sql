@@ -74,8 +74,8 @@ select is(
 );
 select is(
   (select sum(base_amount)::integer from public.v_payroll_preview where month = '2026-09-01'),
-  47546,
-  'seed: all teachers, September — 47 546 as before'
+  51146,
+  'seed: all teachers, September — 51 146 as before'
 );
 select is(
   public.tariff_hour_price((select id from public.tariffs where group_type = 'afterschool' and valid_from = '2026-09-01')),

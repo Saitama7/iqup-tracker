@@ -61,7 +61,8 @@ test('расписание: с недели 5–10 октября на 1 сен�
   await expect(page).toHaveURL(/date=2026-09-01/)
   await expect(
     page.getByRole('heading', {
-      name: isDesktop(page) ? '31 августа – 5 сентября' : 'Вторник, 1 сентября',
+      // the seed's «Байхан» meets on Sundays in September (#109) — the week shows ВС
+      name: isDesktop(page) ? '31 августа – 6 сентября' : 'Вторник, 1 сентября',
     }),
   ).toBeVisible()
   // arrows still work from there

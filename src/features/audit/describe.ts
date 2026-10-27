@@ -721,6 +721,22 @@ function describeSubscription(row: AuditRow, l: AuditLookups): Described {
         : [...who, `абонемент ${package_} удалён`],
     }
   }
+  // #109 · update_subscription (К12): «изменён: 12 уроков / 7 200 → 8 / 7 200», the reason below
+  if (changed(row, 'lessons_total') || changed(row, 'price_full')) {
+    const terms = (x: Snapshot | null, words: boolean) => {
+      const n = num(x, 'lessons_total') ?? 0
+      return `${n}${words ? ` ${pluralRu(n, ['урок', 'урока', 'уроков'])}` : ''} / ${formatSom(num(x, 'price_full') ?? 0)}`
+    }
+    return {
+      badge: { label: 'Абонемент', tone: 'stone' },
+      link,
+      parts: [
+        ...who,
+        'абонемент изменён: ',
+        strong(`${terms(row.before, true)} → ${terms(row.after, false)}`),
+      ],
+    }
+  }
   if (changed(row, 'started_at') && !changed(row, 'status')) {
     return {
       badge: { label: 'Абонемент', tone: 'stone' },
