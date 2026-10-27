@@ -2093,6 +2093,10 @@ export type Database = {
         Args: { p_group_type: Database['public']['Enums']['group_type'] }
         Returns: string
       }
+      teacher_correct_attendance: {
+        Args: { p_comment?: string; p_lesson_id: string; p_marks: Json }
+        Returns: number
+      }
       teacher_month_pay_exact: { Args: { p_month: string; p_teacher_id: string }; Returns: number }
       teaches_enrollment: { Args: { p_enrollment_id: string }; Returns: boolean }
       teaches_group: { Args: { p_group_id: string }; Returns: boolean }
