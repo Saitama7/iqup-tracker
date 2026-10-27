@@ -80,7 +80,7 @@ export const studentsQuery = () =>
         supabase
           .from('groups')
           .select(
-            'id, name, subject:subjects(name), group_type, status, start_date, end_date, teacher:teachers(full_name), schedule_rules(weekday, start_time, valid_from, valid_to)',
+            'id, name, subject:subjects(name), group_type, status, start_date, end_date, lesson_duration_min, teacher:teachers(full_name), schedule_rules(weekday, start_time, valid_from, valid_to)',
           ),
       ])
       if (students.error) throw students.error

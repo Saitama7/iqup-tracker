@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { TariffTerms } from '@/features/tariffs/current'
 import {
   defaultDiscount,
+  defaultLessons,
+  defaultPackagePrice,
   discountAvailability,
+  hoursCaption,
   lessonSizePresets,
+  priceValid,
   lessonsErrorMessage,
   maxSubscriptionLessons,
   priceFinal,
@@ -105,6 +109,62 @@ describe('quoteSubscription', () => {
   it('no tariff before the first version', () => {
     expect(quoteSubscription('afterschool', '2026-08-01', tariffs, 0)).toBeNull()
     expect(quoteSubscription('pair', '2026-10-01', tariffs, 0)).toBeNull()
+  })
+})
+
+describe('К11 / К12: individual in hours, own price (#109)', () => {
+  const individual = tariffs[2] as TariffTerms
+
+  it('individual: 12 h of 1,5-h lessons = 8 lessons by 900, of 2 h — 6 by 1 200', () => {
+    expect(defaultLessons(individual, 90)).toBe(8)
+    expect(defaultPackagePrice(individual, 90, 8)).toBe(7200)
+    expect(defaultLessons(individual, 120)).toBe(6)
+    expect(defaultPackagePrice(individual, 120, 6)).toBe(7200)
+    expect(defaultLessons(individual, 60)).toBe(12)
+    expect(defaultPackagePrice(individual, 90, 4)).toBe(3600)
+  })
+
+  it('other types stay a package of lessons (И89) whatever the length', () => {
+    const group = tariffs[1] as TariffTerms
+    expect(defaultLessons(group, 90)).toBe(12)
+    expect(defaultPackagePrice(group, 90, 8)).toBe(2133)
+  })
+
+  it('quote: the group length sets the default size and price', () => {
+    const q = quoteSubscription('individual', '2026-10-20', tariffs, 0, null, { groupMinutes: 90 })
+    expect(q).toMatchObject({
+      lessonsTotal: 8,
+      defaultLessons: 8,
+      minutes: 90,
+      priceFull: 7200,
+      customPrice: false,
+    })
+    expect(q && hoursCaption(q)).toBe('8 занятий по 1,5 ч = 12 ч · 900 за занятие')
+    expect(
+      quoteSubscription('individual', '2026-10-20', tariffs, 0, 12, { groupMinutes: 90 })
+        ?.priceFull,
+    ).toBe(10800)
+  })
+
+  it('quote: the admin price wins, the discount is from it; an invalid one is ignored', () => {
+    expect(
+      quoteSubscription('afterschool', '2026-10-20', tariffs, 15, 12, { price: 5400 }),
+    ).toMatchObject({ lessonsTotal: 12, priceFull: 5400, priceFinal: 4590, customPrice: true })
+    for (const price of [0, Number.NaN, 2.5, 1_000_001]) {
+      expect(quoteSubscription('group', '2026-10-20', tariffs, 0, null, { price })).toMatchObject({
+        priceFull: 3200,
+        customPrice: false,
+      })
+      expect(priceValid(price)).toBe(false)
+    }
+    expect(priceValid(null)).toBe(true)
+  })
+
+  it('caption only for individual; chips include the default size', () => {
+    const q = quoteSubscription('group', '2026-10-20', tariffs, 0)
+    expect(q && hoursCaption(q)).toBeNull()
+    expect(lessonSizePresets(individual, 6)).toEqual([12, 8, 6, 4])
+    expect(lessonSizePresets(individual, 8)).toEqual([12, 8, 4])
   })
 })
 

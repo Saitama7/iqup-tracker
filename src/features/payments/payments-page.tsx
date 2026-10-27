@@ -22,11 +22,15 @@ import { NativeSelect } from '@/features/students/parts'
 import { StudentPicker, type StudentPickerOption } from '@/features/students/student-picker'
 import { tariffsQuery } from '@/features/subscriptions/api'
 import { LessonsField, lessonsValid } from '@/features/subscriptions/lessons-field'
+import { PriceField } from '@/features/subscriptions/price-field'
 import {
   DISCOUNTS,
   defaultDiscount,
   discountAvailability,
   maxSubscriptionLessons,
+  hoursCaption,
+  priceErrorMessage,
+  priceValid,
   quoteSubscription,
   type DiscountPct,
 } from '@/features/subscriptions/model'
@@ -824,8 +828,10 @@ function RecordPanel({
   const [picked, setTarget] = useState<Target | null>(null)
   const [amount, setAmount] = useState('')
   const [pickedDiscount, setDiscount] = useState<DiscountPct | null>(null)
-  /** «Уроков» of a new package (И89); null — the tariff's package. */
+  /** «Уроков» of a new package (И89); null — the default size (К11). */
   const [lessons, setLessons] = useState<number | null>(null)
+  /** «Цена, сом» of a new package (К12); null — by the tariff. */
+  const [price, setPrice] = useState<number | null>(null)
   const [method, setMethod] = useState<PaymentMethod>('cash')
   const [paidOn, setPaidOn] = useState(formatDateRu(today))
   const [comment, setComment] = useState('')
@@ -905,6 +911,10 @@ function RecordPanel({
           tariffs.data,
           target.kind === 'new' ? discount : 0,
           target.kind === 'new' ? lessons : null,
+          {
+            groupMinutes: groupsById.get(choice.groupId)?.lesson_duration_min,
+            price: target.kind === 'new' && choice.groupType !== 'afterschool' ? price : null,
+          },
         )
       : null
 
@@ -916,6 +926,7 @@ function RecordPanel({
     setTarget(null)
     setDiscount(null)
     setLessons(null)
+    setPrice(null)
     setConfirmed(false)
   }
 
@@ -1022,6 +1033,10 @@ function RecordPanel({
       setError(`Уроков в абонементе — от 1 до ${maxSubscriptionLessons(quote.tariff)}`)
       return
     }
+    if (target.kind === 'new' && !priceValid(price)) {
+      setError(priceErrorMessage)
+      return
+    }
     const parsed = paymentForm(today).safeParse(
       target.kind === 'current'
         ? {
@@ -1037,6 +1052,7 @@ function RecordPanel({
             enrollmentId: target.enrollmentId,
             discount,
             lessons,
+            price: choice?.groupType === 'afterschool' ? null : price,
             amount,
             method,
             paidOn,
@@ -1177,6 +1193,7 @@ function RecordPanel({
               )
               setDiscount(null)
               setLessons(null)
+              setPrice(null)
               setAmount('')
               setError(null)
               setConfirmed(false)
@@ -1300,12 +1317,27 @@ function RecordPanel({
               key={targetValue(target)}
               id={`${id}-lessons`}
               tariff={quote.tariff}
+              byDefault={quote.defaultLessons}
               value={lessons}
               onChange={(n) => {
                 setLessons(n)
                 setAmount('')
                 setError(null)
               }}
+            />
+          )}
+          {target.kind === 'new' && !refund && quote && choice?.groupType !== 'afterschool' && (
+            <PriceField
+              key={`${targetValue(target)}-price`}
+              id={`${id}-price`}
+              defaultPrice={quote.defaultPrice}
+              value={price}
+              onChange={(p) => {
+                setPrice(p)
+                setAmount('')
+                setError(null)
+              }}
+              caption={hoursCaption(quote)}
             />
           )}
           {refund && current && (

@@ -210,6 +210,7 @@ export function EnrollTrialDialog({
           startDate: input.startDate,
           discount: input.discount,
           lessons: input.lessons,
+          price: input.price,
         })
       }
       onEnrolled={() => {

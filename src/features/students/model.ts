@@ -33,6 +33,8 @@ export interface GroupBrief {
   end_date: string | null
   teacher: { full_name: string } | null
   schedule_rules: ScheduleRule[]
+  /** The group's own lesson length (И88); null — the tariff's. */
+  lesson_duration_min?: number | null
 }
 
 export interface SubscriptionRow {

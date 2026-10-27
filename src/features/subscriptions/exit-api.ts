@@ -7,6 +7,7 @@ import type { PaymentMethod } from '@/features/payments/api'
 import { supabase } from '@/lib/supabase/client'
 import { EnrollError } from './api'
 import { AFTERSCHOOL_NO_TRANSFER } from './exit-model'
+import { priceErrorMessage } from './model'
 
 type DbError = { code?: string; message?: string }
 
@@ -24,6 +25,7 @@ function commonMessage(error: DbError): string | null {
   if (m.includes('outside the group dates')) return 'Дата — вне дат выбранной группы'
   if (m.includes('payment method is required')) return 'Выберите способ возврата'
   if (m.includes('no tariff')) return 'Нет тарифа для этой группы на эту дату'
+  if (m.includes('price must be')) return priceErrorMessage
   return null
 }
 
@@ -249,6 +251,8 @@ export async function transferStudent(input: {
   startDate: string
   refundSurplus: boolean
   method: PaymentMethod | null
+  /** The new package's price (К12); null — the default of the target group. */
+  price?: number | null
 }) {
   const { error } = await supabase.rpc('transfer_student', {
     p_enrollment_id: input.enrollmentId,
@@ -256,6 +260,7 @@ export async function transferStudent(input: {
     p_start_date: input.startDate,
     p_refund_surplus: input.refundSurplus,
     ...(input.method ? { p_method: input.method } : {}),
+    ...(input.price != null ? { p_price: input.price } : {}),
   })
   if (error) throw new EnrollError(transferErrorMessage(error))
 }
