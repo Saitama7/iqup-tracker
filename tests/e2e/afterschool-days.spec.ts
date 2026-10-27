@@ -169,7 +169,9 @@ test('продлёнка: 12 дней за 5 400, ВТ/СР/ЧТ → ПН без
     await expect(panel).toContainText('на цену не влияет')
     const { data: sub } = await db
       .from('subscriptions')
-      .select('id, lessons_total, price_full, hours_total, enrollment:enrollments!inner(student_id)')
+      .select(
+        'id, lessons_total, price_full, hours_total, enrollment:enrollments!inner(student_id)',
+      )
       .eq('enrollment.student_id', student.id)
       .single()
     expect(sub).toMatchObject({ lessons_total: 12, price_full: 5400, hours_total: null })
