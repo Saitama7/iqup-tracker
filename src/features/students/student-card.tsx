@@ -39,12 +39,13 @@ const units = (b: Pick<Balance, 'unit'>, n: number) =>
   b.unit === 'hour' ? `${formatHours(n)} ч` : String(n)
 
 /** «Оплачено 6 из 12 · долг 2 ур. · 533 сом» — the one-line summary of the subscription. */
-export function paySummary(b: Balance): string {
+export function paySummary(b: Balance, days = false): string {
   const paid =
     b.unit === 'hour'
       ? `Оплачено ${formatHours(b.paidLessons)} из ${formatHours(b.lessonsTotal)} ч`
       : `Оплачено ${b.paidLessons} из ${b.lessonsTotal}`
-  return b.debtLessons > 0 ? `${paid} · ${debtCaption(b.debtLessons, b.debtSom, b.unit)}` : paid
+  const debt = debtCaption(b.debtLessons, b.debtSom, b.unit, days ? 'дн.' : 'ур.')
+  return b.debtLessons > 0 ? `${paid} · ${debt}` : paid
 }
 
 /** Colour + text: «Оплачено» / «Частично · 6 ур» / «Пора оплачивать» / «Долг». */
@@ -248,7 +249,7 @@ export function EnrollmentCard({
               caption={
                 b.debtLessons > 0 ? (
                   <span className={cn('font-extrabold', debtTextClass(b.debtLessons))}>
-                    {debtCaption(b.debtLessons, b.debtSom)}
+                    {debtCaption(b.debtLessons, b.debtSom, b.unit, days ? 'дн.' : 'ур.')}
                   </span>
                 ) : (
                   'до 3 в долг'
@@ -257,7 +258,7 @@ export function EnrollmentCard({
             />
           </div>
           <UsageBar b={b} />
-          <p className="text-[13px] font-extrabold">{paySummary(b)}</p>
+          <p className="text-[13px] font-extrabold">{paySummary(b, days)}</p>
           <Legend b={b} extra={discountCaption(sub)} />
         </>
       ) : !sub && e.refunded ? (
@@ -319,7 +320,7 @@ export function MobileEnrollment({
             {days && b.unit !== 'hour' ? ` ${daysOf(b.lessonsTotal)}` : ''} · заморозок{' '}
             {b.freezesUsed}
           </p>
-          <p className="text-xs font-extrabold">{paySummary(b)}</p>
+          <p className="text-xs font-extrabold">{paySummary(b, days)}</p>
           <p className="text-xs font-bold text-ink-muted">
             Оплачено {formatSom(b.paidSom)} из {formatSom(sub.price_final)} сом · доступно{' '}
             {units(b, Math.max(0, availableLessons(b)))}
