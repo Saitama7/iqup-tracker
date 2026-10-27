@@ -103,7 +103,10 @@ test('Мой месяц → Сентябрь → группа → Подтвер
       fullPage: true,
     })
 
-    const confirm = page.locator(`main a[href^="/lessons/${lessonId}"]`)
+    // «Подтвердить →»; once held, the lesson's row links to the card too (#110)
+    const confirm = page
+      .locator(`main a[href^="/lessons/${lessonId}"]`)
+      .filter({ hasText: 'Подтвердить' })
     await expect(confirm).toHaveCount(1)
     await confirm.click()
     await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}\\?from=my-month`))
@@ -172,7 +175,8 @@ test('>7 проведённых новее + старые неподтвержд
   const db = service()
   const olderId = await extraLesson(db, group, older)
   const newerId = await extraLesson(db, group, newer)
-  const confirmOf = (id: string) => page.locator(`main a[href^="/lessons/${id}"]`)
+  const confirmOf = (id: string) =>
+    page.locator(`main a[href^="/lessons/${id}"]`).filter({ hasText: 'Подтвердить' })
 
   try {
     await pinClock(page, '2026-10-08T14:24:00+06:00')

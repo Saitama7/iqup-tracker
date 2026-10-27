@@ -227,6 +227,24 @@ function describeAttendance(row: AuditRow, l: AuditLookups): Described {
   const before = str(row.before, 'status')
   const after = str(row.after, 'status')
 
+  const teacherFix = teacherFixComment(row.reason)
+  if (teacherFix !== null && (row.action === 'insert' || before !== after)) {
+    // teacher_correct_attendance (#110, К10): the author is the teacher, the comment is optional
+    return {
+      badge: { label: 'Исправление', tone: 'burned' },
+      link,
+      parts: [
+        'Отметки занятия',
+        lesson ? ` ${lessonWhere(lesson, l)}` : '',
+        ' исправил учитель: ',
+        student,
+        ' ',
+        ...(before ? [status(before), ' → '] : ['→ ']),
+        status(after),
+      ],
+      note: teacherFix ? `Комментарий: «${teacherFix}»` : null,
+    }
+  }
   if (row.action === 'insert') {
     return { badge, link, parts: ['Отметка ', student, ' добавлена: ', status(after), where] }
   }
@@ -497,6 +515,18 @@ function moved(row: AuditRow, key: string): Part[] {
   const was = str(row.before, key)
   const now = str(row.after, key)
   return [` с ${was ? dayMonth(was) : '—'} на `, strong(now ? dayMonth(now) : '—')]
+}
+
+const TEACHER_FIX = 'Исправил учитель'
+
+/**
+ * teacher_correct_attendance's reason (0034): «Исправил учитель» → '', «Исправил учитель: …» → the
+ * comment; anything else → null.
+ */
+export function teacherFixComment(reason: string | null): string | null {
+  const r = reason?.trim() ?? ''
+  if (r === TEACHER_FIX) return ''
+  return r.startsWith(`${TEACHER_FIX}: `) ? r.slice(TEACHER_FIX.length + 2).trim() : null
 }
 
 /** A reason typed by a person (correct_attendance), not an RPC code. */
@@ -1426,6 +1456,8 @@ const REASON_LABEL: Record<string, string> = {
 function reasonNote(row: AuditRow, note: string | null): string | null {
   const reason = row.reason?.trim()
   if (!reason || reason === 'confirm_lesson' || isServiceReason(reason)) return null
+  // the teacher's own correction (#110): the row says «исправил учитель», the comment is the note
+  if (row.entity === 'attendance' && teacherFixComment(reason) !== null) return null
   const cancel = /^cancel:\s*(\S+)$/.exec(reason)
   if (cancel) {
     if (row.entity === 'lessons') return null

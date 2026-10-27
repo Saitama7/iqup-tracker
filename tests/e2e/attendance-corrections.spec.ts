@@ -11,7 +11,7 @@ import {
 } from './support/undo-fixtures'
 
 // #74 · Исправление отметок проведённого занятия: the admin corrects «был → не был» with a reason;
-// a teacher asks to correct, the admin applies, the teacher sees «Исправлено». Own group of Гульзат
+// a teacher's request sent before #110 — the admin applies, the teacher sees «Исправлено». Own group of Гульзат
 // from 1 October (the seed's September is never touched). Needs the local stack + `pnpm seed:users`.
 
 // Held October lessons of a new group change Гульзат's month while the spec runs (И23).
@@ -130,23 +130,24 @@ async function attendanceId(lessonId: string, studentId: string) {
   return data?.id
 }
 
-test('учитель просит исправить → админ применяет → учитель видит «Исправлено»', async ({
+test('запрос учителя, отправленный до #110 → админ применяет → учитель видит «Исправлено»', async ({
   page,
 }, testInfo) => {
   const n = names(testInfo)
   const { studentId, lessonId } = await heldLesson(testInfo)
+  // #110: the teacher corrects own marks directly, the UI no longer sends requests — an old one
+  // (И52) is still decided by the admin; teacher_id comes from the lesson
+  const { error } = await service()
+    .from('attendance_correction_requests')
+    .insert({
+      lesson_id: lessonId,
+      marks: [{ student_id: studentId, status: 'absent_burned' }],
+      comment: 'Ученика не было, отметила по ошибке',
+    })
+  if (error) throw error
 
   await login(page, GULZAT)
   await page.goto(`/lessons/${lessonId}`)
-  const row = page.getByRole('listitem', { name: n.student })
-  await page.getByRole('button', { name: 'Попросить исправить' }).click()
-  await row.getByRole('button', { name: 'Не был' }).click()
-  await page
-    .getByLabel('Что не так — комментарий администратору')
-    .fill('Ученика не было, отметила по ошибке')
-  await shot(page, 'teacher-request', testInfo)
-  await page.getByRole('button', { name: 'Отправить запрос' }).click()
-  await expect(page.getByText('Запрос отправлен администратору')).toBeVisible()
   await expect(page.getByTestId('correction-status')).toHaveText(
     'Запрос на исправление: Ждёт решения администратора',
   )

@@ -199,8 +199,8 @@ test('Гульзат проводит занятие: 8 отметок → «П�
 
     // Held: read-only for the teacher (И4).
     await page.goto(`/lessons/${lessonId}`)
-    // held: marks are locked, the teacher may only ask the admin to correct them (#74)
-    await expect(page.getByRole('button', { name: 'Попросить исправить' })).toBeVisible()
+    // held: marks are locked until the teacher starts «Исправить отметки» (#110)
+    await expect(page.getByRole('button', { name: 'Исправить отметки' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Провести занятие' })).toHaveCount(0)
   } finally {
     await removeLesson(db, group, day)

@@ -376,26 +376,31 @@ function MobileMonth({
           <h2 className="text-sm font-extrabold">Занятия {inMonthPrep(month)}</h2>
           <ul className="flex flex-col rounded-2xl border border-line bg-card px-3.5">
             {shown.map((l) => (
-              <li
-                key={l.id}
-                className="flex items-center justify-between gap-3 border-b border-line py-2.5 last:border-b-0"
-              >
-                <span className="flex min-w-0 flex-col gap-0.5">
-                  <span className="text-[13px] font-extrabold">{l.group}</span>
-                  <span className="text-xs font-bold text-ink-muted">
-                    {l.when} · {l.marks}
-                    {l.confirmed?.late && <span className="text-warn"> · поздно</span>}
-                    {l.noSubscription > 0 && (
-                      <span className="text-burned-strong">
-                        {' · '}
-                        {noSubscriptionCaption(l.noSubscription)}
-                      </span>
-                    )}
+              <li key={l.id} className="border-b border-line last:border-b-0">
+                {/* #110: a held lesson opens its card — the teacher corrects the marks there */}
+                <Link
+                  to="/lessons/$lessonId"
+                  params={{ lessonId: l.id }}
+                  search={fromMyMonth(month, filter.group ?? undefined)}
+                  className="flex min-h-11 items-center justify-between gap-3 py-2.5"
+                >
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-[13px] font-extrabold">{l.group}</span>
+                    <span className="text-xs font-bold text-ink-muted">
+                      {l.when} · {l.marks}
+                      {l.confirmed?.late && <span className="text-warn"> · поздно</span>}
+                      {l.noSubscription > 0 && (
+                        <span className="text-burned-strong">
+                          {' · '}
+                          {noSubscriptionCaption(l.noSubscription)}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                </span>
-                <span className="font-display text-sm font-bold whitespace-nowrap">
-                  {formatSom(l.amount)}
-                </span>
+                  <span className="font-display text-sm font-bold whitespace-nowrap">
+                    {formatSom(l.amount)}
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>
@@ -681,7 +686,21 @@ function LessonRow({
       className={cn('scroll-mt-4 [&:last-child>td]:border-0', unconfirmed && 'bg-burned-soft/50')}
     >
       <td className={cn(td, 'whitespace-nowrap')}>{l.when}</td>
-      <td className={cn(td, 'font-extrabold')}>{l.group}</td>
+      <td className={cn(td, 'font-extrabold')}>
+        {unconfirmed ? (
+          l.group
+        ) : (
+          // #110: a held lesson opens its card — the teacher corrects the marks there
+          <Link
+            to="/lessons/$lessonId"
+            params={{ lessonId: l.id }}
+            search={search}
+            className="underline-offset-4 hover:underline"
+          >
+            {l.group}
+          </Link>
+        )}
+      </td>
       <td className={cn(td, unconfirmed ? 'font-bold text-burned-strong' : 'text-ink-muted')}>
         {l.marks}
         {l.noSubscription > 0 && (

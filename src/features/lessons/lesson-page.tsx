@@ -28,7 +28,7 @@ import { useNow } from '@/lib/now'
 import { bishkekDate, formatDayLong } from '@/lib/time'
 import { useIsDesktop } from '@/lib/use-is-desktop'
 import { cn } from '@/lib/utils'
-import { lessonSheetQuery, type LessonSheet } from './api'
+import { lessonSheetQuery, myTeacherQuery, type LessonSheet } from './api'
 import {
   desktopMeta,
   lessonAccrual,
@@ -96,7 +96,7 @@ interface SheetModel {
   counts: Tally
   /** Marks can be changed and the lesson held now (Б1: from the start; held — admin only, И4). */
   editable: boolean
-  /** A held lesson: the admin corrects its marks / the teacher proposes new ones (#74). */
+  /** A held lesson: the admin or its teacher corrects the marks (#74, #110). */
   correcting: boolean
   corrections: Corrections
   /** The admin's «Отменить проведение» of a held lesson (#95); null — not offered. */
@@ -134,7 +134,7 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
   const isDesktop = useIsDesktop()
   const navigate = useNavigate()
   const router = useRouter()
-  const { roles } = useSession()
+  const { roles, userId } = useSession()
   const mutation = useConfirmLesson(sheet.id, sheet.group.id)
   const trialRows = useQuery(trialsQuery({ lessonId: sheet.id }))
   useTrialsRealtime()
@@ -174,7 +174,16 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
     })
     router.history.back()
   }
-  const corrections = useCorrections(sheet, roster, isAdmin, source ? returnToSource : undefined)
+  // #110: the teacher of the lesson (lessons.teacher_id) corrects own marks
+  const me = useQuery({ ...myTeacherQuery(userId), enabled: !isAdmin })
+  const ownLesson = !isAdmin && me.data?.id === sheet.teacher_id
+  const corrections = useCorrections(
+    sheet,
+    roster,
+    isAdmin,
+    ownLesson,
+    source ? returnToSource : undefined,
+  )
   usePresetsRealtime(sheet.status === 'planned')
   const clearPresetMutation = useClearPreset()
   const [presetFor, setPresetFor] = useState<RosterRow | null>(null)
@@ -308,7 +317,7 @@ function lockedReason({ sheet, state, editable }: SheetModel): string | null {
   if (editable) return null
   if (state === 'upcoming') return 'Отметить можно с начала занятия'
   if (sheet.status === 'cancelled') return 'Занятие отменено — отметки не нужны'
-  return 'Занятие проведено. Исправить отметки может администратор'
+  return 'Занятие проведено'
 }
 
 const som = (n: number) => `${formatSom(n)} сом`

@@ -111,5 +111,9 @@ describe('requests', () => {
     )
     expect(correctionErrorReason({ code: '23505', message: 'duplicate' })).toMatch(/уже ждёт/)
     expect(correctionErrorReason({ code: '42501', message: '' })).toBe('недостаточно прав')
+    // #110: teacher_correct_attendance, the optional comment
+    expect(correctionErrorReason({ code: '23514', message: 'comment is too long' })).toBe(
+      'комментарий — не длиннее 500 символов',
+    )
   })
 })
