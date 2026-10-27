@@ -136,7 +136,7 @@ select throws_ok(
   'buy_subscription: 30 lessons — refused'
 );
 
--- after-school ignores p_lessons: the same hour invoice as without it
+-- after-school (К13, #111): a package of days like every type — p_lessons is its size
 select lives_ok(
   $$ select * from public.enroll_student('e1010000-0000-4000-8000-000000000005', 'd1010000-0000-4000-8000-000000000002', '2002-03-01', p_lessons => 8) $$,
   'after-school enroll with p_lessons'
@@ -148,9 +148,8 @@ select lives_ok(
 select results_eq(
   $$ select s.lessons_total, s.price_full, s.hours_total from public.subscriptions s
      join public.enrollments e on e.id = s.enrollment_id where e.student_id = 'e1010000-0000-4000-8000-000000000005' $$,
-  $$ select s.lessons_total, s.price_full, s.hours_total from public.subscriptions s
-     join public.enrollments e on e.id = s.enrollment_id where e.student_id = 'e1010000-0000-4000-8000-000000000006' $$,
-  'after-school: p_lessons ignored — the hour invoice'
+  $$ values (8, 2960, null::numeric) $$,
+  'after-school: 8 days of 20 · 7 400 → 2 960, no hours'
 );
 
 -- ─── 8 / 4 800: balance, debt, refund, payroll (as postgres) ────────────────

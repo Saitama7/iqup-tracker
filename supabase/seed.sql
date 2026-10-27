@@ -104,6 +104,7 @@ insert into seed_students values
   ('Сезим Жумабекова',    8, 'Чолпон Жумабекова', '996555222333', false, null),
   ('Тимур Мамбетов',      8, 'Эркин Мамбетов',    '996555444555', false, null),
   ('Азамат Уулу',         3, 'Айгуль',            '996555010203', false, null),
+  ('Сайкал Мамытова',     3, 'Айнура Мамытова',   '996555010204', false, null),
   ('Алина Токтогулова',  11, 'Динара Токтогулова','996700404505', false, null),
   ('Асель Кубанычбекова',10, 'Мира Кубанычбекова','996555606707', false, null),
   ('Байхан Жумалиев',     9, 'Жазгуль Жумалиева', '996555606808', false, null),
@@ -171,6 +172,7 @@ with roster (group_id, full_name, start_date, discount) as (
     ('00000000-0000-4000-b000-000000000004'::uuid, 'Тилек Орозбаев',      date '2026-09-01', 0),
 
     ('00000000-0000-4000-b000-000000000005'::uuid, 'Азамат Уулу',         date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000005'::uuid, 'Сайкал Мамытова',     date '2026-09-09', 0),
     ('00000000-0000-4000-b000-000000000006'::uuid, 'Алина Токтогулова',   date '2026-09-01', 0),
     ('00000000-0000-4000-b000-000000000007'::uuid, 'Асель Кубанычбекова', date '2026-09-01', 0),
     ('00000000-0000-4000-b000-000000000008'::uuid, 'Камила Орозова',      date '2026-09-01', 0),
@@ -208,6 +210,19 @@ cross join lateral (
 
 drop table seed_students;
 
+-- Сайкал (К13, #111): after-school is a package of days at its own price — 12 days for 5 400, plan
+-- ВТ/СР/ЧТ 3 ч from 9 September. Her ПН/ПТ marks below were made before the plan was changed backwards
+-- (the production case, И68): 0 h, so they consume nothing — 10 of 12 days used in September.
+set session_replication_role = replica;
+update public.subscriptions s set lessons_total = 12, price_full = 5400, price_final = 5400
+from public.enrollments e join public.students st on st.id = e.student_id
+where e.id = s.enrollment_id and st.full_name = 'Сайкал Мамытова';
+insert into public.afterschool_plans (enrollment_id, valid_from, hours)
+select e.id, e.start_date, array[0, 3, 3, 3, 0, 0, 0]::numeric[]
+from public.enrollments e join public.students st on st.id = e.student_id
+where st.full_name = 'Сайкал Мамытова';
+set session_replication_role = origin;
+
 -- Lessons: every running group from its start to 8 weeks ahead, holidays skipped (А4 «Занятия», У2 «Сегодня»).
 -- September is held below; October's past lessons stay planned (= «не подтверждено»).
 select public.ensure_lessons(public.bishkek_today() + 56);
@@ -237,7 +252,8 @@ select
   l.duration_min,
   e.id as enrollment_id,
   e.student_id,
-  coalesce(m.status, 'present') as status
+  coalesce(m.status, 'present') as status,
+  public.afterschool_lesson_hours(l.id, e.student_id) as hours
 from public.lessons l
 join public.enrollments e
   on e.group_id = l.group_id and e.start_date <= l.lesson_date and (e.end_date is null or e.end_date >= l.lesson_date)
@@ -246,14 +262,14 @@ left join seed_marks m on m.full_name = s.full_name and m.group_id = l.group_id 
 where l.lesson_date between '2026-09-01' and '2026-09-30' and l.status = 'planned';
 
 -- Who used up the first subscription in September renewed it (no discount, tariff on that day) —
--- otherwise every September student would start October «в долг».
+-- otherwise every September student would start October «в долг». Сайкал's 0 h days consume nothing.
 with consumed as (
   select
     ss.enrollment_id,
     ss.lesson_date,
     row_number() over (partition by ss.enrollment_id order by ss.lesson_date, ss.planned_start) as n
   from seed_september ss
-  where ss.status <> 'absent_frozen'
+  where ss.status <> 'absent_frozen' and coalesce(ss.hours, 1) > 0
 )
 insert into public.subscriptions (enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at)
 select c.enrollment_id, t.id, public.subscription_default_lessons(t.id, g.id),
@@ -278,12 +294,13 @@ declare
 begin
   -- Lesson by lesson: attendance_subscription() charges the first subscription until it is used up.
   for r in select * from seed_september order by lesson_date, planned_start, student_id loop
-    insert into public.attendance (lesson_id, student_id, subscription_id, status, marked_at)
+    insert into public.attendance (lesson_id, student_id, subscription_id, status, hours, marked_at)
     values (
       r.lesson_id,
       r.student_id,
       public.attendance_subscription(r.lesson_id, r.student_id),
       r.status,
+      r.hours,
       ((r.lesson_date + r.planned_start) at time zone 'Asia/Bishkek') + make_interval(mins => r.duration_min)
     );
   end loop;
