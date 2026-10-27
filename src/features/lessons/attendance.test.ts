@@ -129,13 +129,60 @@ describe('lessonRoster', () => {
     expect(rows[0]?.initials).toBe('АИ')
   })
 
-  it('held: those with a mark', () => {
+  it('held: those with a mark, even if no longer enrolled on the date', () => {
     const rows = lessonRoster(
-      enrollments,
+      [enrollment('Улан Жээнбеков', [sub('c')], { start_date: '2026-10-09' })],
       { id: LESSON, lesson_date: '2026-10-08', status: 'held' },
       new Map([['id-Улан Жээнбеков', 'present' as const]]),
     )
-    expect(rows.map((r) => r.fullName)).toEqual(['Улан Жээнбеков'])
+    expect(rows.map((r) => [r.fullName, r.unmarked])).toEqual([['Улан Жээнбеков', false]])
+  })
+
+  it('held (#107): plus those enrolled on the date without a mark — unmarked', () => {
+    const rows = lessonRoster(
+      [
+        ...enrollments,
+        // enrolled retroactively from 12.10 — the lessons from then on have no mark of her
+        enrollment('Айзат Кадырбекова', [sub('d', { started_at: '2026-10-12' })], {
+          start_date: '2026-10-08',
+        }),
+        // left before the lesson / finished without end_date
+        enrollment('Бекжан', [sub('e')], { end_date: '2026-10-07', status: 'finished' }),
+        enrollment('Нурай', [sub('f')], { status: 'finished' }),
+      ],
+      { id: LESSON, lesson_date: '2026-10-08', status: 'held' },
+      new Map([['id-Сабина Темирова', 'present' as const]]),
+    )
+    expect(rows.map((r) => [r.fullName, r.unmarked])).toEqual([
+      ['Айзат Кадырбекова', true],
+      ['Алина Исакова', true],
+      ['Сабина Темирова', false],
+    ])
+    // the mark would go where confirm_lesson / correct_attendance put it (attendance_subscription)
+    expect(rows[0]?.balance?.subscriptionId).toBe('d')
+    expect(rows[0]?.paySubscription).toEqual({
+      price_full: 3200,
+      lessons_total: 12,
+      hours_total: null,
+    })
+  })
+
+  it('held: unmarked students stay out of the counts and the accrual', () => {
+    const lesson = { id: LESSON, lesson_date: '2026-10-08', status: 'held' as const }
+    const saved = new Map([['id-Сабина Темирова', 'present' as const]])
+    const rows = lessonRoster(enrollments, lesson, saved)
+    expect(tally(rows, saved)).toMatchObject({ present: 1, frozen: 0, burned: 0, unmarked: 1 })
+    expect(lessonAccrual(rows, saved, 45).pay).toBe(120)
+    expect(marksPayload(rows, saved)).toEqual([
+      { student_id: 'id-Сабина Темирова', status: 'present' },
+    ])
+  })
+
+  it('planned and cancelled lessons have no unmarked rows', () => {
+    for (const status of ['planned', 'cancelled'] as const) {
+      const rows = lessonRoster(enrollments, { id: LESSON, lesson_date: DAY, status }, new Map())
+      expect(rows.every((r) => !r.unmarked)).toBe(true)
+    }
   })
 })
 
@@ -369,6 +416,25 @@ describe('after-school by hours (#82)', () => {
     expect(friday.map((r) => [r.fullName, r.hours])).toEqual([
       ['Айпери', 2],
       ['Бектур', null],
+    ])
+  })
+
+  it('held (#107): an after-school student with 0 h that day is not unmarked', () => {
+    const list = [enrollment('Айпери', [hourSub([])], { plans }), enrollment('Бектур', [sub('b')])]
+    const thursday = lessonRoster(
+      list,
+      { id: LESSON, lesson_date: '2026-10-08', status: 'held' },
+      new Map(),
+    )
+    expect(thursday.map((r) => [r.fullName, r.unmarked])).toEqual([['Бектур', true]])
+    const friday = lessonRoster(
+      list,
+      { id: LESSON, lesson_date: '2026-10-09', status: 'held' },
+      new Map(),
+    )
+    expect(friday.map((r) => [r.fullName, r.hours, r.unmarked])).toEqual([
+      ['Айпери', 2, true],
+      ['Бектур', null, true],
     ])
   })
 

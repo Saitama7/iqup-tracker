@@ -37,8 +37,18 @@ describe('markChanges', () => {
       'Айжан Б.: был → не был',
     )
     expect(changeLine({ fullName: 'Айжан Б.', from: null, to: 'present' })).toBe(
-      'Айжан Б.: без отметки → был',
+      'Айжан Б.: — → был',
     )
+  })
+
+  it('#107: an unmarked student goes to the payload only with a chosen mark', () => {
+    const withUnmarked = [...roster, { studentId: 's3', fullName: 'Айзат К.' }]
+    const untouched = markChanges(withUnmarked, saved, new Map(saved))
+    expect(changesPayload(untouched)).toEqual([])
+    const chosen = markChanges(withUnmarked, saved, new Map(saved).set('s3', 'present'))
+    expect(chosen).toEqual([{ studentId: 's3', fullName: 'Айзат К.', from: null, to: 'present' }])
+    expect(changesPayload(chosen)).toEqual([{ student_id: 's3', status: 'present' }])
+    expect(chosen.map(changeLine)).toEqual(['Айзат К.: — → был'])
   })
 })
 
