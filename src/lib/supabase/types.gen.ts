@@ -1539,6 +1539,7 @@ export type Database = {
       assert_enrollment_undoable: { Args: { p_enrollment_id: string }; Returns: undefined }
       assert_payment_admin: { Args: Record<PropertyKey, never>; Returns: undefined }
       assert_payroll_staff: { Args: Record<PropertyKey, never>; Returns: undefined }
+      assert_subscription_price: { Args: { p_price: number }; Returns: undefined }
       attendance_subscription: {
         Args: { p_lesson_id: string; p_student_id: string }
         Returns: string
@@ -1575,6 +1576,7 @@ export type Database = {
           p_lessons?: number
           p_method: Database['public']['Enums']['payment_method']
           p_paid_on?: string
+          p_price?: number
         }
         Returns: {
           payment_id: string
@@ -1687,6 +1689,7 @@ export type Database = {
           p_group_id: string
           p_lessons?: number
           p_plan?: number[]
+          p_price?: number
           p_start_date: string
           p_student_id: string
         }
@@ -1700,6 +1703,7 @@ export type Database = {
           p_discount_pct?: number
           p_discount_reason?: Database['public']['Enums']['discount_reason']
           p_lessons?: number
+          p_price?: number
           p_start_date: string
           p_trial_id: string
         }
@@ -2001,6 +2005,58 @@ export type Database = {
           teacher_name: string
         }[]
       }
+      subscription_apply_terms: {
+        Args: { p_id: string; p_lessons: number; p_price: number }
+        Returns: undefined
+      }
+      subscription_balance_preview: {
+        Args: { p_id: string; p_lessons: number; p_price: number }
+        Returns: {
+          debt_lessons: number
+          debt_som: number
+          lessons_left: number
+          lessons_total: number
+          lessons_used: number
+          paid_lessons: number
+          paid_som: number
+          phase: string
+          price_final: number
+          price_full: number
+        }[]
+      }
+      subscription_default_lessons: {
+        Args: { p_group_id: string; p_tariff_id: string }
+        Returns: number
+      }
+      subscription_default_price: {
+        Args: { p_group_id: string; p_lessons?: number; p_tariff_id: string }
+        Returns: number
+      }
+      subscription_edit_target: {
+        Args: { p_id: string; p_lessons: number; p_price: number }
+        Returns: {
+          created_at: string
+          credit_hours: number
+          discount_percent: number
+          discount_reason: Database['public']['Enums']['discount_reason']
+          enrollment_id: string
+          hours_total: number | null
+          id: string
+          lessons_total: number
+          period_month: string | null
+          price_final: number
+          price_full: number
+          started_at: string
+          status: Database['public']['Enums']['subscription_status']
+          tariff_id: string
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'subscriptions'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       subscription_settlement: {
         Args: { p_enrollment_id: string }
         Returns: {
@@ -2015,6 +2071,19 @@ export type Database = {
         }[]
       }
       subscription_size_price: { Args: { p_lessons: number; p_tariff_id: string }; Returns: number }
+      subscription_update_preview: {
+        Args: { p_id: string; p_lessons: number; p_price: number }
+        Returns: {
+          amount_after: number
+          amount_before: number
+          mark_after: number
+          mark_before: number
+          marks: number
+          month: string
+          teacher_id: string
+          teacher_name: string
+        }[]
+      }
       tariff_duration: {
         Args: { p_date: string; p_group_type: Database['public']['Enums']['group_type'] }
         Returns: number
@@ -2039,7 +2108,12 @@ export type Database = {
         Returns: string
       }
       transfer_preview: {
-        Args: { p_enrollment_id: string; p_group_id: string; p_start_date?: string }
+        Args: {
+          p_enrollment_id: string
+          p_group_id: string
+          p_price?: number
+          p_start_date?: string
+        }
         Returns: {
           lessons_total: number
           price: number
@@ -2056,6 +2130,7 @@ export type Database = {
           p_group_id: string
           p_method?: Database['public']['Enums']['payment_method']
           p_paid_on?: string
+          p_price?: number
           p_refund_surplus?: boolean
           p_start_date?: string
         }
@@ -2110,6 +2185,10 @@ export type Database = {
           p_month: string
           p_reason: string
         }
+        Returns: undefined
+      }
+      update_subscription: {
+        Args: { p_id: string; p_lessons: number; p_price: number; p_reason: string }
         Returns: undefined
       }
       update_tariff_version: {

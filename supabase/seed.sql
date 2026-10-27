@@ -64,6 +64,12 @@ insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, 
   ('00000000-0000-4000-b000-000000000007', 'Бекзат',     (select id from public.subjects where name = 'Индивидуально'), 10, 'individual', '00000000-0000-4000-a000-000000000003', '2026-09-01', 'active'),
   ('00000000-0000-4000-b000-000000000008', '9 класс',    (select id from public.subjects where name = 'Химия'), 9,  'group',       '00000000-0000-4000-a000-000000000005', '2026-09-01', 'active');
 
+-- К11 (#109): an individual group of 1,5-h lessons on Sat / Sun (prod: Байхан) — the 12 h for 7 200 are
+-- 8 lessons of 900, Айпери (50 %) gets 450 a lesson. Its schedule ends with September so the October
+-- numbers of the artboards (А1 «не подтверждено», «Сегодня») stay as they are.
+insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status, lesson_duration_min) values
+  ('00000000-0000-4000-b000-000000000009', 'Байхан',     (select id from public.subjects where name = 'Индивидуально'), 9, 'individual', '00000000-0000-4000-a000-000000000002', '2026-09-01', 'active', 90);
+
 -- Schedule: 8А 09:00, 6 кл 11:00, 8Б 14:00 — ВТ/ЧТ/СБ; 5 кл 15:00 — ПН/СР/ПТ
 insert into public.schedule_rules (group_id, weekday, start_time, valid_from)
 select g.id, d.weekday, g.t::time, '2026-09-01'
@@ -78,6 +84,8 @@ from (values
   ('00000000-0000-4000-b000-000000000008'::uuid, '16:00', array[2, 4, 6])
 ) as g (id, t, days)
 cross join lateral unnest(g.days) as d (weekday);
+insert into public.schedule_rules (group_id, weekday, start_time, valid_from, valid_to)
+select '00000000-0000-4000-b000-000000000009', d, '10:00', '2026-09-01', '2026-09-30' from unnest(array[6, 7]) d;
 
 -- Rooms — А4 «каб. 1»
 update public.groups set room = '1' where id in ('00000000-0000-4000-b000-000000000001', '00000000-0000-4000-b000-000000000002');
@@ -98,6 +106,7 @@ insert into seed_students values
   ('Азамат Уулу',         3, 'Айгуль',            '996555010203', false, null),
   ('Алина Токтогулова',  11, 'Динара Токтогулова','996700404505', false, null),
   ('Асель Кубанычбекова',10, 'Мира Кубанычбекова','996555606707', false, null),
+  ('Байхан Жумалиев',     9, 'Жазгуль Жумалиева', '996555606808', false, null),
   ('Адилет Сапаров',      6, null, '996555310001', false, null),
   ('Айдана Келдибекова',  6, null, '996555310002', false, null),
   ('Бектур Алиев',        6, null, '996555310003', false, null),
@@ -164,7 +173,8 @@ with roster (group_id, full_name, start_date, discount) as (
     ('00000000-0000-4000-b000-000000000005'::uuid, 'Азамат Уулу',         date '2026-09-01', 0),
     ('00000000-0000-4000-b000-000000000006'::uuid, 'Алина Токтогулова',   date '2026-09-01', 0),
     ('00000000-0000-4000-b000-000000000007'::uuid, 'Асель Кубанычбекова', date '2026-09-01', 0),
-    ('00000000-0000-4000-b000-000000000008'::uuid, 'Камила Орозова',      date '2026-09-01', 0)
+    ('00000000-0000-4000-b000-000000000008'::uuid, 'Камила Орозова',      date '2026-09-01', 0),
+    ('00000000-0000-4000-b000-000000000009'::uuid, 'Байхан Жумалиев',     date '2026-09-01', 0)
 ),
 new_enrollments as (
   insert into public.enrollments (student_id, group_id, start_date)
@@ -173,16 +183,17 @@ new_enrollments as (
   join public.students s on s.full_name = r.full_name
   returning id, student_id, group_id
 )
--- One subscription per enrollment at the group tariff on its start date (same rule as enroll_student, 0007)
+-- One subscription per enrollment at the group tariff on its start date (same rule as enroll_student:
+-- the default size and price, К11 — 8 · 7 200 for «Байхан», the tariff's package elsewhere)
 insert into public.subscriptions (enrollment_id, tariff_id, lessons_total, price_full, discount_percent, discount_reason, price_final, started_at)
 select
   e.id,
   t.id,
-  t.lessons_in_package,
-  t.package_price,
+  public.subscription_default_lessons(t.id, g.id),
+  public.subscription_default_price(t.id, g.id),
   r.discount,
   case r.discount when 15 then 'returning' when 5 then 'referral' else 'none' end::public.discount_reason,
-  round(t.package_price * (100 - r.discount) / 100.0)::integer,
+  round(public.subscription_default_price(t.id, g.id) * (100 - r.discount) / 100.0)::integer,
   r.start_date
 from new_enrollments e
 join public.students st on st.id = e.student_id
@@ -203,7 +214,8 @@ select public.ensure_lessons(public.bishkek_today() + 56);
 
 -- September 2026 is held (R1-9: «Мой месяц», Б1 and the payroll reconciliation test have a month to show).
 -- Every lesson of every group, everyone present except the marks below. Гульзат: 52 lessons,
--- 324 marks − 6 freezes = 318 student-lessons × 120 сом = 38 160 сом (Б1 / Б2 / БМ1).
+-- 324 marks − 6 freezes = 318 student-lessons × 120 сом = 38 160 сом (Б1 / Б2 / БМ1). Айпери's «Байхан»:
+-- 8 Sat / Sun lessons × 450 = 3 600 (К11).
 -- Written as history with triggers off: confirmed in the evening of the lesson day, not late, so the
 -- seed does not look like everything was confirmed at `db reset` time. October stays unconfirmed.
 create temp table seed_marks (full_name text, group_id uuid, lesson_date date, status public.attendance_status);
@@ -244,7 +256,8 @@ with consumed as (
   where ss.status <> 'absent_frozen'
 )
 insert into public.subscriptions (enrollment_id, tariff_id, lessons_total, price_full, price_final, started_at)
-select c.enrollment_id, t.id, t.lessons_in_package, t.package_price, t.package_price, c.lesson_date
+select c.enrollment_id, t.id, public.subscription_default_lessons(t.id, g.id),
+       public.subscription_default_price(t.id, g.id), public.subscription_default_price(t.id, g.id), c.lesson_date
 from consumed c
 join public.subscriptions s on s.enrollment_id = c.enrollment_id
 join public.enrollments e on e.id = c.enrollment_id
