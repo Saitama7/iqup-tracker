@@ -4,7 +4,7 @@ import { AIGERIM, GULZAT, KANYKEI, login } from './support/auth'
 import { lockSeed } from './support/seed-lock'
 
 // Needs the local stack + `pnpm seed:users`. Seed: September 2026 is held for every group
-// (Гульзат: 52 lessons, 318 student-lessons = 38 160 сом; all five teachers — 51 146 сом with «Байхан» 8 × 450, К11),
+// (Гульзат: 52 lessons, 318 student-lessons = 38 160 сом; all five teachers — 53 171 сом with «Байхан» 8 × 450, К11, and Сайкал 10 × 202,5, К13),
 // October is not confirmed. The browser clock is pinned to Thursday 8 October (the artboards' date)
 // and server_now() answers the same instant (docs/02-architecture.md §7.1).
 const NOW = '2026-10-08T14:24:00+06:00'
@@ -107,7 +107,7 @@ test('Б1 «Расчёт ЗП»: accountant sees every teacher, closing is open 
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
     isDesktop(page) ? 'Сентябрь 2026' : 'Сентябрь',
   )
-  await expect(page.getByTestId('payroll-total')).toContainText('51 146')
+  await expect(page.getByTestId('payroll-total')).toContainText('53 171')
 
   if (isDesktop(page)) {
     // Teachers other specs create (А8) show up with zeros — the count is not pinned.
@@ -140,7 +140,7 @@ test('Б1 «Расчёт ЗП»: accountant sees every teacher, closing is open 
   await expect(page.getByTestId('payroll-total')).toContainText('0')
 })
 
-test('admin: А1 card «Расчёт ЗП → 51 146 сом» opens Б1, September can be closed', async ({
+test('admin: А1 card «Расчёт ЗП → 53 171 сом» opens Б1, September can be closed', async ({
   page,
 }) => {
   test.skip(!isDesktop(page), 'the card is on А1 (desktop)')
@@ -148,10 +148,10 @@ test('admin: А1 card «Расчёт ЗП → 51 146 сом» opens Б1, Septemb
   await login(page, KANYKEI)
   await expect(page).toHaveURL(/\/admin$/)
   const card = page.getByTestId('payroll-card-link')
-  await expect(card).toHaveText('Расчёт ЗП → 51 146 сом')
+  await expect(card).toHaveText('Расчёт ЗП → 53 171 сом')
   await card.click()
   await expect(page).toHaveURL(/\/payroll\?month=2026-09$/)
-  await expect(page.getByTestId('payroll-total')).toContainText('51 146')
+  await expect(page.getByTestId('payroll-total')).toContainText('53 171')
   await expect(page.getByRole('button', { name: 'Закрыть период' })).toBeEnabled()
 })
 

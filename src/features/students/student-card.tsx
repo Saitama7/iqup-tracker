@@ -168,6 +168,7 @@ export function EnrollmentCard({
 }) {
   const sub = e.subscription
   const b = e.balance
+  const days = isDays(e)
   const rest = sub && b ? Math.max(0, sub.price_final - b.paidSom) : 0
   return (
     <section
@@ -228,21 +229,21 @@ export function EnrollmentCard({
           <div className="grid grid-cols-2 gap-2.5 min-[1200px]:grid-cols-4">
             <Tile
               label="Абонемент"
-              value={lessonsCaption(sub.lessons_total)}
+              value={packageCaption(sub.lessons_total, days)}
               caption={priceCaption(sub)}
             />
             <Tile
               label="Использовано"
-              value={`${b.lessonsUsed} из ${sub.lessons_total}`}
+              value={`${b.lessonsUsed} из ${sub.lessons_total}${days ? ' дн' : ''}`}
               caption={`заморозок ${b.freezesUsed}`}
             />
             <Tile
               label="Оплачено"
-              value={`${formatSom(b.paidSom)} · ${b.paidLessons} ур`}
+              value={`${formatSom(b.paidSom)} · ${b.paidLessons} ${days ? 'дн' : 'ур'}`}
               caption={rest > 0 ? `остаток ${formatSom(rest)} сом` : 'оплачено полностью'}
             />
             <Tile
-              label="Доступно уроков"
+              label={days ? 'Доступно дней' : 'Доступно уроков'}
               value={Math.max(0, availableLessons(b))}
               caption={
                 b.debtLessons > 0 ? (
@@ -285,6 +286,7 @@ export function MobileEnrollment({
 }) {
   const sub = e.subscription
   const b = e.balance
+  const days = isDays(e)
   return (
     <section
       aria-label={e.groupLabel}
@@ -303,7 +305,7 @@ export function MobileEnrollment({
       </div>
       <p className="text-xs font-bold text-ink-muted">
         {sub
-          ? `${b?.unit === 'hour' ? `${formatHours(b.lessonsTotal)} ч${b.periodMonth ? ` за ${monthAccusative(b.periodMonth)}` : ''}` : lessonsCaption(sub.lessons_total)} · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
+          ? `${b?.unit === 'hour' ? `${formatHours(b.lessonsTotal)} ч${b.periodMonth ? ` за ${monthAccusative(b.periodMonth)}` : ''}` : packageCaption(sub.lessons_total, days)} · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
           : enrollmentCaption(e, today)}
       </p>
       {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
@@ -313,12 +315,15 @@ export function MobileEnrollment({
           <UsageBar b={b} thin />
           <p className="text-xs font-extrabold">
             {b.unit === 'hour' ? 'Списано' : 'Использовано'} {units(b, b.lessonsUsed)} из{' '}
-            {units(b, b.lessonsTotal)} · заморозок {b.freezesUsed}
+            {units(b, b.lessonsTotal)}
+            {days && b.unit !== 'hour' ? ` ${daysOf(b.lessonsTotal)}` : ''} · заморозок{' '}
+            {b.freezesUsed}
           </p>
           <p className="text-xs font-extrabold">{paySummary(b)}</p>
           <p className="text-xs font-bold text-ink-muted">
             Оплачено {formatSom(b.paidSom)} из {formatSom(sub.price_final)} сом · доступно{' '}
             {units(b, Math.max(0, availableLessons(b)))}
+            {days && b.unit !== 'hour' ? ' дн' : ''}
           </p>
         </>
       ) : !sub && e.refunded ? (
@@ -330,3 +335,13 @@ export function MobileEnrollment({
 
 /** «12 уроков», «4 урока» — the package size (И89: any 1 … 2 × package). */
 const lessonsCaption = (n: number) => `${n} ${pluralRu(n, ['урок', 'урока', 'уроков'])}`
+
+/** After-school: a package of days, not lessons (К13, #111). */
+const isDays = (e: EnrollmentView) => e.group?.group_type === 'afterschool'
+
+/** «из 12 дней», «из 21 дня». */
+const daysOf = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'дня' : 'дней')
+
+/** «12 дней» for after-school, else «12 уроков». */
+const packageCaption = (n: number, days: boolean) =>
+  days ? `${n} ${pluralRu(n, ['день', 'дня', 'дней'])}` : lessonsCaption(n)

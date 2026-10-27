@@ -99,8 +99,8 @@ function groupWeekdays(rules: readonly ScheduleRule[], today: string): number[] 
   return [...new Set((live.length > 0 ? live : rules).map((r) => r.weekday))].sort((a, b) => a - b)
 }
 
-/** After-school enrollments get the plan and the month bills on their card (#82). */
-function afterschoolExtra(e: EnrollmentView, view: StudentView, today: string) {
+/** After-school enrollments get the plan on their card (#82; the subscription is a package of days, К13). */
+function afterschoolExtra(e: EnrollmentView, today: string) {
   if (e.group?.group_type !== 'afterschool') return undefined
   return (
     <AfterschoolPanel
@@ -112,7 +112,6 @@ function afterschoolExtra(e: EnrollmentView, view: StudentView, today: string) {
         groupWeekdays: groupWeekdays(e.group.schedule_rules, today),
       }}
       today={today}
-      history={view.enroll}
     />
   )
 }
@@ -344,7 +343,7 @@ function DesktopStudent({
                 key={e.enrollmentId}
                 e={e}
                 today={today}
-                extra={afterschoolExtra(e, view, today)}
+                extra={afterschoolExtra(e, today)}
                 onEditStart={() => {
                   onEditStart(e)
                 }}
@@ -667,7 +666,7 @@ function MobileStudent({
             key={e.enrollmentId}
             e={e}
             today={today}
-            extra={afterschoolExtra(e, view, today)}
+            extra={afterschoolExtra(e, today)}
             onEditStart={() => {
               onEditStart(e)
             }}

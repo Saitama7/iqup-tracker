@@ -30,8 +30,9 @@ export const MARK_LABEL: Record<Mark, string> = {
   absent_burned: 'Не был',
 }
 
-/** attendance.consumes_credit (invariant 5). */
-export const consumesCredit = (m: Mark) => m !== 'absent_frozen'
+/** attendance.consumes_credit (invariant 5); an after-school day with 0 h never consumes (К13). */
+export const consumesCredit = (m: Mark, hours: number | null = null) =>
+  m !== 'absent_frozen' && hours !== 0
 
 export interface SubscriptionSource {
   id: string
@@ -70,7 +71,7 @@ const creditOf = (s: SubscriptionSource) => (isHourSource(s) ? (s.credit_hours ?
 /** Units a consuming mark takes: its hours on an hour subscription, else one lesson. */
 const unitsUsed = (s: SubscriptionSource, marks: SubscriptionSource['marks']) =>
   marks
-    .filter((m) => consumesCredit(m.status))
+    .filter((m) => consumesCredit(m.status, m.hours ?? null))
     .reduce((n, m) => n + (isHourSource(s) ? (m.hours ?? 0) : 1), 0)
 
 export interface EnrollmentSource {
@@ -393,21 +394,17 @@ export interface LessonAccrual {
   perStudentLesson: number | null
 }
 
-/**
- * Teacher's pay of one lesson — same rule as payroll/calc.ts calcMonth(), `percent` on its date;
- * an after-school student with no invoice for the month — by `hourPrice` on the date (И69).
- */
+/** Teacher's pay of one lesson — same rule as payroll/calc.ts calcMonth(), `percent` on its date. */
 export function lessonAccrual(
   rows: readonly (Pick<RosterRow, 'studentId' | 'paySubscription'> & { hours?: number | null })[],
   marks: ReadonlyMap<string, Mark>,
   percent: number,
-  hourPrice: number | null = null,
 ): LessonAccrual {
   let pay = 0
   for (const r of rows) {
     const m = marks.get(r.studentId)
-    if (m && consumesCredit(m))
-      pay += markPay(r.paySubscription, percent, r.hours ?? null, hourPrice)
+    if (m && consumesCredit(m, r.hours ?? null))
+      pay += markPay(r.paySubscription, percent, r.hours ?? null)
   }
   const subs = rows.flatMap((r) => (r.paySubscription ? [r.paySubscription] : []))
   // hour subscriptions pay by each student's hours — no single «за ученико-урок» (#82)

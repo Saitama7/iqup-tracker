@@ -1,5 +1,5 @@
 // Subscription price (#109, К11 / К12) for the TS ↔ SQL reconciliation tests, in May 2025 (before the
-// seed's months — 38 160 / 51 146 do not move), a teacher of its own at 50 %:
+// seed's months — 38 160 / 53 171 do not move), a teacher of its own at 50 %:
 //   P1 — individual group of 1,5-h lessons (Sat / Sun), bought 12 / 7 200 as on prod before К11
 //        (own price) → 600 a lesson, 300 to the teacher; one lesson held;
 //   P2 — a group, 20 / 7 400 own price (продлёнка «выставляется индивидуально»), paid 5 400, 12 held.

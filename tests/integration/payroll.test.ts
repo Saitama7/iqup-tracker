@@ -47,7 +47,7 @@ async function source(supabase: Client) {
     supabase
       .from('lessons')
       .select(
-        'id, group_id, lesson_date, duration_min, status, teacher_id, attendance(status, hours, unbilled_hour_price, subscription:subscriptions(price_full, lessons_total, hours_total))',
+        'id, group_id, lesson_date, duration_min, status, teacher_id, attendance(status, hours, subscription:subscriptions(price_full, lessons_total, hours_total))',
       ),
     supabase.from('teacher_rates').select('teacher_id, percent, valid_from'),
   ])
@@ -104,7 +104,7 @@ describe('v_payroll_preview ↔ calcMonth on the seed', () => {
 
     // The pilot numbers (И20): everyone in September — 47 546 сом + «Байхан» 8 × 450 (К11, #109).
     const september = rows.filter((r) => r.month === '2026-09-01')
-    expect(september.reduce((n, r) => n + (r.base_amount ?? 0), 0)).toBe(51_146)
+    expect(september.reduce((n, r) => n + (r.base_amount ?? 0), 0)).toBe(53_171)
     expect(september.every((r) => r.no_subscription === 0)).toBe(true)
   })
 
@@ -188,23 +188,24 @@ describe('К11 (#109 fixture): update_subscription moves the pay by price_full /
   })
 })
 
-describe('after-school by hours (#82 fixture): invoiced, credit and not invoiced yet', () => {
-  it('the hour price of the invoice, and of the date for a month not invoiced (И69)', async () => {
+describe('after-school days (#111 fixture): % × price_full / N a day (К13)', () => {
+  it('45 % × 5 400 / 12 = 202,5 → 203 — the same rounding in the view and calc.ts', async () => {
     const supabase = await signIn('0555 300 300')
     const rows = (await viewRows(supabase)).filter((r) => r.teacher_id === FIXTURE.teacher)
     const { byKey, rates } = await source(supabase)
     const own = rates.filter((r) => r.teacher_id === FIXTURE.teacher)
-    // hour price 7 000 / 60 h = 117; October 9 h on the October invoices, November F1 6 h on its
-    // invoice (54 h + 6 h credit) + F2 6 h not invoiced, by the hour price on the date
-    expect(rows.map((r) => [r.month, r.base_amount, r.student_hours, r.no_subscription])).toEqual(
+    // October: F1 10 × 202,5 + F2 ПТ 3, 10 × 157,5 (20 · 7 000; the Monday mark deleted) = 2 340
+    // November: F1 one day — 202,5 → 203
+    expect(rows.map((r) => [r.month, r.base_amount, r.student_lessons, r.no_subscription])).toEqual(
       expect.arrayContaining([
-        ['2025-10-01', 474, 9, 0],
-        ['2025-11-01', 632, 12, 0],
+        ['2025-10-01', 2340, 12, 0],
+        ['2025-11-01', 203, 1, 0],
       ]),
     )
     for (const row of rows) {
       const ts = calcMonth(byKey.get(`${FIXTURE.teacher}|${row.month}`) ?? [], own)
       expect(ts.amount).toBe(row.base_amount)
+      expect(ts.studentLessons).toBe(row.student_lessons)
       expect(ts.studentHours).toBe(row.student_hours)
     }
   })

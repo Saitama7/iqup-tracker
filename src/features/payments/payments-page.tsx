@@ -758,9 +758,9 @@ function choicesOf(
       const current =
         balances.find((b) => b.studentId === student.id && b.groupId === g.id && b.isCurrent) ??
         null
-      if (g.group_type === 'afterschool') {
-        // продлёнка (#82): every month invoice still owing, and the newest one — no «новый абонемент»
-        // here, the invoice is issued on the student's card
+      // продлёнка по часам (#82, legacy — К13 made it a package of days): every month invoice still
+      // owing, and the newest one — no «новый абонемент» for those
+      if (g.group_type === 'afterschool' && current?.unit === 'hour') {
         const invoices = balances
           .filter(
             (b) =>
@@ -771,7 +771,7 @@ function choicesOf(
               (b.isCurrent || b.paidSom < b.priceFinal || b.debtSom > 0),
           )
           .sort((a, b) => (a.periodMonth ?? '').localeCompare(b.periodMonth ?? ''))
-        const list = invoices.length > 0 ? invoices : current ? [current] : []
+        const list = invoices.length > 0 ? invoices : [current]
         return list.map((b): EnrollmentChoice => ({
           enrollmentId: e.id,
           groupId: g.id,
@@ -794,7 +794,7 @@ function choicesOf(
 
 /** Default: pay the rest of a partly paid current subscription, else a new one. */
 const defaultTarget = (c: EnrollmentChoice): Target =>
-  c.current && (c.current.paidLessons < c.current.lessonsTotal || c.groupType === 'afterschool')
+  c.current && (c.current.paidLessons < c.current.lessonsTotal || c.current.unit === 'hour')
     ? { kind: 'current', subscriptionId: c.current.subscriptionId }
     : { kind: 'new', enrollmentId: c.enrollmentId }
 
@@ -913,7 +913,7 @@ function RecordPanel({
           target.kind === 'new' ? lessons : null,
           {
             groupMinutes: groupsById.get(choice.groupId)?.lesson_duration_min,
-            price: target.kind === 'new' && choice.groupType !== 'afterschool' ? price : null,
+            price: target.kind === 'new' ? price : null,
           },
         )
       : null
@@ -1052,7 +1052,7 @@ function RecordPanel({
             enrollmentId: target.enrollmentId,
             discount,
             lessons,
-            price: choice?.groupType === 'afterschool' ? null : price,
+            price,
             amount,
             method,
             paidOn,
@@ -1211,7 +1211,7 @@ function RecordPanel({
                     : 'доплата по текущему'}
                 </option>
               ) : null,
-              c.groupType === 'afterschool' ? null : (
+              c.current?.unit === 'hour' ? null : (
                 <option key={`new:${c.enrollmentId}`} value={`new:${c.enrollmentId}`}>
                   {c.label} · новый абонемент
                 </option>
@@ -1326,7 +1326,7 @@ function RecordPanel({
               }}
             />
           )}
-          {target.kind === 'new' && !refund && quote && choice?.groupType !== 'afterschool' && (
+          {target.kind === 'new' && !refund && quote && (
             <PriceField
               key={`${targetValue(target)}-price`}
               id={`${id}-price`}

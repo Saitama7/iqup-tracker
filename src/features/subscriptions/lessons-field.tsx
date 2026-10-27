@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { inputClass, labelClass } from '@/features/tariffs/parts'
 import type { TariffTerms } from '@/features/tariffs/current'
 import { cn } from '@/lib/utils'
-import { lessonSizePresets, maxSubscriptionLessons } from './model'
+import { lessonSizePresets, maxSubscriptionLessons, packageUnitLabel } from './model'
 
 /** «Уроков» of a new package is a whole 1 … 2 × lessons_in_package (И89); null — the default size. */
 export function lessonsValid(tariff: TariffTerms, lessons: number | null): boolean {
@@ -13,7 +13,8 @@ export function lessonsValid(tariff: TariffTerms, lessons: number | null): boole
 }
 
 /**
- * «Уроков» (И89): `12 · 8 · 4 · другое` — the package size bought at the same lesson price.
+ * «Уроков» (И89): `12 · 8 · 4 · другое` — the package size bought at the same lesson price;
+ * after-school — «Дней»: `20 · 12 · 8 · другое` (К13).
  * `value` null — the default size (`byDefault`: the tariff's package; individual — the tariff's hours
  * in lessons of the group, К11); «другое» — a number 1 … 2 × package (NaN while empty).
  */
@@ -48,7 +49,7 @@ export function LessonsField({
   return (
     <div className="flex flex-col gap-1.5">
       <span className={labelClass} id={`${id}-label`}>
-        Уроков
+        {packageUnitLabel(tariff.group_type)}
       </span>
       <div role="radiogroup" aria-labelledby={`${id}-label`} className="flex gap-2">
         {presets.map((n) => (
@@ -83,7 +84,7 @@ export function LessonsField({
       {other && (
         <input
           id={id}
-          aria-label="Уроков в абонементе"
+          aria-label={`${packageUnitLabel(tariff.group_type)} в абонементе`}
           inputMode="numeric"
           autoComplete="off"
           placeholder={`1–${max}`}
@@ -98,7 +99,9 @@ export function LessonsField({
         />
       )}
       {invalid && text !== '' && (
-        <p className="text-xs font-bold text-burned-strong">Уроков — от 1 до {max}</p>
+        <p className="text-xs font-bold text-burned-strong">
+          {packageUnitLabel(tariff.group_type)} — от 1 до {max}
+        </p>
       )}
     </div>
   )

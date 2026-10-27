@@ -1,9 +1,9 @@
-// After-school by hours (#82) for the TS ↔ SQL reconciliation tests: a group of its own teacher in
-// October–November 2025 (before the seed's months — the seed sums 38 160 / 47 546 do not move).
-//   F1 — October invoice paid in full, 1 present + 2 frozen → 6 h credit off November; November
-//        invoiced, 2 days present;
-//   F2 — October invoice unpaid, 2 days present, 1 frozen (a debt); November not invoiced, 2 days
-//        present (the teacher is paid by the hour price on the date, the student owes them, И69).
+// After-school — a package of days (К13, #111) for the TS ↔ SQL reconciliation tests: a group of its
+// own teacher (45 %) in October–November 2025, before the seed's months (the seed sums do not move).
+//   F1 — ВТ/СР/ЧТ 3 ч, 12 days for 5 400, paid in full: 10 days present in October (202,5 a day),
+//        1 more on 4 November (the November accrual 202,5 → 203); 11 of 12 used, 1 left.
+//   F2 — ПН/ПТ 3 ч, the default 20 · 7 000, not paid: 3 October, 6 and 10 October present, the
+//        plan then changed from 6 October to ПТ only (the Monday mark is deleted, К13).
 // Idempotent: created once per database (supabase db reset clears it).
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '../../src/lib/supabase/types.gen'
@@ -95,72 +95,52 @@ export async function ensureAfterschoolFixture(): Promise<void> {
 
   const a = await admin()
   ok(await a.rpc('generate_lessons', { p_group_id: FIXTURE.group, p_until: '2025-11-30' }))
-  for (const student of [FIXTURE.f1, FIXTURE.f2]) {
-    ok(
+  const enrolled = async (student: string, plan: number[], terms: object) => {
+    const row = ok(
       await a.rpc('enroll_student', {
         p_student_id: student,
         p_group_id: FIXTURE.group,
         p_start_date: '2025-10-01',
+        p_plan: plan,
+        ...terms,
       }),
-    )
+    ).at(0)
+    if (!row) throw new Error('fixture: no enrollment')
+    return row
   }
-  const october = ok(
-    await a
-      .from('subscriptions')
-      .select('id, price_final, enrollment:enrollments!inner(student_id)')
-      .eq('enrollment.student_id', FIXTURE.f1)
-      .eq('period_month', '2025-10-01')
-      .single(),
-  )
+  const f1 = await enrolled(FIXTURE.f1, [0, 3, 3, 3, 0, 0, 0], { p_lessons: 12, p_price: 5400 })
+  const f2 = await enrolled(FIXTURE.f2, [3, 0, 0, 0, 3, 0, 0], {})
   ok(
     await a.rpc('record_payment', {
-      p_subscription_id: october.id,
-      p_amount: october.price_final,
+      p_subscription_id: f1.subscription_id,
+      p_amount: 5400,
       p_method: 'cash',
     }),
   )
 
   const lessons = ok(
-    await a
-      .from('lessons')
-      .select('id, lesson_date')
-      .eq('group_id', FIXTURE.group)
-      .in('lesson_date', ['2025-10-01', '2025-10-02', '2025-10-03', '2025-11-03', '2025-11-04']),
+    await a.from('lessons').select('id, lesson_date').eq('group_id', FIXTURE.group),
   )
-  const lesson = (d: string) => {
+  const confirm = async (d: string, student: string) => {
     const l = lessons.find((x) => x.lesson_date === d)
     if (!l) throw new Error(`no fixture lesson on ${d}`)
-    return l.id
-  }
-  const confirm = async (d: string, f1: string, f2: string) => {
     done(
       await a.rpc('confirm_lesson', {
-        p_lesson_id: lesson(d),
-        p_marks: [
-          { student_id: FIXTURE.f1, status: f1 },
-          { student_id: FIXTURE.f2, status: f2 },
-        ],
+        p_lesson_id: l.id,
+        p_marks: [{ student_id: student, status: 'present' }],
       }),
     )
   }
-  await confirm('2025-10-01', 'present', 'present')
-  await confirm('2025-10-02', 'absent_frozen', 'present')
-  await confirm('2025-10-03', 'absent_frozen', 'absent_frozen')
-
-  const f1Enrollment = ok(
-    await a
-      .from('enrollments')
-      .select('id')
-      .eq('student_id', FIXTURE.f1)
-      .eq('group_id', FIXTURE.group)
-      .single(),
-  ).id
-  ok(
-    await a.rpc('issue_afterschool_invoice', {
-      p_enrollment_id: f1Enrollment,
-      p_month: '2025-11-01',
+  for (const d of ['01', '02', '07', '08', '09', '14', '15', '16', '21', '22'])
+    await confirm(`2025-10-${d}`, FIXTURE.f1)
+  for (const d of ['03', '06', '10']) await confirm(`2025-10-${d}`, FIXTURE.f2)
+  await confirm('2025-11-04', FIXTURE.f1)
+  done(
+    await a.rpc('set_afterschool_plan', {
+      p_enrollment_id: f2.enrollment_id,
+      p_valid_from: '2025-10-06',
+      p_hours: [0, 0, 0, 0, 3, 0, 0],
+      p_reason: 'фикстура: только ПТ',
     }),
   )
-  await confirm('2025-11-03', 'present', 'present')
-  await confirm('2025-11-04', 'present', 'present')
 }

@@ -10,30 +10,19 @@ import { formatDateLong, formatSom, GROUP_TYPE_LABEL } from '@/features/tariffs/
 import { DateInput } from '@/components/ui/date-picker'
 import { formatDateRu, parseDateRu } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { groupLessonDatesQuery } from '@/features/afterschool/api'
-import {
-  defaultPlan,
-  formatHours,
-  formatQuote,
-  invoiceQuote,
-  monthPrepositional,
-  monthQuote,
-  monthStart,
-  nextMonth,
-  tariffHourPrice,
-  validPlan,
-} from '@/features/afterschool/model'
+import { defaultPlan, validPlan } from '@/features/afterschool/model'
 import { PlanEditor } from '@/features/afterschool/plan-editor'
 import { LessonsField, lessonsValid } from './lessons-field'
 import { PriceField } from './price-field'
-import { tariffFor } from '@/features/tariffs/current'
-import { enrollForm, enrollStudent, tariffsQuery, type EnrollInput, type TariffRow } from './api'
+import { enrollForm, enrollStudent, tariffsQuery, type EnrollInput } from './api'
 import {
   defaultDiscount,
   discountAvailability,
   discountByPct,
   hoursCaption,
   maxSubscriptionLessons,
+  packageSizeCaption,
+  packageUnitLabel,
   priceErrorMessage,
   priceValid,
   quoteSubscription,
@@ -113,28 +102,15 @@ export function EnrollDialog({
   // the plan follows the picked group until the admin touches it
   const [plan, setPlan] = useState<number[] | null>(null)
   const hours = plan ?? defaultPlan(weekdays)
-  const billMonth = monthStart(startIso ?? today)
-  const lessonDates = useQuery({
-    ...groupLessonDatesQuery(group?.id ?? '', billMonth, nextMonth(nextMonth(billMonth))),
-    enabled: afterschool && !!startIso,
-  })
   const options = discountAvailability(
     student ?? { isReturning: false, subscriptions: [], friendsBrought: 0 },
   )
   const quote =
     group && startIso && tariffs.data
-      ? quoteSubscription(
-          group.group_type,
-          startIso,
-          tariffs.data,
-          discount,
-          afterschool ? null : lessons,
-          { groupMinutes: group.lesson_duration_min, price: afterschool ? null : price },
-        )
-      : null
-  const hourBill =
-    afterschool && startIso && lessonDates.data && tariffs.data
-      ? afterschoolBill(lessonDates.data, hours, startIso, tariffs.data, discount)
+      ? quoteSubscription(group.group_type, startIso, tariffs.data, discount, lessons, {
+          groupMinutes: group.lesson_duration_min,
+          price,
+        })
       : null
 
   const mutation = useMutation({
@@ -160,8 +136,8 @@ export function EnrollDialog({
       groupId,
       startDate: date,
       discount,
-      lessons: afterschool ? null : lessons,
-      price: afterschool ? null : price,
+      lessons,
+      price,
     })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Проверьте поля формы')
@@ -171,11 +147,13 @@ export function EnrollDialog({
       setError('На эту дату нет тарифа для группы')
       return
     }
-    if (!afterschool && !lessonsValid(quote.tariff, lessons)) {
-      setError(`Уроков в абонементе — от 1 до ${maxSubscriptionLessons(quote.tariff)}`)
+    if (!lessonsValid(quote.tariff, lessons)) {
+      setError(
+        `${packageUnitLabel(quote.tariff.group_type)} в абонементе — от 1 до ${maxSubscriptionLessons(quote.tariff)}`,
+      )
       return
     }
-    if (!afterschool && !priceValid(price)) {
+    if (!priceValid(price)) {
       setError(priceErrorMessage)
       return
     }
@@ -303,7 +281,7 @@ export function EnrollDialog({
           </div>
         </div>
 
-        {!afterschool && quote && (
+        {quote && (
           <>
             <LessonsField
               key={groupId}
@@ -344,54 +322,13 @@ export function EnrollDialog({
           role="status"
           className="flex flex-col gap-1.5 rounded-[14px] bg-muted px-4 py-3 text-sm font-bold"
         >
-          {afterschool && startIso ? (
-            hourBill ? (
-              <>
-                <div className="flex justify-between gap-3">
-                  <span className="text-ink-muted">Абонемент</span>
-                  <span className="text-right">помесячно · с {formatDayMonth(hourBill.from)}</span>
-                </div>
-                <p className="text-xs text-ink-muted">{formatQuote(hourBill.month)}</p>
-                <div className="flex justify-between gap-3">
-                  <span className="text-ink-muted">
-                    {formatHours(hourBill.invoice.hours)} ч ×{' '}
-                    {formatSom(hourBill.invoice.hourPrice)} сом
-                  </span>
-                  <span className="text-right whitespace-nowrap">
-                    {formatSom(hourBill.invoice.priceFull)} сом
-                  </span>
-                </div>
-                {discount > 0 && (
-                  <div className="flex justify-between gap-3">
-                    <span className="text-ink-muted">Скидка {discount} %</span>
-                    <span className="whitespace-nowrap">
-                      −{formatSom(hourBill.invoice.priceFull - hourBill.invoice.priceFinal)} сом
-                    </span>
-                  </div>
-                )}
-                <div className="flex items-baseline justify-between gap-3 border-t border-line-strong pt-2">
-                  <span>
-                    ≈ {formatHours(hourBill.invoice.hours)} ч в{' '}
-                    {monthPrepositional(hourBill.monthStart)}
-                  </span>
-                  <span className="font-display text-lg font-bold whitespace-nowrap">
-                    {formatSom(hourBill.invoice.priceFinal)} сом
-                  </span>
-                </div>
-              </>
-            ) : (
-              <p className="text-ink-muted">
-                {lessonDates.isPending || tariffs.isPending
-                  ? 'Считаем часы…'
-                  : 'По графику нет часов — выберите дни'}
-              </p>
-            )
-          ) : quote && group && startIso ? (
+          {quote && group && startIso ? (
             <>
               <div className="flex justify-between gap-3">
                 <span className="text-ink-muted">Абонемент</span>
                 <span className="text-right">
-                  {quote.lessonsTotal} уроков · с {formatDayMonth(startIso)}
+                  {packageSizeCaption(group.group_type, quote.lessonsTotal)} · с{' '}
+                  {formatDayMonth(startIso)}
                 </span>
               </div>
               <div className="flex justify-between gap-3">
@@ -468,33 +405,4 @@ function groupWeekdays(group: GroupBrief, date: string): number[] {
     (r) => r.valid_from <= date && (r.valid_to === null || r.valid_to >= date),
   )
   return [...new Set((live.length > 0 ? live : rules).map((r) => r.weekday))].sort((a, b) => a - b)
-}
-
-/**
- * After-school (#82): the first monthly invoice enroll_student creates — the start month from the
- * start date, or the next month when the start month has no planned hours left.
- */
-function afterschoolBill(
-  lessonDates: readonly string[],
-  hours: readonly number[],
-  start: string,
-  tariffs: readonly TariffRow[],
-  discount: number,
-) {
-  const plans = [{ valid_from: start, hours }]
-  let first = monthStart(start)
-  let month = monthQuote(lessonDates, plans, first, start)
-  if (month.hours === 0) {
-    first = nextMonth(first)
-    month = monthQuote(lessonDates, plans, first, start)
-  }
-  if (month.hours === 0) return null
-  const tariff = tariffFor('afterschool', first < start ? start : first, tariffs)
-  if (!tariff) return null
-  return {
-    from: first < start ? start : first,
-    monthStart: first,
-    month,
-    invoice: invoiceQuote(month.hours, 0, tariffHourPrice(tariff), discount),
-  }
 }

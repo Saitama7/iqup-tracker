@@ -8,7 +8,7 @@ import { lockSeed } from './support/seed-lock'
 
 // #83 · advances: the accountant issues one on Б1 → «К выплате» goes down, the accrual stays →
 // the teacher sees it in «Мой месяц» → the accountant deletes it with a reason. Needs the local
-// stack + `pnpm seed:users`. Seed: Гульзат, September 2026 — 38 160 сом, everyone — 51 146 («Байхан», К11).
+// stack + `pnpm seed:users`. Seed: Гульзат, September 2026 — 38 160 сом, everyone — 53 171 («Байхан», К11).
 const NOW = '2026-10-08T14:24:00+06:00'
 const GULZAT_ID = '00000000-0000-4000-a000-000000000001'
 
@@ -52,7 +52,7 @@ test('бухгалтер выдаёт аванс → «К выплате» ме�
   await pinClock(page, NOW)
   await login(page, AIGERIM)
   await expect(page).toHaveURL(/\/payroll$/)
-  await expect(page.getByTestId('payroll-total')).toContainText('51 146')
+  await expect(page.getByTestId('payroll-total')).toContainText('53 171')
 
   const row = page.getByTestId(`payroll-row-${GULZAT_ID}`)
   if (isDesktop(page)) {
@@ -117,6 +117,6 @@ test('бухгалтер выдаёт аванс → «К выплате» ме�
   await remove.getByLabel('Причина').fill('ошиблись месяцем')
   await remove.getByRole('button', { name: 'Удалить' }).click()
   await expect(page.getByText('Аванс 5 000 сом удалён')).toBeVisible()
-  await expect(page.getByTestId('payroll-total')).toContainText('51 146')
+  await expect(page.getByTestId('payroll-total')).toContainText('53 171')
   await expect(row.getByTestId('payroll-to-pay')).toHaveText('38 160')
 })

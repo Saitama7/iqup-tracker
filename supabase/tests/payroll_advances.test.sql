@@ -138,8 +138,8 @@ select results_eq(
 );
 select is(
   (select sum(base_amount)::integer from public.v_payroll_preview where month = '2026-09-01'),
-  51146,
-  'seed: everyone in September — still 51 146 сом accrued'
+  53171,
+  'seed: everyone in September — still 53 171 сом accrued'
 );
 
 -- ─── Teacher A: own only, cannot write ──────────────────────────────────────
