@@ -88,13 +88,13 @@ test('админ отменяет проведение: −X сом, «Мой м
   const amount = impact?.[0]?.amount ?? 0
   expect(amount).toBeGreaterThan(0)
 
-  // the teacher: «Попросить исправить», no «Отменить проведение»
+  // the teacher: «Исправить отметки» (#110), no «Отменить проведение»
   await login(page, GULZAT)
   const before = await octoberBase()
   expect(before).toBeGreaterThanOrEqual(amount)
   await expectOctoberPay(page, before)
   await page.goto(`/lessons/${lessonId}`)
-  await expect(page.getByRole('button', { name: 'Попросить исправить' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Исправить отметки' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Отменить проведение' })).toHaveCount(0)
 
   await switchUser(page, KANYKEI)
