@@ -45,7 +45,7 @@ const tariffs: Tariff[] = Object.entries(PRICES).flatMap(([validFrom, prices]) =
     package_price: price,
     max_students: MAX[type as GroupType],
     lesson_duration_min: type === 'afterschool' ? 180 : 60,
-    freeze_limit: 2,
+    freeze_limit: null,
     valid_from: validFrom,
     created_at: validFrom === '2026-09-01' ? '2026-08-25T06:00:00Z' : `${validFrom}T00:00:00Z`,
     created_by: validFrom === '2025-09-01' ? null : KANYKEI,

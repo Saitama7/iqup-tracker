@@ -2,7 +2,7 @@
 // 0023). Not a mark — the teacher sees it prefilled and may change it; confirm_lesson takes it as the
 // default. Pure: callers pass rows they already have.
 import { addDays, dayShort } from '@/features/groups/model'
-import { freezeBlocked, type Mark, type RosterRow } from '@/features/lessons/attendance'
+import type { Mark, RosterRow } from '@/features/lessons/attendance'
 import { lessonStartMs, type LessonTiming } from '@/features/lessons/select'
 
 export interface PresetInfo {
@@ -11,18 +11,17 @@ export interface PresetInfo {
 
 /**
  * Marks with the presets filled in for students not marked yet — an explicit mark (the student
- * came after all) wins; a subscription with no freezes left gets no prefill (В2), like a draft.
+ * came after all) wins; no freeze limit (К9).
  */
 export function applyPresets(
   marks: ReadonlyMap<string, Mark>,
   presets: ReadonlyMap<string, PresetInfo>,
-  roster: readonly Pick<RosterRow, 'studentId' | 'balance'>[],
+  roster: readonly Pick<RosterRow, 'studentId'>[],
 ): ReadonlyMap<string, Mark> {
   if (presets.size === 0) return marks
   const next = new Map(marks)
   for (const row of roster) {
     if (next.has(row.studentId) || !presets.has(row.studentId)) continue
-    if (freezeBlocked(row, undefined)) continue
     next.set(row.studentId, 'absent_frozen')
   }
   return next
@@ -78,8 +77,8 @@ export function presetErrorReason(error: { code?: string; message?: string }): s
     return 'сервер не обновлён — сообщите администратору'
   if (m.includes('freeze limit'))
     return m.includes('month')
-      ? 'лимит заморозок 2 на месяц исчерпан'
-      : 'лимит заморозок 2 на абонемент исчерпан'
+      ? 'лимит заморозок на месяц исчерпан'
+      : 'лимит заморозок на абонемент исчерпан'
   if (m.includes('in the past')) return 'занятие уже прошло'
   if (m.includes('already started')) return 'занятие уже началось — это не «заранее»'
   if (m.includes('closed period')) return 'период закрыт'

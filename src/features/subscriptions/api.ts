@@ -12,7 +12,7 @@ const tariffTermsSchema = z.object({
   valid_from: z.string(),
   lessons_in_package: z.number().int(),
   package_price: z.number().int(),
-  freeze_limit: z.number().int(),
+  freeze_limit: z.number().int().nullable(),
   lesson_duration_min: z.number().int(),
   /** After-school price per hour (#82); null — package / (lessons × h). */
   hour_price: z.number().int().nullable(),

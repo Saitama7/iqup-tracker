@@ -41,7 +41,8 @@ export interface SubscriptionSource {
   lessons_total: number
   price_full: number
   price_final: number
-  freeze_limit: number
+  /** null — no limit (К9). */
+  freeze_limit: number | null
   /** Σ payments.amount of the subscription (refunds are negative). */
   paid: number
   /** Every mark charged to this subscription; after-school — with its planned hours (#82). */
@@ -99,7 +100,8 @@ export interface Balance {
   /** Without the mark of `lessonId`; negative — lessons «в долг» (В7). */
   left: number
   freezes: number
-  freezeLimit: number
+  /** null — no limit (К9). */
+  freezeLimit: number | null
   /** price_final / lessons_total — price of one lesson with the discount (В8). */
   lessonPrice: number
 }
@@ -272,16 +274,6 @@ export function lessonRoster(
   return [...rows.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
 }
 
-/** Freeze limit reached on the subscription this mark goes to (В2: 2 per subscription). */
-export function freezeBlocked(row: Pick<RosterRow, 'balance'>, mark: Mark | undefined): boolean {
-  const b = row.balance
-  return !!b && mark !== 'absent_frozen' && b.freezes >= b.freezeLimit
-}
-
-/** «Лимит 2 на абонемент» — hint next to the disabled «Заморозка». */
-export const freezeLimitHint = (b: Pick<Balance, 'freezeLimit'>) =>
-  `лимит ${b.freezeLimit} на абонемент`
-
 const LESSONS_GEN = ['урок', 'урока', 'уроков'] as const
 const som = (n: number) => `${formatSom(n)} сом`
 
@@ -301,13 +293,13 @@ const partlyPaid = (b: Balance, p: StudentPay) => p.paidLessons < b.total
 
 /**
  * Second line under the name (У3): «Долг 2 ур. · 533 сом» / «Осталось 1 ур. · пора оплачивать» /
- * «Частично · оплачено 6 ур · заморозок 1/2» / «Осталось 4 ур. · заморозок 1/2».
+ * «Частично · оплачено 6 ур · заморозок 1» / «Осталось 4 ур. · заморозок 1» (no limit, К9).
  */
 export function mobileMeta(row: Meta): { text: string; tone: Tone } {
   const b = row.balance
   const p = row.pay
   if (!b || !p) return { text: 'Нет абонемента', tone: 'debt' }
-  const freezes = `заморозок ${b.freezes}/${b.freezeLimit}`
+  const freezes = `заморозок ${b.freezes}`
   if (p.state === 'debt') {
     return {
       text: `Долг ${short(b, p.debtLessons)} · ${som(p.debtSom)}`,
@@ -329,7 +321,7 @@ export function mobileMeta(row: Meta): { text: string; tone: Tone } {
   return { text: `Осталось ${short(b, b.left)} · ${freezes}`, tone: 'muted' }
 }
 
-/** «Абонемент» column (УД2): «4 из 12 · заморозок 1/2», «долг 2 урока · 533 сом», «… — лимит». */
+/** «Абонемент» column (УД2): «4 из 12 · заморозок 1», «долг 2 урока · 533 сом». */
 export function desktopMeta(row: Meta): { text: string; tone: Tone } {
   const b = row.balance
   const p = row.pay
@@ -348,7 +340,7 @@ export function desktopMeta(row: Meta): { text: string; tone: Tone } {
     const text = partlyPaid(b, p) ? `оплачено ещё ${short(b, p.available)}` : ofTotal
     return { text: `${text} · пора оплачивать`, tone: 'warn' }
   }
-  const freezes = `заморозок ${b.freezes}/${b.freezeLimit}${b.freezes >= b.freezeLimit ? ' — лимит' : ''}`
+  const freezes = `заморозок ${b.freezes}`
   if (p.state === 'partial') {
     return {
       text: `частично · оплачено ${hour ? short(b, p.paidLessons) : `${p.paidLessons} ур`} · ${freezes}`,

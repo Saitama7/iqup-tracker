@@ -198,7 +198,7 @@ export function EnrollmentCard({
             <Tile
               label="Списано"
               value={`${formatHours(b.lessonsUsed)} из ${formatHours(b.lessonsTotal)} ч`}
-              caption={`заморозок ${b.freezesUsed} / ${b.freezeLimit}`}
+              caption={`заморозок ${b.freezesUsed}`}
             />
             <Tile
               label="Оплачено"
@@ -234,7 +234,7 @@ export function EnrollmentCard({
             <Tile
               label="Использовано"
               value={`${b.lessonsUsed} из ${sub.lessons_total}`}
-              caption={`заморозок ${b.freezesUsed} / ${b.freezeLimit}`}
+              caption={`заморозок ${b.freezesUsed}`}
             />
             <Tile
               label="Оплачено"
@@ -313,7 +313,7 @@ export function MobileEnrollment({
           <UsageBar b={b} thin />
           <p className="text-xs font-extrabold">
             {b.unit === 'hour' ? 'Списано' : 'Использовано'} {units(b, b.lessonsUsed)} из{' '}
-            {units(b, b.lessonsTotal)} · заморозок {b.freezesUsed} / {b.freezeLimit}
+            {units(b, b.lessonsTotal)} · заморозок {b.freezesUsed}
           </p>
           <p className="text-xs font-extrabold">{paySummary(b)}</p>
           <p className="text-xs font-bold text-ink-muted">

@@ -2,23 +2,23 @@
 -- Auth users and profiles are NOT created here — see scripts/seed-users.ts (R0-3); it links teachers.user_id by phone.
 -- Lessons are generated from schedule_rules at the end (generate_lessons, 0008): from the group start to 8 weeks ahead.
 
--- Tariffs — docs/01-domain-model.md §3; in effect since September 2026, earlier versions for А9а
+-- Tariffs — docs/01-domain-model.md §3; in effect since September 2026, earlier versions for А9а; freeze_limit null — no limit (К9)
 insert into public.tariffs (group_type, lessons_in_package, package_price, max_students, lesson_duration_min, freeze_limit, valid_from, created_at) values
-  ('group',       12, 2800, 10,  60, 2, '2025-02-01', '2025-01-20 12:00+06'),
-  ('mini',        12, 3200,  4,  60, 2, '2025-02-01', '2025-01-20 12:00+06'),
-  ('pair',        12, 3600,  2,  60, 2, '2025-02-01', '2025-01-20 12:00+06'),
-  ('individual',  12, 6000,  1,  60, 2, '2025-02-01', '2025-01-20 12:00+06'),
-  ('afterschool', 20, 6500,  8, 180, 2, '2025-02-01', '2025-01-20 12:00+06'),
-  ('group',       12, 3000, 10,  60, 2, '2025-09-01', '2025-08-20 12:00+06'),
-  ('mini',        12, 3500,  4,  60, 2, '2025-09-01', '2025-08-20 12:00+06'),
-  ('pair',        12, 4000,  2,  60, 2, '2025-09-01', '2025-08-20 12:00+06'),
-  ('individual',  12, 6500,  1,  60, 2, '2025-09-01', '2025-08-20 12:00+06'),
-  ('afterschool', 20, 7000,  8, 180, 2, '2025-09-01', '2025-08-20 12:00+06'),
-  ('group',       12, 3200, 10,  60, 2, '2026-09-01', '2026-08-25 12:00+06'),
-  ('mini',        12, 3800,  4,  60, 2, '2026-09-01', '2026-08-25 12:00+06'),
-  ('pair',        12, 4400,  2,  60, 2, '2026-09-01', '2026-08-25 12:00+06'),
-  ('individual',  12, 7200,  1,  60, 2, '2026-09-01', '2026-08-25 12:00+06'),
-  ('afterschool', 20, 7400,  8, 180, 2, '2026-09-01', '2026-08-25 12:00+06');
+  ('group',       12, 2800, 10,  60, null, '2025-02-01', '2025-01-20 12:00+06'),
+  ('mini',        12, 3200,  4,  60, null, '2025-02-01', '2025-01-20 12:00+06'),
+  ('pair',        12, 3600,  2,  60, null, '2025-02-01', '2025-01-20 12:00+06'),
+  ('individual',  12, 6000,  1,  60, null, '2025-02-01', '2025-01-20 12:00+06'),
+  ('afterschool', 20, 6500,  8, 180, null, '2025-02-01', '2025-01-20 12:00+06'),
+  ('group',       12, 3000, 10,  60, null, '2025-09-01', '2025-08-20 12:00+06'),
+  ('mini',        12, 3500,  4,  60, null, '2025-09-01', '2025-08-20 12:00+06'),
+  ('pair',        12, 4000,  2,  60, null, '2025-09-01', '2025-08-20 12:00+06'),
+  ('individual',  12, 6500,  1,  60, null, '2025-09-01', '2025-08-20 12:00+06'),
+  ('afterschool', 20, 7000,  8, 180, null, '2025-09-01', '2025-08-20 12:00+06'),
+  ('group',       12, 3200, 10,  60, null, '2026-09-01', '2026-08-25 12:00+06'),
+  ('mini',        12, 3800,  4,  60, null, '2026-09-01', '2026-08-25 12:00+06'),
+  ('pair',        12, 4400,  2,  60, null, '2026-09-01', '2026-08-25 12:00+06'),
+  ('individual',  12, 7200,  1,  60, null, '2026-09-01', '2026-08-25 12:00+06'),
+  ('afterschool', 20, 7400,  8, 180, null, '2026-09-01', '2026-08-25 12:00+06');
 
 -- Holidays — А9, school year 2026/27 (+ two past days: locked, cannot be deleted)
 insert into public.holidays (day, name) values

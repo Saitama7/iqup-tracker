@@ -60,7 +60,7 @@ describe('planRows', () => {
     package_price: 3200,
     max_students: 10,
     lesson_duration_min: 60,
-    freeze_limit: 2,
+    freeze_limit: null,
     valid_from: '2026-09-01',
     created_at: '2026-08-25T06:00:00Z',
     created_by: null,
@@ -83,7 +83,7 @@ describe('planRows', () => {
       package_price: 4600,
       max_students: 8,
       lesson_duration_min: 60,
-      freeze_limit: 2,
+      freeze_limit: null,
       hour_price: null,
       valid_from: '2027-09-01',
     })

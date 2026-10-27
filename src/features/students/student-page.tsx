@@ -554,9 +554,7 @@ function MobileStudent({
     (n, e) => n + (e.balance ? Math.max(0, availableLessons(e.balance)) : 0),
     0,
   )
-  const freezes = first?.balance
-    ? `${first.balance.freezesUsed} / ${first.balance.freezeLimit}`
-    : '—'
+  const freezes = first?.balance ? String(first.balance.freezesUsed) : '—'
   const caption = [
     s.grade ? `${s.grade} класс` : null,
     first?.groupLabel,

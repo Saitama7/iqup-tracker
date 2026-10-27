@@ -1,7 +1,6 @@
 import {
   desktopMeta,
   enrolledOn,
-  freezeBlocked,
   lessonAccrual,
   lessonRoster,
   markAllPresent,
@@ -30,7 +29,7 @@ const sub = (
   lessons_total: 12,
   price_full: 3200,
   price_final: 3200,
-  freeze_limit: 2,
+  freeze_limit: null,
   paid: 3200,
   marks: marks.map((status, i) => ({ lesson_id: `${id}-l${i}`, status })),
   ...over,
@@ -245,21 +244,11 @@ describe("lessonAccrual — «Начислится» by the students' subscripti
   })
 })
 
-describe('freeze limit', () => {
-  const row = { balance: pickSubscription([sub('s', {}, times(2, 'absent_frozen'))], LESSON, DAY) }
-
-  it('2 freezes used → «Заморозка» blocked', () => {
-    expect(freezeBlocked(row, undefined)).toBe(true)
-    expect(freezeBlocked(row, 'present')).toBe(true)
-  })
-
-  it('one left → allowed', () => {
-    const one = { balance: pickSubscription([sub('s', {}, ['absent_frozen'])], LESSON, DAY) }
-    expect(freezeBlocked(one, undefined)).toBe(false)
-  })
-
-  it('no subscription → never blocked', () => {
-    expect(freezeBlocked({ balance: null }, undefined)).toBe(false)
+describe('freezes (no limit, К9)', () => {
+  it('3 freezes on one subscription are counted, «Заморозка» stays available', () => {
+    const b = pickSubscription([sub('s', {}, times(3, 'absent_frozen'))], LESSON, DAY)
+    expect(b?.freezes).toBe(3)
+    expect(b?.left).toBe(12)
   })
 })
 
@@ -271,7 +260,7 @@ describe('captions', () => {
 
   it('mobile (У3)', () => {
     expect(mobileMeta(meta([...times(8, 'present'), 'absent_frozen']))).toEqual({
-      text: 'Осталось 4 ур. · заморозок 1/2',
+      text: 'Осталось 4 ур. · заморозок 1',
       tone: 'muted',
     })
     expect(mobileMeta(meta(times(11, 'present'))).text).toBe('Осталось 1 ур. · пора оплачивать')
@@ -289,7 +278,7 @@ describe('captions', () => {
   it('partial payment: 6 lessons open, the rest unpaid', () => {
     const half = { paid: 1600 }
     expect(mobileMeta(meta(times(2, 'present'), half))).toEqual({
-      text: 'Частично · оплачено 6 ур · заморозок 0/2',
+      text: 'Частично · оплачено 6 ур · заморозок 0',
       tone: 'warn',
     })
     expect(mobileMeta(meta(times(5, 'present'), half)).text).toBe(
@@ -301,16 +290,16 @@ describe('captions', () => {
       tone: 'warn',
     })
     expect(desktopMeta(meta(times(2, 'present'), half)).text).toBe(
-      'частично · оплачено 6 ур · заморозок 0/2',
+      'частично · оплачено 6 ур · заморозок 0',
     )
   })
 
   it('desktop (УД2)', () => {
     expect(desktopMeta(meta([...times(8, 'present'), 'absent_frozen'])).text).toBe(
-      '4 из 12 · заморозок 1/2',
+      '4 из 12 · заморозок 1',
     )
     expect(desktopMeta(meta([...times(5, 'present'), ...times(2, 'absent_frozen')])).text).toBe(
-      '7 из 12 · заморозок 2/2 — лимит',
+      '7 из 12 · заморозок 2',
     )
     expect(desktopMeta(meta(times(11, 'present'))).text).toBe('1 из 12 · пора оплачивать')
     // 3 200 / 12 × 2 = 533,33 → 534 сом (ceil, И37)
@@ -450,8 +439,8 @@ describe('after-school by hours (#82)', () => {
       new Map(),
     )
     expect(row?.balance).toMatchObject({ unit: 'hour', total: 20, left: 16, freezes: 1 })
-    expect(row && mobileMeta(row).text).toBe('Осталось 16 ч · заморозок 1/2')
-    expect(row && desktopMeta(row).text).toBe('16 из 20 ч · заморозок 1/2')
+    expect(row && mobileMeta(row).text).toBe('Осталось 16 ч · заморозок 1')
+    expect(row && desktopMeta(row).text).toBe('16 из 20 ч · заморозок 1')
     // 2 h × 100 сом/ч × 45 %
     expect(row && lessonAccrual([row], new Map([[row.studentId, 'present']]), 45)).toEqual({
       pay: 90,

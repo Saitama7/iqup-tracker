@@ -1,4 +1,4 @@
-import { freezeBlocked, MARKS, type Mark, type RosterRow } from './attendance'
+import { MARKS, type Mark, type RosterRow } from './attendance'
 
 /**
  * Marks before «Провести» are a client draft (И19). It survives leaving the page and a reload:
@@ -38,12 +38,12 @@ function parse(raw: string | null): StoredDraft | null {
 }
 
 /**
- * The draft for the current roster: students no longer on the lesson are dropped, so is a
- * «Заморозка» the subscription has no freezes left for anymore (В2). null — nothing to restore.
+ * The draft for the current roster: students no longer on the lesson are dropped; a «Заморозка»
+ * stays — there is no freeze limit (К9). null — nothing to restore.
  */
 export function decodeDraft(
   raw: string | null,
-  roster: readonly Pick<RosterRow, 'studentId' | 'balance'>[],
+  roster: readonly Pick<RosterRow, 'studentId'>[],
   now: number,
 ): Map<string, Mark> | null {
   const stored = parse(raw)
@@ -52,7 +52,6 @@ export function decodeDraft(
   for (const row of roster) {
     const mark = stored.marks[row.studentId]
     if (!isMark(mark)) continue
-    if (mark === 'absent_frozen' && freezeBlocked(row, undefined)) continue
     marks.set(row.studentId, mark)
   }
   return marks.size ? marks : null
@@ -68,7 +67,7 @@ function storage(): Storage | null {
 
 export function loadDraft(
   lessonId: string,
-  roster: readonly Pick<RosterRow, 'studentId' | 'balance'>[],
+  roster: readonly Pick<RosterRow, 'studentId'>[],
   now: number,
 ): Map<string, Mark> | null {
   try {

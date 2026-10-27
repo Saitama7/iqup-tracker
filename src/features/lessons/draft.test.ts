@@ -18,7 +18,7 @@ const balance = (freezes: number): Balance => ({
   total: 12,
   left: 6,
   freezes,
-  freezeLimit: 2,
+  freezeLimit: null,
   lessonPrice: 266.67,
 })
 
@@ -54,9 +54,9 @@ describe('decodeDraft', () => {
     expect(decodeDraft(raw, roster, NOW)).toEqual(marks([['a', 'present']]))
   })
 
-  it('drops a freeze the subscription has no freezes left for (В2)', () => {
+  it('keeps a third freeze — no limit (К9)', () => {
     const raw = encodeDraft(marks([['b', 'absent_frozen']]), NOW)
-    expect(decodeDraft(raw, roster, NOW)).toBeNull()
+    expect(decodeDraft(raw, roster, NOW)).toEqual(marks([['b', 'absent_frozen']]))
   })
 
   it('ignores missing, broken and expired drafts', () => {

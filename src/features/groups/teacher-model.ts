@@ -259,11 +259,11 @@ export function groupsCaption(summaries: readonly Pick<GroupSummary, 'students'>
   return `${summaries.length} ${pluralRu(summaries.length, GROUPS)} · ${students} ${pluralRu(students, STUDENTS)}`
 }
 
-/** «пора оплачивать · заморозок 2 / 2», «долг 2 урока · 533 сом · родитель 0555 123 456». */
+/** «пора оплачивать · заморозок 2» (no limit, К9), «долг 2 урока · 533 сом · родитель 0555 123 456». */
 export function memberCaption(m: MemberRow, phone: string | null): string {
   const b = m.balance
   if (!b) return 'нет абонемента'
-  const freezes = `заморозок ${b.freezes} / ${b.freezeLimit}`
+  const freezes = `заморозок ${b.freezes}`
   if (m.pay === 'debt') {
     return [
       `долг ${m.debt} ${pluralRu(m.debt, ['урок', 'урока', 'уроков'])} · ${formatSom(m.debtSom)} сом`,

@@ -179,7 +179,7 @@ function TariffTable({ tariffs }: { tariffs: Tariff[] }) {
               )}
             </td>
             <td className={cn(tdClass, numClass)}>{t.lesson_duration_min} мин</td>
-            <td className={cn(tdClass, numClass)}>{t.freeze_limit}</td>
+            <td className={cn(tdClass, numClass)}>{t.freeze_limit ?? 'без лимита'}</td>
             <td className={cn(tdClass, numClass, 'text-ink-muted')}>
               {share(t)}
               {t.group_type === 'afterschool' && (
@@ -216,7 +216,9 @@ function TariffCards({ tariffs }: { tariffs: Tariff[] }) {
             <span className="whitespace-nowrap">урок {formatLessonPrice(lessonPrice(t))}</span>
           </div>
           <div className="flex items-baseline justify-between gap-3 text-[13px] text-ink-muted">
-            <span>Заморозок {t.freeze_limit}</span>
+            <span>
+              {t.freeze_limit === null ? 'Заморозки без лимита' : `Заморозок ${t.freeze_limit}`}
+            </span>
             <span className="whitespace-nowrap">учителю 45 % / 50 %: {share(t)}</span>
           </div>
           {t.group_type === 'afterschool' && (

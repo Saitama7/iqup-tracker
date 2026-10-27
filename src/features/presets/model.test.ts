@@ -16,7 +16,7 @@ const balance = (freezes: number): Balance => ({
   total: 12,
   left: 8,
   freezes,
-  freezeLimit: 2,
+  freezeLimit: null,
   lessonPrice: 300,
   unit: 'lesson',
 })
@@ -41,9 +41,9 @@ describe('applyPresets', () => {
     expect(marks.has('a')).toBe(false)
   })
 
-  it('no prefill when the subscription has no freezes left (В2)', () => {
+  it('prefills a third freeze too — no limit (К9)', () => {
     const out = applyPresets(new Map(), new Map([['c', { comment: null }]]), roster)
-    expect(out.has('c')).toBe(false)
+    expect(out.get('c')).toBe('absent_frozen')
   })
 
   it('students outside the roster are ignored; no presets — the same map', () => {
@@ -83,7 +83,7 @@ describe('presets copy', () => {
   it('error reasons', () => {
     expect(
       presetErrorReason({ code: '23514', message: 'freeze limit (2) exceeded for subscription x' }),
-    ).toBe('лимит заморозок 2 на абонемент исчерпан')
+    ).toBe('лимит заморозок на абонемент исчерпан')
     expect(presetErrorReason({ code: '42501', message: 'x' })).toBe(
       'заморозку заранее ставит только администратор',
     )

@@ -172,7 +172,7 @@ const subscriptionSchema = z.object({
   credit_out_hours: z.number(),
   price_full: z.number(),
   price_final: z.number(),
-  tariff: z.object({ freeze_limit: z.number().int() }),
+  tariff: z.object({ freeze_limit: z.number().int().nullable() }),
   attendance: z.array(
     z.object({ lesson_id: z.uuid(), status: markSchema, hours: z.number().nullable() }),
   ),
@@ -319,8 +319,8 @@ export function confirmErrorReason(error: { code?: string; message?: string }): 
   if (m.includes('already confirmed')) return 'занятие уже проведено'
   if (m.includes('freeze limit'))
     return m.includes('month')
-      ? 'лимит заморозок 2 на месяц — отметьте «Не был»'
-      : 'лимит заморозок 2 на абонемент — отметьте «Не был»'
+      ? 'лимит заморозок на месяц — отметьте «Не был»'
+      : 'лимит заморозок на абонемент — отметьте «Не был»'
   if (m.includes('not started')) return 'занятие ещё не началось'
   if (m.includes('closed period')) return 'период закрыт — исправления через администратора'
   if (m.includes('cancelled')) return 'занятие отменено'

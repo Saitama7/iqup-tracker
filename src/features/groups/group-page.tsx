@@ -96,7 +96,7 @@ function members(
           startDate: e.start_date,
           left: sub ? (balance?.lessonsLeft ?? sub.lessons_total) : null,
           total: sub?.lessons_total ?? null,
-          freezes: balance ? `${balance.freezesUsed} / ${balance.freezeLimit}` : '—',
+          freezes: balance ? String(balance.freezesUsed) : '—',
         },
       ]
     })

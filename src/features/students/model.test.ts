@@ -90,7 +90,7 @@ const bal = (subscriptionId: string, over: Partial<Balance> = {}): Balance => ({
   refundSuggested: 0,
   isCurrent: true,
   freezesUsed: 0,
-  freezeLimit: 2,
+  freezeLimit: null,
   ...over,
 })
 
