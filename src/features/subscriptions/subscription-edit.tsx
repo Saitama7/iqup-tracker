@@ -11,7 +11,7 @@ import {
 } from './edit-api'
 import { balanceLine, payrollLine, termsCaption } from './edit-model'
 
-// #109 · «Изменить абонемент» (К12, И90) — the «⋯» of an enrollment on А6 and on the group page:
+// #109 · «Изменить абонемент» (К12, И91) — the «⋯» of an enrollment on А6 and on the group page:
 // size and price of its newest live package with a reason; under the form the database's preview —
 // the teacher's payroll and the student's balance «было → станет». Payroll follows by К6.
 

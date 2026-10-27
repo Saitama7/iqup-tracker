@@ -1,4 +1,4 @@
--- #109 · Subscription price of its own; individual = 12 hours for 7 200; «Изменить абонемент» (К11, К12, И90).
+-- #109 · Subscription price of its own; individual = 12 hours for 7 200; «Изменить абонемент» (К11, К12, И91).
 --
 --   1. subscription_default_lessons / subscription_default_price — the defaults of a new package:
 --      individual (К11): the tariff's package is lessons_in_package HOURS (12 h for 7 200); a lesson of

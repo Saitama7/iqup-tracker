@@ -1,4 +1,4 @@
-// #109 · «Изменить абонемент» (К12, И90): size and price of a live package — update_subscription
+// #109 · «Изменить абонемент» (К12, И91): size and price of a live package — update_subscription
 // (0033, admin, a reason), the preview of payroll and balance «было → станет» from the database.
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'

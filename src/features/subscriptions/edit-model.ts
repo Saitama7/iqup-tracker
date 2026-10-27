@@ -1,4 +1,4 @@
-// #109 · «Изменить абонемент» (К12, И90): the words of the preview. Pure — the numbers come from
+// #109 · «Изменить абонемент» (К12, И91): the words of the preview. Pure — the numbers come from
 // subscription_update_preview / subscription_balance_preview (0033).
 import { pluralRu } from '@/features/lessons/select'
 import { formatSom } from '@/features/tariffs/model'

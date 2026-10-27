@@ -1,4 +1,4 @@
--- #109 · subscription price of its own (0033, К11, К12, И90): individual — 12 hours for 7 200, a 90-min
+-- #109 · subscription price of its own (0033, К11, К12, И91): individual — 12 hours for 7 200, a 90-min
 -- group defaults to 8 lessons · 7 200 (900 a lesson); p_price — the admin's price, the В5 discount from
 -- it; update_subscription — admin with a reason, refused in a closed period, the guard refuses a direct
 -- write; previews — payroll 300 → 450 a mark, balance 20 / 7 400 → 12 / 5 400. Self-contained, rolled back.
