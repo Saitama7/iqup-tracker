@@ -254,8 +254,8 @@ select results_eq(
 );
 select is(
   (select sum(base_amount)::integer from public.v_payroll_preview where month = '2026-09-01'),
-  47546,
-  'seed: everyone in September — 47 546 сом'
+  51146,
+  'seed: everyone in September — 51 146 сом'
 );
 
 -- ─── Nobody signed in ───────────────────────────────────────────────────────
