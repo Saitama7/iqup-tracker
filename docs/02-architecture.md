@@ -115,7 +115,7 @@ iqup-tracker/
 │   ├── routes/               # TanStack Router: /login, /today, /lessons/$id, /my-month, /admin/*, /payroll/*
 │   ├── features/
 │   │   ├── lessons/          # «Сегодня», колода, подтверждение
-│   │   ├── attendance/       # отметка, flip-карточки, лимит заморозки
+│   │   ├── attendance/       # отметка, flip-карточки, счётчик заморозок
 │   │   ├── payroll/calc.ts   # чистая функция расчёта — тесты
 │   │   ├── payments/balance.ts
 │   │   ├── groups/ students/ subscriptions/ users/
@@ -183,7 +183,7 @@ sequenceDiagram
 | Отмена / доп. урок / архив | RPC `cancel_lesson` (center/teacher/all_frozen, только `planned`, черновые отметки удаляются), `create_extra_lesson` (одно восполнение на отменённое), `archive_group` (удаляет будущие `planned`, завершает активные зачисления: `finished`, `end_date` = сегодня; абонементы не трогает — 0009) | `attendance_guard` не даёт отметить посещаемость на `cancelled` |
 | Статус «Не подтверждено» | Вычисляемый в view: `status = 'planned' AND lesson_date < current_date` | Без cron |
 | Баланс ученика (уроки и деньги) | View `subscription_balances` | Из первичных данных |
-| Списание / заморозка | Триггер на `attendance`: `consumes_credit`, проверка `freeze_limit` | Правило одно для всех |
+| Списание / заморозка | Триггер на `attendance`: `consumes_credit`, проверка `freeze_limit` (если задан; `null` — без лимита, К9) | Правило одно для всех |
 | Расчёт ЗП | View `payroll_preview(month)` + TS `calcStudentLessonPay()` с тестами, сверяющими SQL и TS | SQL — отчёты; TS — экран учителя и юнит-тесты |
 | Старая схема (сверка в пилоте) | View `payroll_legacy(month)`: Σ оплат месяца по группам учителя × процент | Объяснить расхождение |
 | Закрытие периода | SQL-функция `close_period(month)`: снапшот `payroll_lines`, `is_locked = true` | Атомарно |
