@@ -276,15 +276,17 @@ export function lessonRoster(
 }
 
 const LESSONS_GEN = ['урок', 'урока', 'уроков'] as const
+const DAYS_GEN = ['день', 'дня', 'дней'] as const
 const som = (n: number) => `${formatSom(n)} сом`
 
-/** «2 ур.» / «1,5 ч» — the unit of the subscription the mark goes to (#82). */
-const short = (b: Pick<Balance, 'unit'>, n: number) =>
-  b.unit === 'hour' ? `${formatHours(n)} ч` : `${n} ур.`
+/** «2 ур.» / «2 дн.» (after-school days, К13) / «1,5 ч» — the unit of the subscription (#82). */
+const short = (b: Pick<Balance, 'unit'>, n: number, days = false) =>
+  b.unit === 'hour' ? `${formatHours(n)} ч` : `${n} ${days ? 'дн.' : 'ур.'}`
 
 export type Tone = 'muted' | 'warn' | 'debt'
 
-type Meta = Pick<RosterRow, 'balance' | 'pay'>
+/** `hours` — set for an after-school student (the plan's hours that day): the package counts days. */
+type Meta = Pick<RosterRow, 'balance' | 'pay'> & { hours?: number | null }
 
 /** Up to 3 lessons «в долг» are a warning, beyond — red (В7). */
 const debtTone = (lessons: number): Tone => (debtOverLimit(lessons) ? 'debt' : 'warn')
@@ -300,26 +302,27 @@ export function mobileMeta(row: Meta): { text: string; tone: Tone } {
   const b = row.balance
   const p = row.pay
   if (!b || !p) return { text: 'Нет абонемента', tone: 'debt' }
+  const days = row.hours != null
   const freezes = `заморозок ${b.freezes}`
   if (p.state === 'debt') {
     return {
-      text: `Долг ${short(b, p.debtLessons)} · ${som(p.debtSom)}`,
+      text: `Долг ${short(b, p.debtLessons, days)} · ${som(p.debtSom)}`,
       tone: debtTone(p.debtLessons),
     }
   }
   if (p.state === 'soon') {
     const text = partlyPaid(b, p)
-      ? `Оплачено ещё ${short(b, p.available)}`
-      : `Осталось ${short(b, b.left)}`
+      ? `Оплачено ещё ${short(b, p.available, days)}`
+      : `Осталось ${short(b, b.left, days)}`
     return { text: `${text} · пора оплачивать`, tone: 'warn' }
   }
   if (p.state === 'partial') {
     return {
-      text: `Частично · оплачено ${b.unit === 'hour' ? short(b, p.paidLessons) : `${p.paidLessons} ур`} · ${freezes}`,
+      text: `Частично · оплачено ${b.unit === 'hour' ? short(b, p.paidLessons) : `${p.paidLessons} ${days ? 'дн' : 'ур'}`} · ${freezes}`,
       tone: 'warn',
     }
   }
-  return { text: `Осталось ${short(b, b.left)} · ${freezes}`, tone: 'muted' }
+  return { text: `Осталось ${short(b, b.left, days)} · ${freezes}`, tone: 'muted' }
 }
 
 /** «Абонемент» column (УД2): «4 из 12 · заморозок 1», «долг 2 урока · 533 сом». */
@@ -328,23 +331,24 @@ export function desktopMeta(row: Meta): { text: string; tone: Tone } {
   const p = row.pay
   if (!b || !p) return { text: 'нет абонемента', tone: 'debt' }
   const hour = b.unit === 'hour'
+  const days = row.hours != null
   if (p.state === 'debt') {
     return {
-      text: `долг ${hour ? short(b, p.debtLessons) : `${p.debtLessons} ${pluralRu(p.debtLessons, LESSONS_GEN)}`} · ${som(p.debtSom)}`,
+      text: `долг ${hour ? short(b, p.debtLessons) : `${p.debtLessons} ${pluralRu(p.debtLessons, days ? DAYS_GEN : LESSONS_GEN)}`} · ${som(p.debtSom)}`,
       tone: debtTone(p.debtLessons),
     }
   }
   const ofTotal = hour
     ? `${formatHours(b.left)} из ${formatHours(b.total)} ч`
-    : `${b.left} из ${b.total}`
+    : `${b.left} из ${b.total}${days ? ' дн.' : ''}`
   if (p.state === 'soon') {
-    const text = partlyPaid(b, p) ? `оплачено ещё ${short(b, p.available)}` : ofTotal
+    const text = partlyPaid(b, p) ? `оплачено ещё ${short(b, p.available, days)}` : ofTotal
     return { text: `${text} · пора оплачивать`, tone: 'warn' }
   }
   const freezes = `заморозок ${b.freezes}`
   if (p.state === 'partial') {
     return {
-      text: `частично · оплачено ${hour ? short(b, p.paidLessons) : `${p.paidLessons} ур`} · ${freezes}`,
+      text: `частично · оплачено ${hour ? short(b, p.paidLessons) : `${p.paidLessons} ${days ? 'дн' : 'ур'}`} · ${freezes}`,
       tone: 'warn',
     }
   }

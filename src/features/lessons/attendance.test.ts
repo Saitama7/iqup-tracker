@@ -264,6 +264,10 @@ describe('captions', () => {
       tone: 'muted',
     })
     expect(mobileMeta(meta(times(11, 'present'))).text).toBe('Осталось 1 ур. · пора оплачивать')
+    // after-school (К13): the package counts days
+    expect(mobileMeta({ ...meta(times(11, 'present')), hours: 3 }).text).toBe(
+      'Осталось 1 дн. · пора оплачивать',
+    )
     expect(mobileMeta(meta(times(14, 'present')))).toEqual({
       text: 'Долг 2 ур. · 534 сом',
       tone: 'warn',
