@@ -415,7 +415,9 @@ export function nextUnconfirmed(unconfirmed: MonthLessonLine[]): string | null {
 function singlePrice(source: MyMonthSource, pay: MonthPay, asOf: string): number | null {
   const paid = pay.lessons.flatMap((p) =>
     p.lesson.attendance.flatMap((m) =>
-      consumesCredit(m.status) && m.subscription ? [subscriptionLessonPrice(m.subscription)] : [],
+      consumesCredit(m.status, m.hours ?? null) && m.subscription
+        ? [subscriptionLessonPrice(m.subscription)]
+        : [],
     ),
   )
   const prices = new Set(

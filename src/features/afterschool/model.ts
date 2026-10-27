@@ -177,6 +177,19 @@ export function formatPlan(hours: PlanHours): string {
   return parts.length > 0 ? `${parts.join(' · ')} ч` : 'без часов'
 }
 
+/** «4 отметки за ПН/ПТ» — what «Изменить с даты» deletes (afterschool_plan_preview, К13). */
+export function formatRemovedMarks(marks: number, weekdays: readonly number[]): string {
+  const n = marks % 100
+  const word =
+    n % 10 === 1 && n !== 11
+      ? 'отметка'
+      : n % 10 >= 2 && n % 10 <= 4 && (n < 12 || n > 14)
+        ? 'отметки'
+        : 'отметок'
+  const days = weekdays.map((d) => WEEKDAY_SHORT[d - 1] ?? '').join('/')
+  return `${marks} ${word}${days ? ` за ${days}` : ''}`
+}
+
 export interface HourTariff {
   package_price: number
   lessons_in_package: number

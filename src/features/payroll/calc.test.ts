@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GroupType } from '@/features/tariffs/current'
 import {
+  consumesCredit,
   advancesTotal,
   byGroup,
   byTeacher,
@@ -326,29 +327,56 @@ describe('after-school hour subscriptions (#82, И62)', () => {
   })
 })
 
-describe('after-school hours not invoiced yet (И69)', () => {
-  it('markPay: hours × the hour price on the date × percent — the pay does not wait for the invoice', () => {
-    expect(markPay(null, 45, 3, 123)).toBeCloseTo(166.05)
-    expect(markPay(null, 45, null, 123)).toBe(0)
-    expect(markPay(null, 45, 3, null)).toBe(0)
-    expect(markPay(null, null, 3, 123)).toBe(0)
-  })
+describe('after-school — a package of days (К13, #111)', () => {
+  const DAYS = { price_full: 5400, lessons_total: 12 }
 
-  it('calcMonth: 7 days × 3 h with no invoice = 21 h × 123 × 45 % = 1 162, not «без абонемента»', () => {
-    const l = lesson({ duration_min: 180, marks: [] })
-    const day = {
-      ...l,
-      attendance: [
-        { status: 'present' as const, subscription: null, hours: 3, unbilled_hour_price: 123 },
-      ],
-    }
+  it('12 days for 5 400 at 45 %: 202,5 a day → 203, whatever the hours', () => {
+    expect(markPay(DAYS, 45, 3)).toBe(202.5)
+    expect(markPay(DAYS, 45, 1.5)).toBe(202.5)
     const month = calcMonth(
-      Array.from({ length: 7 }, (_, i) => ({ ...day, id: `l${i}` })),
+      [lesson({ duration_min: 180, marks: [] })].map((l) => ({
+        ...l,
+        attendance: [{ status: 'present' as const, subscription: DAYS, hours: 3 }],
+      })),
       RATE_45,
     )
-    expect(month.amount).toBe(1162)
-    expect(month.studentHours).toBe(21)
-    expect(month.noSubscription).toBe(0)
+    expect(month.amount).toBe(203)
+    expect(month.studentLessons).toBe(1)
+    expect(month.studentHours).toBe(0)
+  })
+
+  it('a day with 0 h by the plan consumes nothing and pays 0, whatever the status', () => {
+    expect(consumesCredit('present', 0)).toBe(false)
+    expect(consumesCredit('absent_burned', 0)).toBe(false)
+    expect(consumesCredit('present', 3)).toBe(true)
+    expect(consumesCredit('present')).toBe(true)
+    const l = lesson({ duration_min: 180, marks: [] })
+    const month = calcMonth(
+      [
+        {
+          ...l,
+          attendance: [
+            { status: 'present', subscription: DAYS, hours: 0 },
+            { status: 'absent_burned', subscription: DAYS, hours: 0 },
+            { status: 'present', subscription: DAYS, hours: 3 },
+          ],
+        },
+      ],
+      RATE_45,
+    )
+    expect(month.studentLessons).toBe(1)
+    expect(month.amount).toBe(203)
+  })
+
+  it('an after-school mark without a subscription pays 0 and is «нет абонемента» (the month bill is off)', () => {
+    expect(markPay(null, 45, 3)).toBe(0)
+    const l = lesson({ duration_min: 180, marks: [] })
+    const month = calcMonth(
+      [{ ...l, attendance: [{ status: 'present', subscription: null, hours: 3 }] }],
+      RATE_45,
+    )
+    expect(month.amount).toBe(0)
+    expect(month.noSubscription).toBe(1)
   })
 
   it('a lesson mark without a subscription still pays 0 and is flagged', () => {

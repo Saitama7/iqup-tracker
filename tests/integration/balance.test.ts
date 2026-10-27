@@ -5,7 +5,6 @@
 import { createClient } from '@supabase/supabase-js'
 import {
   subscriptionBalances,
-  unbilledDebt,
   type BalanceSubscription,
   type SubscriptionBalance,
 } from '../../src/features/payments/balance'
@@ -138,8 +137,8 @@ describe('v_student_balance ↔ subscriptionBalances on the seed', () => {
   })
 })
 
-describe('after-school by hours (#82 fixture)', () => {
-  it('credit hours, an unpaid invoice — the same in the view and in balance.ts', async () => {
+describe('after-school days (#111 fixture, К13)', () => {
+  it('12 days for 5 400, paid: 11 of 12 used, 1 left, no debt — the same in the view and balance.ts', async () => {
     const supabase = await signIn('0555 300 300')
     const [view, ts, fixture] = await Promise.all([
       viewRows(supabase),
@@ -147,54 +146,25 @@ describe('after-school by hours (#82 fixture)', () => {
       fixtureSubscriptions(supabase, [FIXTURE.group]),
     ])
     const own = ts.filter((b) => fixture.has(b.subscriptionId))
-    expect(own).toHaveLength(3)
+    expect(own).toHaveLength(2)
     for (const b of own) expect(view.get(b.subscriptionId)).toEqual(asView(b))
-    // F1 November: 54 h billed + 6 h credit (paid on October) — the credit counts as paid
-    expect(own.some((b) => b.lessonsTotal === 60 && b.paidLessons === 6)).toBe(true)
-    // F2 October unpaid: 6 h used → debt 6 h × 117
-    expect(own.filter((b) => b.debtLessons > 0).map((b) => [b.debtLessons, b.debtSom])).toEqual([
-      [6, 702],
-    ])
+    expect(
+      own.map((b) => [b.lessonsTotal, b.paidSom, b.lessonsUsed, b.lessonsLeft, b.debtSom]),
+    ).toEqual(
+      expect.arrayContaining([
+        // F1: 10 October days + 4 November
+        [12, 5400, 11, 1, 0],
+        // F2: ПТ 3, 10 October not paid — 2 × 350
+        [20, 0, 2, 18, 700],
+      ]),
+    )
   })
 
-  it('a month not invoiced (И69): v_afterschool_unbilled ↔ unbilledDebt, and in v_student_balance', async () => {
+  it('v_afterschool_unbilled is empty — the month without a bill is off', async () => {
     const supabase = await signIn('0555 300 300')
-    const [{ data: view, error }, { data: marks, error: e2 }, { data: virtual, error: e3 }] =
-      await Promise.all([
-        supabase
-          .from('v_afterschool_unbilled')
-          .select('student_id, month, hours, amount')
-          .eq('group_id', FIXTURE.group),
-        supabase
-          .from('attendance')
-          .select(
-            'student_id, consumes_credit, hours, unbilled_hour_price, lesson:lessons!inner(lesson_date, group_id)',
-          )
-          .eq('lesson.group_id', FIXTURE.group)
-          .is('subscription_id', null),
-        supabase
-          .from('v_student_balance')
-          .select('student_id, debt_lessons, debt_som, unbilled')
-          .eq('group_id', FIXTURE.group)
-          .is('subscription_id', null),
-      ])
+    const { data, error } = await supabase.from('v_afterschool_unbilled').select('enrollment_id')
     if (error) throw error
-    if (e2) throw e2
-    if (e3) throw e3
-    const ts = unbilledDebt(
-      marks
-        .filter((m) => m.consumes_credit && m.hours !== null && m.student_id === FIXTURE.f2)
-        .map((m) => ({
-          lesson_date: m.lesson.lesson_date,
-          hours: m.hours ?? 0,
-          hourPrice: m.unbilled_hour_price ?? 0,
-        })),
-    )
-    expect(ts).toEqual([{ month: '2025-11-01', hours: 6, som: 702 }])
-    expect(view).toEqual([{ student_id: FIXTURE.f2, month: '2025-11-01', hours: 6, amount: 702 }])
-    expect(virtual).toEqual([
-      { student_id: FIXTURE.f2, debt_lessons: 6, debt_som: 702, unbilled: true },
-    ])
+    expect(data).toEqual([])
   })
 })
 
@@ -365,14 +335,14 @@ describe('delete_payment / update_payment (#92): the view and balance.ts still a
     expect(after).toEqual(before)
   })
 
-  it('an extra payment on an hour invoice with credit is deleted (#82 fixture)', async () => {
+  it('an extra payment on a paid after-school package is deleted (#111 fixture)', async () => {
     const supabase = await signIn('0555 775 772')
     const before = await expectAgree(supabase)
     const fixture = await fixtureSubscriptions(supabase, [FIXTURE.group])
     const invoice = [...before.values()].find(
       (r) => r.subscription_id && fixture.has(r.subscription_id) && (r.paid_som ?? 0) > 0,
     )
-    if (!invoice?.subscription_id) throw new Error('no paid fixture invoice')
+    if (!invoice?.subscription_id) throw new Error('no paid fixture package')
     const rec = await supabase.rpc('record_payment', {
       p_subscription_id: invoice.subscription_id,
       p_amount: 123,

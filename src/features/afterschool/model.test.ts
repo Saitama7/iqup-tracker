@@ -3,6 +3,7 @@ import {
   dayHours,
   defaultPlan,
   formatPlan,
+  formatRemovedMarks,
   formatQuote,
   invoiceQuote,
   isoWeekday,
@@ -79,6 +80,16 @@ describe('plan', () => {
   it('formatPlan', () => {
     expect(formatPlan(MON2_WED1_FRI2)).toBe('ПН 2 · СР 1 · ПТ 2 ч')
     expect(formatPlan([1.5, 0, 0, 0, 0, 0, 0])).toBe('ПН 1,5 ч')
+  })
+})
+
+describe('formatRemovedMarks (К13 preview)', () => {
+  it('the count with its word and the weekdays', () => {
+    expect(formatRemovedMarks(4, [1, 5])).toBe('4 отметки за ПН/ПТ')
+    expect(formatRemovedMarks(1, [2])).toBe('1 отметка за ВТ')
+    expect(formatRemovedMarks(11, [1])).toBe('11 отметок за ПН')
+    expect(formatRemovedMarks(21, [1, 3, 5])).toBe('21 отметка за ПН/СР/ПТ')
+    expect(formatRemovedMarks(0, [])).toBe('0 отметок')
   })
 })
 

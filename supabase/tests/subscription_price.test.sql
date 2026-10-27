@@ -175,10 +175,9 @@ select throws_ok(
   '23514', 'price must be 1 … 1000000',
   'price 0 — refused'
 );
-select throws_ok(
-  $$ select * from public.enroll_student('e1090000-0000-4000-8000-000000000007', 'd1090000-0000-4000-8000-000000000004', '2003-03-01', p_price => 5400) $$,
-  '23514', 'a price is for lesson packages only',
-  'after-school by hours — no own price (#111)'
+select lives_ok(
+  $$ select * from public.enroll_student('e1090000-0000-4000-8000-000000000007', 'd1090000-0000-4000-8000-000000000004', '2003-03-01', p_lessons => 12, p_price => 5400) $$,
+  'after-school — a package of days at its own price (К13, #111)'
 );
 
 -- ─── Previews (admin) ───────────────────────────────────────────────────────

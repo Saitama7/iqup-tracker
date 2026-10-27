@@ -1494,10 +1494,16 @@ export type Database = {
       afterschool_plan_preview: {
         Args: { p_enrollment_id: string; p_hours: number[]; p_valid_from: string }
         Returns: {
-          balance_delta: number
-          hours_delta: number
           marks: number
-          payroll_delta: number
+          payroll: Json
+          weekdays: number[]
+        }[]
+      }
+      afterschool_plan_zero_marks: {
+        Args: { p_enrollment_id: string; p_hours?: number[]; p_valid_from: string }
+        Returns: {
+          id: string
+          lesson_date: string
         }[]
       }
       afterschool_remap_plan: {

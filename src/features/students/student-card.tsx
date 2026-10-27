@@ -39,12 +39,13 @@ const units = (b: Pick<Balance, 'unit'>, n: number) =>
   b.unit === 'hour' ? `${formatHours(n)} ч` : String(n)
 
 /** «Оплачено 6 из 12 · долг 2 ур. · 533 сом» — the one-line summary of the subscription. */
-export function paySummary(b: Balance): string {
+export function paySummary(b: Balance, days = false): string {
   const paid =
     b.unit === 'hour'
       ? `Оплачено ${formatHours(b.paidLessons)} из ${formatHours(b.lessonsTotal)} ч`
       : `Оплачено ${b.paidLessons} из ${b.lessonsTotal}`
-  return b.debtLessons > 0 ? `${paid} · ${debtCaption(b.debtLessons, b.debtSom, b.unit)}` : paid
+  const debt = debtCaption(b.debtLessons, b.debtSom, b.unit, days ? 'дн.' : 'ур.')
+  return b.debtLessons > 0 ? `${paid} · ${debt}` : paid
 }
 
 /** Colour + text: «Оплачено» / «Частично · 6 ур» / «Пора оплачивать» / «Долг». */
@@ -168,6 +169,7 @@ export function EnrollmentCard({
 }) {
   const sub = e.subscription
   const b = e.balance
+  const days = isDays(e)
   const rest = sub && b ? Math.max(0, sub.price_final - b.paidSom) : 0
   return (
     <section
@@ -228,26 +230,26 @@ export function EnrollmentCard({
           <div className="grid grid-cols-2 gap-2.5 min-[1200px]:grid-cols-4">
             <Tile
               label="Абонемент"
-              value={lessonsCaption(sub.lessons_total)}
+              value={packageCaption(sub.lessons_total, days)}
               caption={priceCaption(sub)}
             />
             <Tile
               label="Использовано"
-              value={`${b.lessonsUsed} из ${sub.lessons_total}`}
+              value={`${b.lessonsUsed} из ${sub.lessons_total}${days ? ' дн' : ''}`}
               caption={`заморозок ${b.freezesUsed}`}
             />
             <Tile
               label="Оплачено"
-              value={`${formatSom(b.paidSom)} · ${b.paidLessons} ур`}
+              value={`${formatSom(b.paidSom)} · ${b.paidLessons} ${days ? 'дн' : 'ур'}`}
               caption={rest > 0 ? `остаток ${formatSom(rest)} сом` : 'оплачено полностью'}
             />
             <Tile
-              label="Доступно уроков"
+              label={days ? 'Доступно дней' : 'Доступно уроков'}
               value={Math.max(0, availableLessons(b))}
               caption={
                 b.debtLessons > 0 ? (
                   <span className={cn('font-extrabold', debtTextClass(b.debtLessons))}>
-                    {debtCaption(b.debtLessons, b.debtSom)}
+                    {debtCaption(b.debtLessons, b.debtSom, b.unit, days ? 'дн.' : 'ур.')}
                   </span>
                 ) : (
                   'до 3 в долг'
@@ -256,7 +258,7 @@ export function EnrollmentCard({
             />
           </div>
           <UsageBar b={b} />
-          <p className="text-[13px] font-extrabold">{paySummary(b)}</p>
+          <p className="text-[13px] font-extrabold">{paySummary(b, days)}</p>
           <Legend b={b} extra={discountCaption(sub)} />
         </>
       ) : !sub && e.refunded ? (
@@ -285,6 +287,7 @@ export function MobileEnrollment({
 }) {
   const sub = e.subscription
   const b = e.balance
+  const days = isDays(e)
   return (
     <section
       aria-label={e.groupLabel}
@@ -303,7 +306,7 @@ export function MobileEnrollment({
       </div>
       <p className="text-xs font-bold text-ink-muted">
         {sub
-          ? `${b?.unit === 'hour' ? `${formatHours(b.lessonsTotal)} ч${b.periodMonth ? ` за ${monthAccusative(b.periodMonth)}` : ''}` : lessonsCaption(sub.lessons_total)} · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
+          ? `${b?.unit === 'hour' ? `${formatHours(b.lessonsTotal)} ч${b.periodMonth ? ` за ${monthAccusative(b.periodMonth)}` : ''}` : packageCaption(sub.lessons_total, days)} · ${priceCaption(sub)} · ${enrollmentCaption(e, today)}`
           : enrollmentCaption(e, today)}
       </p>
       {onEditStart && <EditStartButton e={e} onClick={onEditStart} />}
@@ -313,12 +316,15 @@ export function MobileEnrollment({
           <UsageBar b={b} thin />
           <p className="text-xs font-extrabold">
             {b.unit === 'hour' ? 'Списано' : 'Использовано'} {units(b, b.lessonsUsed)} из{' '}
-            {units(b, b.lessonsTotal)} · заморозок {b.freezesUsed}
+            {units(b, b.lessonsTotal)}
+            {days && b.unit !== 'hour' ? ` ${daysOf(b.lessonsTotal)}` : ''} · заморозок{' '}
+            {b.freezesUsed}
           </p>
-          <p className="text-xs font-extrabold">{paySummary(b)}</p>
+          <p className="text-xs font-extrabold">{paySummary(b, days)}</p>
           <p className="text-xs font-bold text-ink-muted">
             Оплачено {formatSom(b.paidSom)} из {formatSom(sub.price_final)} сом · доступно{' '}
             {units(b, Math.max(0, availableLessons(b)))}
+            {days && b.unit !== 'hour' ? ' дн' : ''}
           </p>
         </>
       ) : !sub && e.refunded ? (
@@ -330,3 +336,13 @@ export function MobileEnrollment({
 
 /** «12 уроков», «4 урока» — the package size (И89: any 1 … 2 × package). */
 const lessonsCaption = (n: number) => `${n} ${pluralRu(n, ['урок', 'урока', 'уроков'])}`
+
+/** After-school: a package of days, not lessons (К13, #111). */
+const isDays = (e: EnrollmentView) => e.group?.group_type === 'afterschool'
+
+/** «из 12 дней», «из 21 дня». */
+const daysOf = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? 'дня' : 'дней')
+
+/** «12 дней» for after-school, else «12 уроков». */
+const packageCaption = (n: number, days: boolean) =>
+  days ? `${n} ${pluralRu(n, ['день', 'дня', 'дней'])}` : lessonsCaption(n)

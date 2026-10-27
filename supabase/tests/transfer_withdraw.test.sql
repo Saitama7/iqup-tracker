@@ -15,7 +15,7 @@ select is(
 );
 select is(
   (select sum(base_amount)::integer from public.v_payroll_preview where month = '2026-09-01'),
-  51146, 'seed: everyone in September 2026 is 51 146'
+  53171, 'seed: everyone in September 2026 is 53 171'
 );
 
 -- ─── Fixtures (as postgres) ─────────────────────────────────────────────────
@@ -806,7 +806,7 @@ select is(
 );
 select is(
   (select sum(base_amount)::integer from public.v_payroll_preview where month = '2026-09-01'),
-  51146, 'seed: everyone still 51 146'
+  53171, 'seed: everyone still 53 171'
 );
 
 select * from finish();

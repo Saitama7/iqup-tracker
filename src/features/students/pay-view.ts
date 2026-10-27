@@ -41,9 +41,9 @@ export function chipTone(state: PayState, debtLessons: number): PayTone {
   return PAY_TONE[state]
 }
 
-/** «долг 2 ур. · 533 сом» */
-export const debtCaption = (lessons: number, som: number, unit: Unit = 'lesson') =>
-  `долг ${amount(lessons, unit, 'ур.')} · ${formatSom(som)} сом`
+/** «долг 2 ур. · 533 сом»; after-school days (К13) — «долг 1 дн. · 450 сом». */
+export const debtCaption = (lessons: number, som: number, unit: Unit = 'lesson', word = 'ур.') =>
+  `долг ${amount(lessons, unit, word)} · ${formatSom(som)} сом`
 
 /** «долг 2 ур. + 6 ч · 779 сом» — package lessons and after-school hours apart (А5, #82). */
 export function listDebtCaption(lessons: number, hours: number, som: number): string {

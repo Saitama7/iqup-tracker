@@ -102,7 +102,10 @@ test('учитель: провести → «Мой месяц» → «Испр�
   const held = await octoberBase()
   await expectPay(page, held)
 
-  // back to the held lesson through «Мой месяц» (#110: its row opens the card)
+  // back to the held lesson through «Мой месяц» (#110: its row opens the card). The desktop table
+  // shows the newest 7 lessons — after 19:00 on a lesson day the oldest row is behind «ещё N».
+  const more = page.getByRole('button', { name: /^ещё \d+ заняти/ })
+  if (await more.isVisible().catch(() => false)) await more.click()
   await links.filter({ hasNotText: 'Подтвердить' }).click()
   await expect(page).toHaveURL(new RegExp(`/lessons/${lessonId}\\?from=my-month`))
   const row = page.getByRole('listitem', { name: n.student })

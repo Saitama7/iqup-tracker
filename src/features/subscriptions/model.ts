@@ -118,7 +118,9 @@ export function lessonSizePresets(
   tariff: TariffTerms,
   byDefault = tariff.lessons_in_package,
 ): number[] {
-  return [...new Set([tariff.lessons_in_package, 8, 4, byDefault])]
+  // after-school days (К13): 20 · 12 · 8 — «12 дней за 5 400» is the usual short package
+  const sizes = tariff.group_type === 'afterschool' ? [12, 8] : [8, 4]
+  return [...new Set([tariff.lessons_in_package, ...sizes, byDefault])]
     .filter((n) => n <= maxSubscriptionLessons(tariff))
     .sort((a, b) => b - a)
 }
@@ -196,6 +198,14 @@ export function hoursCaption(
   )
   return `${q.lessonsTotal} ${pluralRu(q.lessonsTotal, ['занятие', 'занятия', 'занятий'])} по ${h(q.minutes)} ч = ${h(q.minutes * q.lessonsTotal)} ч · ${lesson} за занятие`
 }
+
+/** «Уроков» / «Дней» — the unit of a package: after-school counts days (К13, #111). */
+export const packageUnitLabel = (groupType: GroupType) =>
+  groupType === 'afterschool' ? 'Дней' : 'Уроков'
+
+/** «12 уроков», «12 дней» — the package size in its unit. */
+export const packageSizeCaption = (groupType: GroupType, n: number) =>
+  `${n} ${pluralRu(n, groupType === 'afterschool' ? ['день', 'дня', 'дней'] : ['урок', 'урока', 'уроков'])}`
 
 /** «Цена, сом» (К12): null — by the tariff. */
 export const subscriptionPrice = z

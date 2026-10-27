@@ -269,15 +269,15 @@ select is(
   'a9500000-0000-4000-8000-000000000001', 'confirmed_by — the teacher this time'
 );
 
--- ─── After-school: by hours (И62) ───────────────────────────────────────────
+-- ─── After-school: a package of days (К13) ──────────────────────────────────
 set local request.jwt.claims = '{"sub":"a9500000-0000-4000-8000-000000000003","role":"authenticated","app_metadata":{"roles":["admin"]}}';
--- S4 2 h + S5 3 h on the March invoices; percent 40
+-- S4 2 h + S5 3 h on 20-day packages of 7 400; percent 40 — 148 a day whatever the hours
 delete from pg_temp.seen;
 insert into pg_temp.seen values
   ('pay', pg_temp.pay()),
   ('impact', (select amount from public.lesson_payroll_impact(pg_temp.lesson(2, '2003-03-03')))),
-  ('by_hours', (
-    select round(sum(s.price_full * 40 * a.hours / (s.hours_total * 100.0)))::integer
+  ('by_days', (
+    select round(sum(s.price_full * 40 / (s.lessons_total * 100.0)))::integer
     from public.attendance a join public.subscriptions s on s.id = a.subscription_id
     where a.lesson_id = pg_temp.lesson(2, '2003-03-03')
   ));
@@ -286,9 +286,9 @@ select is(
   2, 'after-school: 2 consumed marks'
 );
 select ok(
-  (select n from pg_temp.seen where key = 'by_hours') > 0
-  and (select n from pg_temp.seen where key = 'impact') = (select n from pg_temp.seen where key = 'by_hours'),
-  'after-school: the preview is price_full × hours / hours_total × percent'
+  (select n from pg_temp.seen where key = 'by_days') = 296
+  and (select n from pg_temp.seen where key = 'impact') = (select n from pg_temp.seen where key = 'by_days'),
+  'after-school: the preview is price_full / lessons_total × percent a day'
 );
 select lives_ok(
   $$ select public.unconfirm_lesson(pg_temp.lesson(2, '2003-03-03'), 'не та группа') $$,
