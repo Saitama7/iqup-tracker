@@ -232,6 +232,51 @@ describe('attendance corrections (#74)', () => {
   })
 })
 
+describe('teacher corrects own marks (#110, К10)', () => {
+  const mark = {
+    id: 'm1',
+    lesson_id: LESSON,
+    student_id: ALINA,
+    subscription_id: SUB,
+    status: 'present',
+  }
+
+  it('«Отметки занятия … исправил учитель: Алина Исакова Был → Заморозка», no «Причина»', () => {
+    const e = describeAuditRow(
+      row({
+        entity: 'attendance',
+        kind: 'retro',
+        before: mark,
+        after: { ...mark, status: 'absent_frozen' },
+        reason: 'Исправил учитель',
+      }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Отметки занятия Математика · 8 класс Б, 10.10 в 09:00 исправил учитель: Алина Исакова Был → Заморозка',
+    )
+    expect(e.badge).toEqual({ label: 'Исправление', tone: 'burned' })
+    expect(e.note).toBeNull()
+  })
+
+  it('the comment goes to the note; an unmarked student gets a mark', () => {
+    const e = describeAuditRow(
+      row({
+        entity: 'attendance',
+        action: 'insert',
+        kind: 'retro',
+        after: mark,
+        reason: 'Исправил учитель: Был, забыла отметить',
+      }),
+      lookups,
+    )
+    expect(plain(e.parts)).toBe(
+      'Отметки занятия Математика · 8 класс Б, 10.10 в 09:00 исправил учитель: Алина Исакова → Был',
+    )
+    expect(e.note).toBe('Комментарий: «Был, забыла отметить»')
+  })
+})
+
 describe('attendance_presets (#84)', () => {
   const preset = { id: 'p1', lesson_id: LESSON, student_id: ALINA, comment: 'заболел' }
 

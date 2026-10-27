@@ -1,5 +1,6 @@
 // #74 · Исправление отметок: admin RPCs (0021) and the teacher's requests. RLS: a teacher reads own
-// requests and inserts for own held lessons; staff read all; apply / reject are admin RPCs.
+// requests; staff read all; apply / reject are admin RPCs. #110: the teacher corrects own marks
+// directly (teacher_correct_attendance) — new requests are no longer sent, old ones stay.
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { z } from 'zod'
@@ -150,13 +151,18 @@ export async function correctAttendance(lessonId: string, marks: Payload, reason
   return z.number().int().parse(data)
 }
 
-/** Teacher: ask the admin to correct the marks; author and status come from the database. */
-export async function requestCorrection(lessonId: string, marks: Payload, comment: string) {
-  const { error } = await supabase
-    .from('attendance_correction_requests')
-    // teacher_id, author and status are set by attendance_correction_requests_guard
-    .insert({ lesson_id: lessonId, marks, comment: comment.trim() })
+/**
+ * #110 (К10) · Teacher: new marks of own held lesson in an open period, the comment is optional
+ * (0034 teacher_correct_attendance; journal reason «Исправил учитель[: комментарий]»).
+ */
+export async function teacherCorrectAttendance(lessonId: string, marks: Payload, comment: string) {
+  const { data, error } = await supabase.rpc('teacher_correct_attendance', {
+    p_lesson_id: lessonId,
+    p_marks: marks,
+    p_comment: comment.trim(),
+  })
   if (error) throw fail(error)
+  return z.number().int().parse(data)
 }
 
 export async function applyRequest(requestId: string) {

@@ -1,7 +1,8 @@
 // #74 · A held lesson on У3 / УД2: the admin corrects its marks («Исправить отметки», reason
-// required) and decides the teacher's request («Применить» / «Отклонить»); the teacher asks to
-// correct them («Попросить исправить») and sees the request's status. Closed period — no changes;
-// a request left open there can only be rejected (reject_correction_request works on it).
+// required) and decides a teacher's request left from before #110 («Применить» / «Отклонить»).
+// #110 (К10): the teacher of the lesson corrects own marks too — «Исправить отметки», the comment
+// is optional — and sees the status of an old request. Closed period — no changes; a request left
+// open there can only be rejected (reject_correction_request works on it).
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
@@ -14,7 +15,7 @@ import {
   correctAttendance,
   lessonRequestsQuery,
   rejectRequest,
-  requestCorrection,
+  teacherCorrectAttendance,
   useCorrectionsRealtime,
 } from './corrections-api'
 import {
@@ -30,6 +31,8 @@ import {
 
 export interface Corrections {
   isAdmin: boolean
+  /** The admin, or the teacher of the lesson (lessons.teacher_id, #110). */
+  canFix: boolean
   locked: boolean
   /** Marks being corrected; null — showing the saved ones. */
   fix: ReadonlyMap<string, Mark> | null
@@ -53,7 +56,9 @@ export function useCorrections(
   sheet: LessonSheet,
   roster: readonly RosterRow[],
   isAdmin: boolean,
-  /** The admin's fix is saved — back to the screen the sheet came from (#89). */
+  /** The teacher of the lesson (lessons.teacher_id) — corrects own marks (#110). */
+  ownLesson: boolean,
+  /** The fix is saved — back to the screen the sheet came from (#89, #110). */
   onFixed?: () => void,
 ): Corrections {
   const queryClient = useQueryClient()
@@ -79,17 +84,21 @@ export function useCorrections(
     toast.error(`${title}: ${e.message}`)
   }
 
+  const canFix = isAdmin || ownLesson
+  // the admin — a reason is required; the teacher — the comment is optional (К10)
+  const ready = changes.length > 0 && (!isAdmin || note.trim() !== '')
+
   const save = useMutation({
     mutationFn: async () => {
       const payload = changesPayload(changes)
       if (isAdmin) await correctAttendance(sheet.id, payload, note)
-      else await requestCorrection(sheet.id, payload, note)
+      else await teacherCorrectAttendance(sheet.id, payload, note)
     },
     onSuccess: () => {
-      done(isAdmin ? 'Отметки исправлены' : 'Запрос отправлен администратору')
-      if (isAdmin) onFixed?.()
+      done('Отметки исправлены')
+      onFixed?.()
     },
-    onError: failed(isAdmin ? 'Не удалось исправить отметки' : 'Не удалось отправить запрос'),
+    onError: failed('Не удалось исправить отметки'),
   })
   const apply = useMutation({
     mutationFn: applyRequest,
@@ -112,6 +121,7 @@ export function useCorrections(
 
   return {
     isAdmin,
+    canFix,
     locked: sheet.is_locked,
     fix,
     setFixMark: (studentId, mark) => {
@@ -129,7 +139,7 @@ export function useCorrections(
       setNote('')
     },
     submit: () => {
-      if (changes.length > 0 && note.trim() && !save.isPending) save.mutate()
+      if (ready && !save.isPending) save.mutate()
     },
     busy: save.isPending,
     latest,
@@ -183,7 +193,9 @@ export function HeldPanel({ c, unconfirm }: { c: Corrections; unconfirm?: ReactN
       <div className="flex flex-col gap-2.5">
         {c.isAdmin && c.pending && <RequestReview c={c} pending={c.pending} />}
         <p className="rounded-2xl bg-line px-4 py-3 text-center text-sm font-extrabold text-ink-muted">
-          Период закрыт — отметки не меняются. Исправления — корректировкой ЗП
+          {c.isAdmin
+            ? 'Период закрыт — отметки не меняются. Исправления — корректировкой ЗП'
+            : 'Период закрыт — отметки не меняются'}
         </p>
         {c.isAdmin && unconfirm}
       </div>
@@ -191,7 +203,7 @@ export function HeldPanel({ c, unconfirm }: { c: Corrections; unconfirm?: ReactN
   }
 
   if (c.fix) {
-    const label = c.isAdmin ? 'Причина исправления' : 'Что не так — комментарий администратору'
+    const label = c.isAdmin ? 'Причина исправления' : 'Комментарий (необязательно)'
     return (
       <div className="flex flex-col gap-2.5" aria-label="Исправление отметок">
         <Changes changes={c.changes} empty="Измените отметки в списке учеников" />
@@ -220,10 +232,10 @@ export function HeldPanel({ c, unconfirm }: { c: Corrections; unconfirm?: ReactN
           <button
             type="button"
             className={primary}
-            disabled={c.busy || c.changes.length === 0 || !c.note.trim()}
+            disabled={c.busy || c.changes.length === 0 || (c.isAdmin && !c.note.trim())}
             onClick={c.submit}
           >
-            {c.busy ? 'Сохраняем…' : c.isAdmin ? 'Сохранить исправление' : 'Отправить запрос'}
+            {c.busy ? 'Сохраняем…' : c.isAdmin ? 'Сохранить исправление' : 'Сохранить'}
           </button>
         </div>
       </div>
@@ -244,19 +256,13 @@ export function HeldPanel({ c, unconfirm }: { c: Corrections; unconfirm?: ReactN
           Запрос на исправление: {requestStatusText(c.latest)}
         </p>
       )}
-      {c.isAdmin ? (
-        <div className={cn('grid gap-2', unconfirm && 'grid-cols-2')}>
+      {c.canFix && (
+        <div className={cn('grid gap-2', c.isAdmin && unconfirm && 'grid-cols-2')}>
           <button type="button" className={outline} onClick={c.start}>
             Исправить отметки
           </button>
-          {unconfirm}
+          {c.isAdmin && unconfirm}
         </div>
-      ) : (
-        c.latest?.status !== 'pending' && (
-          <button type="button" className={outline} onClick={c.start}>
-            Попросить исправить
-          </button>
-        )
       )}
     </div>
   )

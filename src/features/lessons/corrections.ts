@@ -1,5 +1,6 @@
-// #74 · Исправление отметок проведённого занятия: admin correction (correct_attendance) and the
-// teacher's request (attendance_correction_requests, 0021). Pure: (roster, saved, edited, requests).
+// #74 · Исправление отметок проведённого занятия: admin correction (correct_attendance), the
+// teacher's own correction (teacher_correct_attendance, #110) and the teacher's old requests
+// (attendance_correction_requests, 0021). Pure: (roster, saved, edited, requests).
 import { MARK_LABEL, type Mark, type RosterRow } from './attendance'
 
 export interface MarkChange {
@@ -81,7 +82,7 @@ export function requestStatusText(
   return r.decision_comment ? `Отклонено: ${r.decision_comment}` : 'Отклонено'
 }
 
-/** correct_attendance / requests error → why (lower case, follows a colon). */
+/** correct_attendance / teacher_correct_attendance / requests error → why (lower case, follows a colon). */
 export function correctionErrorReason(error: { code?: string; message?: string }): string {
   const m = error.message ?? ''
   if (!error.code) return 'нет связи с сервером — проверьте интернет'
@@ -96,6 +97,7 @@ export function correctionErrorReason(error: { code?: string; message?: string }
       : 'лимит заморозок на абонемент — отметьте «Не был»'
   if (m.includes('reason is required')) return 'укажите причину'
   if (m.includes('reason is too long')) return 'причина — не длиннее 500 символов'
+  if (m.includes('comment is too long')) return 'комментарий — не длиннее 500 символов'
   if (m.includes('not found')) return 'запрос уже удалён — обновите страницу'
   if (m.includes('not held')) return 'занятие не проведено'
   if (m.includes('is rejected')) return 'запрос уже отклонён'
