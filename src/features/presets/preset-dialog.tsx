@@ -62,7 +62,7 @@ export function PresetDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Предупредил о пропуске"
-      description={`${studentName} — «Заморозка» на занятие. Учитель увидит её при отметке и сможет поменять, если ученик всё-таки придёт. Не более 2 заморозок на абонемент.`}
+      description={`${studentName} — «Заморозка» на занятие. Учитель увидит её при отметке и сможет поменять, если ученик всё-таки придёт.`}
     >
       <form
         className="flex flex-col gap-4"

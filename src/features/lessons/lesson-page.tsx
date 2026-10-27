@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useRouter } from '@tanstack/react-router'
 import { Check } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { PageTitle } from '@/components/page'
 import { BackButton } from '@/components/shell/back-button'
 import { rateOn } from '@/features/payroll/calc'
@@ -31,8 +31,6 @@ import { cn } from '@/lib/utils'
 import { lessonSheetQuery, type LessonSheet } from './api'
 import {
   desktopMeta,
-  freezeBlocked,
-  freezeLimitHint,
   lessonAccrual,
   lessonRoster,
   MARK_LABEL,
@@ -246,8 +244,7 @@ function Sheet({ sheet, search }: { sheet: LessonSheet; search: LessonSearch }) 
       })
     },
     setMark: (studentId, mark) => {
-      const row = roster.find((r) => r.studentId === studentId)
-      if (!row || (mark === 'absent_frozen' && freezeBlocked(row, marks.get(studentId)))) return
+      if (!roster.some((r) => r.studentId === studentId)) return
       if (correcting) {
         corrections.setFixMark(studentId, mark)
         return
@@ -375,28 +372,23 @@ function MarkAvatar({
 function MarkButtons({
   m,
   row,
-  hintId,
   desktop = false,
 }: {
   m: SheetModel
   row: RosterRow
-  hintId: string
   desktop?: boolean
 }) {
   const mark = m.marks.get(row.studentId)
-  const blocked = freezeBlocked(row, mark)
   return (
     <div className="grid grid-cols-3 gap-1.5">
       {MARKS.map((k) => {
         const active = mark === k
-        const limit = k === 'absent_frozen' && blocked
         return (
           <button
             key={k}
             type="button"
             aria-pressed={active}
-            disabled={!(m.editable || m.correcting) || m.busy || limit}
-            aria-describedby={limit ? hintId : undefined}
+            disabled={!(m.editable || m.correcting) || m.busy}
             onClick={() => {
               m.setMark(row.studentId, k)
             }}
@@ -404,7 +396,6 @@ function MarkButtons({
               'border-[1.5px] text-[13px] font-extrabold transition-opacity',
               desktop ? 'min-h-10 rounded-[10px]' : 'min-h-11 rounded-xl',
               active ? ACTIVE[k] : 'border-line-strong bg-card text-ink',
-              limit && 'bg-stone text-placeholder',
               !(m.editable || m.correcting) && !active && 'opacity-50',
             )}
           >
@@ -423,15 +414,6 @@ function UnmarkedBadge({ row, mark }: { row: RosterRow; mark: Mark | undefined }
     <span className="shrink-0 rounded-full border border-line-strong bg-card px-2.5 py-1 text-xs font-extrabold whitespace-nowrap text-ink-muted">
       Не отмечен
     </span>
-  )
-}
-
-function FreezeHint({ id, row, mark }: { id: string; row: RosterRow; mark: Mark | undefined }) {
-  if (!row.balance || !freezeBlocked(row, mark)) return null
-  return (
-    <p id={id} className="text-xs font-bold text-ink-muted">
-      Заморозка недоступна — {freezeLimitHint(row.balance)}
-    </p>
   )
 }
 
@@ -560,7 +542,6 @@ function MobileSheet({ m, now }: { m: SheetModel; now: number }) {
 }
 
 function MobileStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
-  const hintId = useId()
   const mark = m.marks.get(row.studentId)
   const meta = mobileMeta(row)
   return (
@@ -580,8 +561,7 @@ function MobileStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
         </div>
         <UnmarkedBadge row={row} mark={mark} />
       </div>
-      <MarkButtons m={m} row={row} hintId={hintId} />
-      <FreezeHint id={hintId} row={row} mark={mark} />
+      <MarkButtons m={m} row={row} />
       <PresetNote m={m} row={row} />
     </li>
   )
@@ -697,7 +677,6 @@ function DesktopSheet({ m, now }: { m: SheetModel; now: number }) {
 }
 
 function DesktopStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
-  const hintId = useId()
   const mark = m.marks.get(row.studentId)
   const meta = desktopMeta(row)
   return (
@@ -719,10 +698,9 @@ function DesktopStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
       </span>
       <span className="flex flex-col gap-0.5">
         <span className={cn('text-[13px] font-bold', TONE[meta.tone])}>{meta.text}</span>
-        <FreezeHint id={hintId} row={row} mark={mark} />
         <PresetNote m={m} row={row} />
       </span>
-      <MarkButtons m={m} row={row} hintId={hintId} desktop />
+      <MarkButtons m={m} row={row} desktop />
     </li>
   )
 }

@@ -92,8 +92,8 @@ export function correctionErrorReason(error: { code?: string; message?: string }
   if (m.includes('closed period')) return 'период закрыт — исправления только корректировкой ЗП'
   if (m.includes('freeze limit'))
     return m.includes('month')
-      ? 'лимит заморозок 2 на месяц — отметьте «Не был»'
-      : 'лимит заморозок 2 на абонемент — отметьте «Не был»'
+      ? 'лимит заморозок на месяц — отметьте «Не был»'
+      : 'лимит заморозок на абонемент — отметьте «Не был»'
   if (m.includes('reason is required')) return 'укажите причину'
   if (m.includes('reason is too long')) return 'причина — не длиннее 500 символов'
   if (m.includes('not found')) return 'запрос уже удалён — обновите страницу'

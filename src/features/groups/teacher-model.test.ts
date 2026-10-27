@@ -30,7 +30,7 @@ const sub = (
   lessons_total: 12,
   price_full: 3200,
   price_final: 3200,
-  freeze_limit: 2,
+  freeze_limit: null,
   paid: 3200,
   marks: marks.map((status, i) => ({ lesson_id: `${id}-${i}`, status })),
   ...over,
@@ -135,9 +135,9 @@ describe('memberRows', () => {
   it('captions as on У5', () => {
     const [a, d, p, e] = rows
     if (!a || !d || !p || !e) throw new Error('rows')
-    expect(memberCaption(a, null)).toBe('с 1 сент · заморозок 1 / 2')
-    expect(memberCaption(d, null)).toBe('пора оплачивать · заморозок 0 / 2')
-    expect(memberCaption(p, null)).toBe('частично · оплачено 6 ур · заморозок 0 / 2')
+    expect(memberCaption(a, null)).toBe('с 1 сент · заморозок 1')
+    expect(memberCaption(d, null)).toBe('пора оплачивать · заморозок 0')
+    expect(memberCaption(p, null)).toBe('частично · оплачено 6 ур · заморозок 0')
     expect(memberCaption(e, '0555 123 456')).toBe('долг 2 урока · 534 сом · родитель 0555 123 456')
   })
 })

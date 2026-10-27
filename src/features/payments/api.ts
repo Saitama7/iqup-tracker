@@ -37,7 +37,7 @@ const balanceSchema = z.object({
   debt_som: z.number().int(),
   refund_suggested: z.number().int(),
   freezes_used: z.number().int(),
-  freeze_limit: z.number().int(),
+  freeze_limit: z.number().int().nullable(),
   is_current: z.boolean(),
   unit: z.enum(['lesson', 'hour']),
   hours_total: z.number().nullable(),
@@ -48,7 +48,8 @@ export interface StudentBalance extends SubscriptionBalance {
   studentId: string
   groupId: string
   freezesUsed: number
-  freezeLimit: number
+  /** null — no limit (К9). */
+  freezeLimit: number | null
   /** lesson — a package; hour — an after-school month, every count in hours (#82). */
   unit: 'lesson' | 'hour'
   /** After-school: the billed month (first day). */

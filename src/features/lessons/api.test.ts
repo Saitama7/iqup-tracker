@@ -23,7 +23,7 @@ describe('confirmErrorReason (#41)', () => {
       'отметить может только учитель группы',
     )
     expect(confirmErrorReason({ code: 'P0001', message: 'freeze limit reached' })).toBe(
-      'лимит заморозок 2 на абонемент — отметьте «Не был»',
+      'лимит заморозок на абонемент — отметьте «Не был»',
     )
     expect(confirmErrorReason({ code: 'P0001', message: 'lesson is in a closed period' })).toBe(
       'период закрыт — исправления через администратора',

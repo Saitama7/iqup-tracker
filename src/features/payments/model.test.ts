@@ -91,7 +91,7 @@ const balance = (over: Partial<StudentBalance> = {}): StudentBalance => ({
   refundSuggested: 3200,
   isCurrent: true,
   freezesUsed: 0,
-  freezeLimit: 2,
+  freezeLimit: null,
   ...over,
 })
 

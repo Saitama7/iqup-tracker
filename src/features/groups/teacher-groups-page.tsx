@@ -844,7 +844,7 @@ function MemberTableRow({ m }: { m: MemberRow }) {
       >
         {b ? (m.debt > 0 ? `−${m.debt}` : `${b.left} / ${b.total}`) : '—'}
       </td>
-      <td className={cn(tdClass, numClass)}>{b ? `${b.freezes} / ${b.freezeLimit}` : '—'}</td>
+      <td className={cn(tdClass, numClass)}>{b ? b.freezes : '—'}</td>
       <td className={tdClass}>
         {m.pay === 'debt' ? (
           <span

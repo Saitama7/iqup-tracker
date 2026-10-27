@@ -16,7 +16,7 @@ const tariffSchema = z.object({
   package_price: z.number().int(),
   max_students: z.number().int(),
   lesson_duration_min: z.number().int(),
-  freeze_limit: z.number().int(),
+  freeze_limit: z.number().int().nullable(),
   hour_price: z.number().int().nullable(),
   valid_from: z.string(),
   created_at: z.string(),
