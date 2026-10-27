@@ -3,6 +3,7 @@ import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { KANYKEI, login } from './support/auth'
+import { holidayDays } from './support/db'
 import { lockSeed } from './support/seed-lock'
 
 // #100: a group on Saturdays and Sundays at 15:00 for 1,5 hours — «Длительность, мин» in «Новая
@@ -55,9 +56,15 @@ test('группа Сб+Вс 15:00 по 90 мин; длительность с �
   await removeGroup(f.name)
   const service = serviceClient()
   const today = bishkekToday()
-  // the first Saturday after today, its Sunday; the length changes from the Saturday a week later
+  // the first Saturday after today, its Sunday; the length changes from the Saturday a week later —
+  // all three must have lessons, so weekends that hit a holiday are skipped (07.11 in the seed, #116)
+  const holidays = await holidayDays(service)
   let sat = addDays(today, 1)
-  while (weekday(sat) !== 6) sat = addDays(sat, 1)
+  while (
+    weekday(sat) !== 6 ||
+    [sat, addDays(sat, 1), addDays(sat, 7)].some((day) => holidays.has(day))
+  )
+    sat = addDays(sat, 1)
   const sun = addDays(sat, 1)
   const from = addDays(sat, 7)
 
