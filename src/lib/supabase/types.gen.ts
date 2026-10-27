@@ -920,7 +920,7 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string | null
-          freeze_limit: number
+          freeze_limit: number | null
           group_type: Database['public']['Enums']['group_type']
           hour_price: number | null
           id: string
@@ -934,7 +934,7 @@ export type Database = {
         Insert: {
           created_at?: string
           created_by?: string | null
-          freeze_limit?: number
+          freeze_limit?: number | null
           group_type: Database['public']['Enums']['group_type']
           hour_price?: number | null
           id?: string
@@ -947,7 +947,7 @@ export type Database = {
         Update: {
           created_at?: string
           created_by?: string | null
-          freeze_limit?: number
+          freeze_limit?: number | null
           group_type?: Database['public']['Enums']['group_type']
           hour_price?: number | null
           id?: string

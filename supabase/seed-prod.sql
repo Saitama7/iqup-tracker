@@ -2,11 +2,11 @@
 -- Предметы заводит миграция 0013. Людей, групп и абонементов здесь нет — их заводит Каныкей в системе.
 -- Применять один раз: psql "$PROD_DB_URL" -f supabase/seed-prod.sql
 insert into public.tariffs (group_type, lessons_in_package, package_price, max_students, lesson_duration_min, freeze_limit, valid_from) values
-  ('group',       12, 3200, 10,  60, 2, '2026-09-01'),
-  ('mini',        12, 3800,  4,  60, 2, '2026-09-01'),
-  ('pair',        12, 4400,  2,  60, 2, '2026-09-01'),
-  ('individual',  12, 7200,  1,  60, 2, '2026-09-01'),
-  ('afterschool', 20, 7400,  8, 180, 2, '2026-09-01')
+  ('group',       12, 3200, 10,  60, null, '2026-09-01'),
+  ('mini',        12, 3800,  4,  60, null, '2026-09-01'),
+  ('pair',        12, 4400,  2,  60, null, '2026-09-01'),
+  ('individual',  12, 7200,  1,  60, null, '2026-09-01'),
+  ('afterschool', 20, 7400,  8, 180, null, '2026-09-01')
 on conflict do nothing;
 
 insert into public.holidays (day, name) values
