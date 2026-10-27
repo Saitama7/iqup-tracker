@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
-import { GULZAT, login } from './support/auth'
+import { GULZAT, KANYKEI, login, switchUser } from './support/auth'
 import { lockSeed } from './support/seed-lock'
 import { groupTeacher } from './support/db'
 
@@ -147,7 +147,7 @@ test('Гульзат проводит занятие: 8 отметок → «П�
 
     // Three states: present, frozen, burned — then «Все были» for the rest.
     await students.nth(0).getByRole('button', { name: 'Был', exact: true }).click()
-    // 3 and 4: not the students the freeze-limit test fills up (Улан, Бегимай)
+    // 3 and 4: not the students the three-freezes test freezes (Улан, Бегимай)
     await students.nth(3).getByRole('button', { name: 'Заморозка' }).click()
     await students.nth(4).getByRole('button', { name: 'Не был' }).click()
     await expect(students.nth(3).getByRole('button', { name: 'Заморозка' })).toHaveAttribute(
@@ -207,73 +207,73 @@ test('Гульзат проводит занятие: 8 отметок → «П�
   }
 })
 
-test('третья заморозка на абонементе — кнопка disabled, «лимит 2 на абонемент»', async ({
+test('три заморозки подряд одному ученику — без лимита (К9, #108); на А6 «заморозок 3»', async ({
   page,
 }, testInfo) => {
+  test.setTimeout(180_000)
   const desktop = testInfo.project.name === 'webkit-desktop'
   const day = desktop ? '2026-09-22' : '2026-09-24'
   // Students without a freeze on their current subscription (the seed's renewal).
   const name = desktop ? 'Улан Жээнбеков' : 'Бегимай Осмонова'
-  // Two freezes on planned extra lessons of our own — the seed's held September stays untouched.
-  const freezeDays = desktop ? ['2026-09-01', '2026-09-03'] : ['2026-09-05', '2026-09-08']
+  // Three extra lessons of our own — the seed's held September stays untouched.
+  const days = desktop ? ['2026-09-01', '2026-09-03', day] : ['2026-09-05', '2026-09-08', day]
   const db = service()
-  const lessonId = await extraLesson(db, GROUP_8B, day)
+  const lessons: string[] = []
+  for (const d of days) lessons.push(await extraLesson(db, GROUP_8B, d))
   const student = await studentId(db, name)
   const { subscription_id } = await balance(db, GROUP_8B, student)
-  const earlier: string[] = []
-  for (const d of freezeDays) {
-    await removeLesson(db, GROUP_8B, d)
-    const { data, error } = await db
-      .from('lessons')
-      .insert({
-        group_id: GROUP_8B,
-        teacher_id: await groupTeacher(db, GROUP_8B),
-        lesson_date: d,
-        planned_start: '19:00',
-        duration_min: 60,
-        is_extra: true,
-      })
-      .select('id')
-      .single()
-    if (error) throw error
-    earlier.push(data.id)
-  }
-  const cleanup = async () => {
-    for (const d of [day, ...freezeDays]) await removeLesson(db, GROUP_8B, d)
-  }
-  const { error: markError } = await db.from('attendance').insert(
-    earlier.map((id) => ({
-      lesson_id: id,
-      student_id: student,
-      subscription_id,
-      status: 'absent_frozen' as const,
-    })),
-  )
-  if (markError) throw markError
 
   try {
     await pinClock(page, `${day}T19:10:00+06:00`)
     await login(page, GULZAT)
-    await page.goto(`/lessons/${lessonId}`)
-    const card = page.getByRole('listitem', { name })
-    const freeze = card.getByRole('button', { name: 'Заморозка' })
-    await expect(freeze).toBeDisabled()
-    await expect(card.getByText('лимит 2 на абонемент', { exact: false })).toBeVisible()
-    await expect(card).toContainText(desktop ? 'заморозок 2/2 — лимит' : 'заморозок 2/2')
-    // Other students may still be frozen.
-    await expect(
-      page
-        .getByRole('listitem', { name: 'Алина Исакова' })
-        .getByRole('button', { name: 'Заморозка' }),
-    ).toBeEnabled()
-    await card.getByRole('button', { name: 'Не был' }).click()
-    await expect(card.getByRole('button', { name: 'Не был' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    await card.screenshot({ path: shot(testInfo, 'freeze-limit'), style: noTabBar })
+    for (const [i, lessonId] of lessons.entries()) {
+      await page.goto(`/lessons/${lessonId}`)
+      const card = page.getByRole('listitem', { name })
+      const freeze = card.getByRole('button', { name: 'Заморозка' })
+      await expect(freeze).toBeEnabled()
+      await expect(card).toContainText(`заморозок ${i}`)
+      await freeze.click()
+      await expect(freeze).toHaveAttribute('aria-pressed', 'true')
+      await expect(card.getByText('лимит', { exact: false })).toHaveCount(0)
+      if (i === 2) {
+        await page.waitForTimeout(600) // the avatar flip settles
+        await card.scrollIntoViewIfNeeded()
+        await page.screenshot({
+          path: shot(testInfo, desktop ? 'third-freeze-1280' : 'third-freeze-390'),
+          fullPage: desktop,
+        })
+      }
+      await page.getByRole('button', { name: 'Все были' }).click()
+      // Earlier days are already over — «Подтвердить занятие» there (#41).
+      await page.getByRole('button', { name: /^(Провести|Подтвердить) занятие$/ }).click()
+      await expect
+        .poll(
+          async () => {
+            const { data } = await db.from('lessons').select('status').eq('id', lessonId).single()
+            return data?.status
+          },
+          { timeout: 20_000 },
+        )
+        .toBe('held')
+    }
+
+    const { data: marks } = await db
+      .from('attendance')
+      .select('status')
+      .eq('subscription_id', subscription_id)
+      .eq('student_id', student)
+      .in('lesson_id', lessons)
+    expect(marks?.map((m) => m.status)).toEqual(Array(3).fill('absent_frozen'))
+
+    await switchUser(page, KANYKEI)
+    await page.goto(`/admin/students/${student}`)
+    await expect(page.getByText('заморозок 3', { exact: false }).first()).toBeVisible()
+    await page.screenshot({
+      path: shot(testInfo, desktop ? 'student-freezes-1280' : 'student-freezes-390'),
+      fullPage: desktop,
+    })
   } finally {
-    await cleanup()
+    for (const d of days) await removeLesson(db, GROUP_8B, d)
   }
 })
 

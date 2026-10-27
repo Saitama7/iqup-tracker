@@ -755,7 +755,7 @@ function Summary({ m }: { m: SheetModel }) {
         )}
       </div>
       <p className="rounded-2xl bg-stone px-4 py-3.5 text-xs leading-normal font-bold text-ink-muted">
-        Заморозка — ученик предупредил за день или минимум за 2 часа. Не более 2 на абонемент.
+        Заморозка — ученик предупредил за день или минимум за 2 часа.
         Сгоревший урок списывается и начисляется учителю.
       </p>
     </aside>
