@@ -416,6 +416,16 @@ function MarkButtons({
   )
 }
 
+/** #107: a student enrolled on the date of a held lesson without a mark — grey, colour + text. */
+function UnmarkedBadge({ row, mark }: { row: RosterRow; mark: Mark | undefined }) {
+  if (!row.unmarked || mark) return null
+  return (
+    <span className="shrink-0 rounded-full border border-line-strong bg-card px-2.5 py-1 text-xs font-extrabold whitespace-nowrap text-ink-muted">
+      Не отмечен
+    </span>
+  )
+}
+
 function FreezeHint({ id, row, mark }: { id: string; row: RosterRow; mark: Mark | undefined }) {
   if (!row.balance || !freezeBlocked(row, mark)) return null
   return (
@@ -559,6 +569,7 @@ function MobileStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
       className={cn(
         'flex flex-col gap-2.5 rounded-[18px] border border-l-[5px] border-line bg-card py-3 pr-3 pl-3.5',
         mark ? EDGE[mark] : 'border-l-line',
+        row.unmarked && !mark && 'bg-stone',
       )}
     >
       <div className="flex items-center gap-3">
@@ -567,6 +578,7 @@ function MobileStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
           <span className="text-[15px] font-extrabold">{row.fullName}</span>
           <span className={cn('text-xs font-bold', TONE[meta.tone])}>{meta.text}</span>
         </div>
+        <UnmarkedBadge row={row} mark={mark} />
       </div>
       <MarkButtons m={m} row={row} hintId={hintId} />
       <FreezeHint id={hintId} row={row} mark={mark} />
@@ -695,11 +707,13 @@ function DesktopStudent({ m, row }: { m: SheetModel; row: RosterRow }) {
         COLS,
         'items-center border-b border-l-[5px] border-b-line py-3 last:rounded-bl-[20px] last:border-b-0',
         mark ? EDGE[mark] : 'border-l-line',
+        row.unmarked && !mark && 'bg-stone',
       )}
     >
       <span className="flex items-center gap-3">
         <MarkAvatar row={row} mark={mark} className="size-9 text-xs" />
         <span className="text-[15px] font-extrabold">{row.fullName}</span>
+        <UnmarkedBadge row={row} mark={mark} />
       </span>
       <span className="flex flex-col gap-0.5">
         <span className={cn('text-[13px] font-bold', TONE[meta.tone])}>{meta.text}</span>

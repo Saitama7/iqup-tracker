@@ -220,12 +220,17 @@ export interface RosterRow {
   paySubscription: PaySubscription | null
   /** After-school: the student's planned hours that day (#82); null — not after-school. */
   hours: number | null
+  /**
+   * A held lesson without a mark of the student enrolled on its date (#107: enrolled retroactively
+   * after the lesson was held) — «Не отмечен»; the admin can add the mark (correct_attendance).
+   */
+  unmarked: boolean
 }
 
 /**
- * Students of a lesson: a planned one — enrolled on the lesson date (all must be marked), an
- * after-school student only with hours that day (confirm_lesson, 0025); a held one — those with a
- * mark. By name.
+ * Students of a lesson: enrolled on the lesson date (all must be marked), an after-school student
+ * only with hours that day (confirm_lesson, 0025); a held one — those with a mark plus those enrolled
+ * on its date without one (`unmarked`, #107 — same rule as assert_correction_marks). By name.
  */
 export function lessonRoster(
   enrollments: readonly EnrollmentSource[],
@@ -235,10 +240,8 @@ export function lessonRoster(
   const rows = new Map<string, RosterRow>()
   for (const e of enrollments) {
     const hours = dayHours(e.plans ?? [], lesson.lesson_date)
-    const on =
-      lesson.status === 'held'
-        ? saved.has(e.student.id)
-        : enrolledOn(e, lesson.lesson_date) && hours !== 0
+    const marked = lesson.status === 'held' && saved.has(e.student.id)
+    const on = marked || (enrolledOn(e, lesson.lesson_date) && hours !== 0)
     if (!on || rows.has(e.student.id)) continue
     // A student enrolled twice in a row keeps all subscriptions of the group.
     const subs = enrollments
@@ -263,6 +266,7 @@ export function lessonRoster(
           }
         : null,
       hours,
+      unmarked: lesson.status === 'held' && !saved.has(e.student.id),
     })
   }
   return [...rows.values()].sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))

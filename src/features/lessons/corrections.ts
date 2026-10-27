@@ -9,7 +9,10 @@ export interface MarkChange {
   to: Mark
 }
 
-/** Marks that differ from the saved ones, in roster order. */
+/**
+ * Marks that differ from the saved ones, in roster order; an unmarked student (#107) only once a
+ * mark was chosen for them — untouched ones are not sent and get no mark.
+ */
 export function markChanges(
   roster: readonly Pick<RosterRow, 'studentId' | 'fullName'>[],
   saved: ReadonlyMap<string, Mark>,
@@ -26,9 +29,9 @@ export function markChanges(
 export const changesPayload = (changes: readonly MarkChange[]) =>
   changes.map((c) => ({ student_id: c.studentId, status: c.to }))
 
-/** «Айжан Б.: был → не был». */
+/** «Айжан Б.: был → не был»; a student without a mark (#107) — «Айзат К.: — → был». */
 export function changeLine(c: Pick<MarkChange, 'fullName' | 'from' | 'to'>): string {
-  const from = c.from ? MARK_LABEL[c.from].toLowerCase() : 'без отметки'
+  const from = c.from ? MARK_LABEL[c.from].toLowerCase() : '—'
   return `${c.fullName}: ${from} → ${MARK_LABEL[c.to].toLowerCase()}`
 }
 
