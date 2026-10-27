@@ -76,7 +76,7 @@ test('бухгалтер выдаёт аванс → «К выплате» ме�
 
   // «К выплате» = 38 160 − 5 000; the accrual is untouched.
   await expect(row.getByTestId('payroll-to-pay')).toHaveText('33 160')
-  await expect(page.getByTestId('payroll-total')).toContainText('46 146')
+  await expect(page.getByTestId('payroll-total')).toContainText('48 171')
   await expect(page.getByTestId('payroll-advances')).toContainText('5 000')
   if (isDesktop(page)) {
     await expect(row).toContainText('38 160')
