@@ -9,7 +9,9 @@ import type { Database } from '../../src/lib/supabase/types.gen'
 import { phoneToEmail } from '../../supabase/functions/_shared/phone'
 import { localSupabase } from '../../scripts/local-supabase'
 import { ensureAfterschoolFixture, FIXTURE } from './afterschool-fixture'
+import { ensurePriceFixture, PRICE_FIXTURE, resetPriceFixture } from './price-fixture'
 import { ensureSizeFixture, SIZE_FIXTURE } from './size-fixture'
+import { admin } from './afterschool-fixture'
 
 const env = localSupabase()
 
@@ -65,6 +67,7 @@ async function source(supabase: Client) {
 beforeAll(async () => {
   await ensureAfterschoolFixture()
   await ensureSizeFixture()
+  await ensurePriceFixture()
 })
 
 describe('v_payroll_preview ↔ calcMonth on the seed', () => {
@@ -99,9 +102,9 @@ describe('v_payroll_preview ↔ calcMonth on the seed', () => {
       expect(calcMonth(lessons, teacherRates).lessonsHeld).toBe(0)
     }
 
-    // The pilot numbers (И20): everyone in September — 47 546 сом.
+    // The pilot numbers (И20): everyone in September — 47 546 сом + «Байхан» 8 × 450 (К11, #109).
     const september = rows.filter((r) => r.month === '2026-09-01')
-    expect(september.reduce((n, r) => n + (r.base_amount ?? 0), 0)).toBe(47_546)
+    expect(september.reduce((n, r) => n + (r.base_amount ?? 0), 0)).toBe(51_146)
     expect(september.every((r) => r.no_subscription === 0)).toBe(true)
   })
 
@@ -138,6 +141,49 @@ describe('subscription size (#101 fixture): pay by price_full / lessons_total (�
       rates.filter((r) => r.teacher_id === SIZE_FIXTURE.teacher),
     )
     expect(ts.amount).toBe(1620)
+  })
+})
+
+describe('К11 (#109 fixture): update_subscription moves the pay by price_full / lessons_total', () => {
+  it('individual 1,5 h: 12 / 7 200 → 8 / 7 200 — the held lesson 300 → 450 in the view and calc.ts', async () => {
+    const id = await resetPriceFixture(PRICE_FIXTURE.p1, 12, 7200)
+    const supabase = await signIn('0555 300 300')
+    const month = async () => {
+      const rows = await viewRows(supabase)
+      const view = rows.find(
+        (r) => r.teacher_id === PRICE_FIXTURE.teacher && r.month === '2025-05-01',
+      )
+      const { byKey, rates } = await source(supabase)
+      const own = rates.filter((r) => r.teacher_id === PRICE_FIXTURE.teacher)
+      const lessons = byKey.get(`${PRICE_FIXTURE.teacher}|2025-05-01`) ?? []
+      // the month holds the fixture group's days too (balance.test edits their price): the view's
+      // sum is checked against calc.ts of the whole month, the individual lesson — alone
+      expect(calcMonth(lessons, own).amount).toBe(view?.base_amount)
+      return calcMonth(
+        lessons.filter((l) => l.group_id === PRICE_FIXTURE.individual),
+        own,
+      ).amount
+    }
+    expect(await month()).toBe(300)
+
+    const a = await admin()
+    const { data: preview, error: pe } = await a.rpc('subscription_update_preview', {
+      p_id: id,
+      p_lessons: 8,
+      p_price: 7200,
+    })
+    if (pe) throw pe
+    expect(preview).toHaveLength(1)
+    expect(preview?.[0]).toMatchObject({ marks: 1, mark_before: 300, mark_after: 450 })
+    expect((preview?.[0]?.amount_after ?? 0) - (preview?.[0]?.amount_before ?? 0)).toBe(150)
+    const { error } = await a.rpc('update_subscription', {
+      p_id: id,
+      p_lessons: 8,
+      p_price: 7200,
+      p_reason: 'К11: 12 часов = 8 занятий по 1,5 ч',
+    })
+    if (error) throw error
+    expect(await month()).toBe(450)
   })
 })
 

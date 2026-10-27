@@ -12,7 +12,8 @@ import {
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { phoneToEmail } from '../../supabase/functions/_shared/phone'
 import { localSupabase } from '../../scripts/local-supabase'
-import { ensureAfterschoolFixture, FIXTURE } from './afterschool-fixture'
+import { admin, ensureAfterschoolFixture, FIXTURE } from './afterschool-fixture'
+import { ensurePriceFixture, PRICE_FIXTURE, resetPriceFixture } from './price-fixture'
 import { ensureSizeFixture, SIZE_FIXTURE } from './size-fixture'
 
 const env = localSupabase()
@@ -79,7 +80,7 @@ async function tsBalances(supabase: Client) {
 /** Subscription ids of the fixture groups (#82, #101) — kept out of the seed's own numbers. */
 async function fixtureSubscriptions(
   supabase: Client,
-  groups = [FIXTURE.group, SIZE_FIXTURE.group],
+  groups = [FIXTURE.group, SIZE_FIXTURE.group, PRICE_FIXTURE.individual, PRICE_FIXTURE.group],
 ) {
   const { data, error } = await supabase
     .from('subscriptions')
@@ -92,6 +93,7 @@ async function fixtureSubscriptions(
 beforeAll(async () => {
   await ensureAfterschoolFixture()
   await ensureSizeFixture()
+  await ensurePriceFixture()
 })
 
 const asView = (b: SubscriptionBalance) => ({
@@ -233,6 +235,47 @@ describe('subscription size (#101 fixture): 8 lessons at the same lesson price',
       debtLessons: 2,
       debtSom: 600,
       refundSuggested: 0,
+    })
+  })
+})
+
+describe('К12 (#109 fixture): own price edited — 20 / 7 400 → 12 / 5 400', () => {
+  it('paid 5 400: 2 000 left to pay before, nothing after; the view and balance.ts agree', async () => {
+    const id = await resetPriceFixture(PRICE_FIXTURE.p2, 20, 7400)
+    const supabase = await signIn('0555 300 300')
+    const of = async () => {
+      const [view, ts] = await Promise.all([viewRows(supabase), tsBalances(supabase)])
+      const b = ts.find((x) => x.subscriptionId === id)
+      if (!b) throw new Error('no fixture balance')
+      expect(view.get(id)).toEqual(asView(b))
+      return b
+    }
+    expect(await of()).toMatchObject({
+      lessonsTotal: 20,
+      priceFinal: 7400,
+      paidSom: 5400,
+      paidLessons: 14,
+      lessonsUsed: 12,
+      debtLessons: 0,
+    })
+
+    const a = await admin()
+    const { error } = await a.rpc('update_subscription', {
+      p_id: id,
+      p_lessons: 12,
+      p_price: 5400,
+      p_reason: 'Продлёнка: 12 дней за 5 400',
+    })
+    if (error) throw error
+    expect(await of()).toMatchObject({
+      lessonsTotal: 12,
+      priceFinal: 5400,
+      paidSom: 5400,
+      paidLessons: 12,
+      lessonsUsed: 12,
+      lessonsLeft: 0,
+      debtLessons: 0,
+      debtSom: 0,
     })
   })
 })
