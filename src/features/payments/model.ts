@@ -292,7 +292,11 @@ export function totalsByTeacher(rows: readonly PaymentRow[], lookups: Lookups): 
 // ─── Record panel ───────────────────────────────────────────────────────────
 
 /** Short state of the current subscription for the panel and А5: «осталось 1 из 12». */
-export function balanceLine(b: StudentBalance): { text: string; state: PayState; note: string } {
+export function balanceLine(
+  b: StudentBalance,
+  /** «абонемент с 07.09» — an older one picked instead of the current (#119). */
+  caption?: string,
+): { text: string; state: PayState; note: string } {
   const state = payState(b)
   const left =
     b.lessonsLeft >= 0
@@ -307,7 +311,11 @@ export function balanceLine(b: StudentBalance): { text: string; state: PayState;
           ? `оплачено ${unitOf(b, b.paidLessons, b.lessonsTotal)}`
           : 'оплачен'
   const head =
-    b.unit === 'hour' && b.periodMonth ? `Счёт за ${monthAccusative(b.periodMonth)}` : 'Текущий'
+    b.unit === 'hour' && b.periodMonth
+      ? `Счёт за ${monthAccusative(b.periodMonth)}`
+      : caption
+        ? `${caption.charAt(0).toUpperCase()}${caption.slice(1)}`
+        : 'Текущий'
   return { text: `${head}: ${left}`, state, note }
 }
 
@@ -318,7 +326,7 @@ export const carryToNext = (
 
 /** Amount presets: the rest / the debt on the current one; half / full on a new one. */
 export function amountPresets(
-  target: 'current' | 'new',
+  target: 'existing' | 'new',
   price: number,
   current: StudentBalance | null,
 ): { label: string; amount: number }[] {
@@ -341,7 +349,7 @@ export function amountPresets(
 
 /** The green line above «Записать»: what the payment opens (В7.1, И37). */
 export function paymentHint(
-  target: 'current' | 'new',
+  target: 'existing' | 'new',
   amount: number | null,
   terms: { lessonsTotal: number; priceFinal: number; priceFull: number },
   current: StudentBalance | null,
@@ -393,6 +401,114 @@ export function parseAmount(v: string): number | null {
   return /^\d+$/.test(d) ? Number(d) : null
 }
 
+// ─── «Что оплачивает» (#119) ───────────────────────────────────────────────
+
+export type PayTarget =
+  { kind: 'existing'; subscriptionId: string } | { kind: 'new'; enrollmentId: string }
+
+export interface PayOption {
+  /** «sub:<id>» / «new:<enrollment id>» — the select's value. */
+  value: string
+  target: PayTarget
+  enrollmentId: string
+  groupId: string
+  label: string
+  /** The subscription paid on; «new» — null. */
+  balance: StudentBalance | null
+  /** The enrollment's current subscription — hints and «Похоже на повтор» of «new». */
+  current: StudentBalance | null
+  /** «new»: the oldest subscription still owed (#119). */
+  owed: StudentBalance | null
+}
+
+export const payTargetValue = (t: PayTarget) =>
+  t.kind === 'existing' ? `sub:${t.subscriptionId}` : `new:${t.enrollmentId}`
+
+/** A subscription the student still owes for: not paid in full, or lessons taken in debt. */
+export const isOwed = (b: StudentBalance) =>
+  !b.refunded && (b.paidLessons < b.lessonsTotal || b.debtLessons > 0)
+
+const shortUnits = (b: Pick<StudentBalance, 'unit'>, n: number) =>
+  b.unit === 'hour' ? `${formatHours(n)} ч` : `${n} ур.`
+
+/** «долг 12 ур. · 7 200» / «осталось внести 2 400». */
+function owedNote(b: StudentBalance): string {
+  return b.debtLessons > 0
+    ? `долг ${shortUnits(b, b.debtLessons)} · ${formatSom(b.debtSom)}`
+    : `осталось внести ${formatSom(b.priceFinal - b.paidSom)}`
+}
+
+/** «закрыть долг · абонемент с 07.09 · 12 ур. · 7 200» and the like. */
+function existingLabel(b: StudentBalance, what: string): string {
+  if (b.debtLessons > 0)
+    return `закрыть долг · ${what} · ${shortUnits(b, b.debtLessons)} · ${formatSom(b.debtSom)}`
+  if (b.paidSom === 0)
+    return `оплатить ${what} · ${shortUnits(b, b.lessonsTotal)} · ${formatSom(b.priceFinal)}`
+  if (b.paidSom < b.priceFinal)
+    return `доплата · ${what} · осталось ${formatSom(b.priceFinal - b.paidSom)}`
+  return `${what} · оплачен`
+}
+
+/**
+ * Targets of «Что оплачивает» (#119): per active enrollment every subscription still owed, oldest
+ * first, then «новый абонемент». A debt on an older package (a payment recorded as a new one) must
+ * stay payable. `include` — also list this paid one (the refund). Legacy hour invoices (#82): the
+ * current invoice is always listed and there is no «новый».
+ */
+export function payOptions(
+  student: Pick<StudentRow, 'id' | 'enrollments'>,
+  groups: ReadonlyMap<string, Pick<GroupBrief, 'subject' | 'name'>>,
+  balances: readonly StudentBalance[],
+  include?: string,
+): PayOption[] {
+  const subs = subscriptionsOf(student)
+  const start = (b: StudentBalance) => b.periodMonth ?? subs.get(b.subscriptionId)?.started_at ?? ''
+  return student.enrollments
+    .filter((e) => e.status === 'active')
+    .flatMap((e): PayOption[] => {
+      const g = groups.get(e.group_id)
+      if (!g) return []
+      const own = balances.filter((b) => b.studentId === student.id && b.groupId === e.group_id)
+      const current = own.find((b) => b.isCurrent) ?? null
+      const hourly = current?.unit === 'hour'
+      const owed = own
+        .filter(
+          (b) =>
+            isOwed(b) ||
+            (!b.refunded && b.subscriptionId === include) ||
+            (hourly && b.isCurrent && !b.refunded),
+        )
+        .sort((a, b) => start(a).localeCompare(start(b)))
+      const base = { enrollmentId: e.id, groupId: e.group_id, current }
+      const list = owed.map((b): PayOption => ({
+        ...base,
+        value: `sub:${b.subscriptionId}`,
+        target: { kind: 'existing', subscriptionId: b.subscriptionId },
+        label: `${groupLabel(g)} · ${existingLabel(
+          b,
+          subscriptionCaption({
+            started_at: subs.get(b.subscriptionId)?.started_at,
+            period_month: b.periodMonth,
+          }),
+        )}`,
+        balance: b,
+        owed: null,
+      }))
+      if (hourly) return list
+      return [
+        ...list,
+        {
+          ...base,
+          value: `new:${e.id}`,
+          target: { kind: 'new', enrollmentId: e.id },
+          label: `${groupLabel(g)} · новый абонемент`,
+          balance: null,
+          owed: owed.find((b) => b.unit === 'lesson' && b.paidLessons < b.lessonsTotal) ?? null,
+        },
+      ]
+    })
+}
+
 // ─── Duplicate guard of «Записать оплату» (#93) ────────────────────────────
 
 /** paid_at → its Bishkek date '2026-10-05' (invariant 8). */
@@ -442,10 +558,12 @@ export function paymentsOf(
 }
 
 export interface DuplicateTarget {
-  kind: 'current' | 'new'
+  kind: 'existing' | 'new'
   groupId: string
-  /** The subscription paid on («current»), or the enrollment's current one («new»). */
+  /** The subscription paid on («existing»), or the enrollment's current one («new»). */
   balance: StudentBalance | null
+  /** «new»: the enrollment's oldest subscription still owed (#119) — pay it, not a new one. */
+  owed?: StudentBalance | null
 }
 
 /**
@@ -484,6 +602,14 @@ export function duplicateWarning(
     )
   }
 
+  const owed = target.kind === 'new' ? target.owed : null
+  if (owed) {
+    const what = subscriptionCaption({ started_at: subs.get(owed.subscriptionId)?.started_at })
+    reasons.push(
+      `${what.charAt(0).toUpperCase()}${what.slice(1)} не оплачен (${owedNote(owed)}) — оплатите его, новый не нужен`,
+    )
+  }
+
   if (
     target.kind === 'new' &&
     b &&
@@ -499,7 +625,7 @@ export function duplicateWarning(
   }
 
   if (
-    target.kind === 'current' &&
+    target.kind === 'existing' &&
     b &&
     b.unit === 'hour' &&
     b.periodMonth &&

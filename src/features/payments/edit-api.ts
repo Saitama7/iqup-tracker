@@ -106,6 +106,8 @@ export const editPaymentForm = (today: string, refund: boolean) =>
       ? z.string().trim().min(1, 'Укажите причину возврата').max(500, 'Слишком длинный текст')
       : z.string().trim().max(500, 'Слишком длинный комментарий'),
     reason,
+    /** #119: move the payment to another subscription of the enrollment; null — it stays. */
+    subscriptionId: z.uuid().nullable(),
   })
 export type EditPaymentInput = z.output<ReturnType<typeof editPaymentForm>>
 
@@ -121,6 +123,9 @@ export function editErrorMessage(error: { code?: string; message?: string }): st
     if (m.includes('delete the refund first')) return 'Сначала удалите возврат по этому абонементу'
     if (m.includes('deleted by mistake'))
       return 'Возврат по записи «Записан по ошибке» не удаляется'
+    if (m.includes('same enrollment')) return 'Перенести можно только на абонемент этой же группы'
+    if (m.includes('subscription is refunded')) return 'По этому абонементу оформлен возврат'
+    if (m.includes('stays on its subscription')) return 'Возврат не переносится'
     if (m.includes('another invoice')) return 'За этот месяц у ученика уже есть другой счёт'
     if (m.includes('future')) return 'Дата оплаты — не позже сегодня'
     if (m.includes('between 0')) return 'Возврат — не больше, чем оплачено'
@@ -149,6 +154,7 @@ export async function updatePayment(input: EditPaymentInput): Promise<void> {
     p_paid_on: input.paidOn,
     p_comment: input.comment,
     p_reason: input.reason,
+    p_subscription_id: input.subscriptionId ?? undefined,
   })
   if (error) throw new PaymentError(editErrorMessage(error))
 }

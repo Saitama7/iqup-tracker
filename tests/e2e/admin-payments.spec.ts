@@ -126,7 +126,7 @@ test('А7: частичная оплата открывает 6 уроков, в
     await page.goto(`/admin/payments?student=${studentId}`)
     const form = page.getByRole('form', { name: 'Записать оплату' })
     await expect(form.getByLabel('Ученик', { exact: true })).toContainText(name)
-    await expect(form.getByLabel('Что оплачивает')).toContainText('доплата по текущему')
+    await expect(form.getByLabel('Что оплачивает')).toContainText('оплатить абонемент с')
     await expect(form.getByText('Текущий: осталось 12 из 12')).toBeVisible()
     await expect(form.getByText('пора оплачивать', { exact: true })).toBeVisible()
 

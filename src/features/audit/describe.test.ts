@@ -919,6 +919,27 @@ describe('payments deleted / edited by the admin (#92, Г10)', () => {
     )
     expect(e.note).toBe('Причина: «ошиблись суммой»')
   })
+  it('#119: «оплата перенесена на абонемент с 07.09»', () => {
+    const OLD = '00000000-0000-4000-c000-0000000000aa'
+    expect(
+      text(
+        row({
+          entity: 'payments',
+          action: 'update',
+          before: { ...payment, subscription_id: OLD },
+          after: payment,
+          reason: 'оплата ушла в новый абонемент',
+          kind: 'payment',
+        }),
+        {
+          ...lookups,
+          subscriptions: {
+            [SUB]: { enrollmentId: ENROLLMENT, lessons: 12, price: 3200, startedAt: '2026-09-07' },
+          },
+        },
+      ),
+    ).toBe('Оплата изменена: Алина Исакова · оплата перенесена на абонемент с 07.09')
+  })
   it('the same day at another time is not a date change', () => {
     expect(
       text(

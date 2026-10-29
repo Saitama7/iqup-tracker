@@ -3,7 +3,6 @@
 // teacher (Г4) on their own tabs, the panel «Записать оплату» (on the current subscription or a new
 // one — В5, В7.1, И37) and «Возврат» (В8). Desktop: the panel sits to the right of the journal;
 // phone: «Записать» is the first tab (the tab bar's «Оплата»).
-import { monthAccusative } from '@/features/afterschool/model'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useId, useMemo, useRef, useState, type ReactNode, type SubmitEvent } from 'react'
@@ -12,12 +11,7 @@ import { DateInput } from '@/components/ui/date-picker'
 import { PageHeader, PageTitle } from '@/components/page'
 import { TEACHER_GROUPS_KEY } from '@/features/groups/teacher-api'
 import { STUDENTS_KEY, studentsQuery } from '@/features/students/api'
-import {
-  firstName,
-  groupLabel,
-  type StudentRow,
-  type StudentsSource,
-} from '@/features/students/model'
+import { firstName, groupLabel, type StudentsSource } from '@/features/students/model'
 import { NativeSelect } from '@/features/students/parts'
 import { StudentPicker, type StudentPickerOption } from '@/features/students/student-picker'
 import { tariffsQuery } from '@/features/subscriptions/api'
@@ -82,6 +76,9 @@ import {
   monthOf,
   parseAmount,
   paymentHint,
+  payOptions,
+  payTargetValue,
+  type PayTarget,
   paymentsOf,
   recentMonths,
   recordedToast,
@@ -734,73 +731,6 @@ function TotalsTable({
 
 // ─── «Записать оплату» / «Возврат» ──────────────────────────────────────────
 
-type Target = { kind: 'current'; subscriptionId: string } | { kind: 'new'; enrollmentId: string }
-
-interface EnrollmentChoice {
-  enrollmentId: string
-  groupId: string
-  label: string
-  groupType: StudentsSource['groups'][number]['group_type']
-  current: StudentBalance | null
-}
-
-function choicesOf(
-  student: StudentRow | undefined,
-  source: StudentsSource | undefined,
-  balances: readonly StudentBalance[],
-): EnrollmentChoice[] {
-  if (!student || !source) return []
-  return student.enrollments
-    .filter((e) => e.status === 'active')
-    .flatMap((e): EnrollmentChoice[] => {
-      const g = source.groups.find((x) => x.id === e.group_id)
-      if (!g) return []
-      const current =
-        balances.find((b) => b.studentId === student.id && b.groupId === g.id && b.isCurrent) ??
-        null
-      // продлёнка по часам (#82, legacy — К13 made it a package of days): every month invoice still
-      // owing, and the newest one — no «новый абонемент» for those
-      if (g.group_type === 'afterschool' && current?.unit === 'hour') {
-        const invoices = balances
-          .filter(
-            (b) =>
-              b.studentId === student.id &&
-              b.groupId === g.id &&
-              !b.refunded &&
-              b.unit === 'hour' &&
-              (b.isCurrent || b.paidSom < b.priceFinal || b.debtSom > 0),
-          )
-          .sort((a, b) => (a.periodMonth ?? '').localeCompare(b.periodMonth ?? ''))
-        const list = invoices.length > 0 ? invoices : [current]
-        return list.map((b): EnrollmentChoice => ({
-          enrollmentId: e.id,
-          groupId: g.id,
-          label: `${groupLabel(g)}${b.periodMonth ? ` · счёт за ${monthAccusative(b.periodMonth)}` : ''}`,
-          groupType: g.group_type,
-          current: b,
-        }))
-      }
-      return [
-        {
-          enrollmentId: e.id,
-          groupId: g.id,
-          label: groupLabel(g),
-          groupType: g.group_type,
-          current,
-        },
-      ]
-    })
-}
-
-/** Default: pay the rest of a partly paid current subscription, else a new one. */
-const defaultTarget = (c: EnrollmentChoice): Target =>
-  c.current && (c.current.paidLessons < c.current.lessonsTotal || c.current.unit === 'hour')
-    ? { kind: 'current', subscriptionId: c.current.subscriptionId }
-    : { kind: 'new', enrollmentId: c.enrollmentId }
-
-const targetValue = (t: Target) =>
-  t.kind === 'current' ? `cur:${t.subscriptionId}` : `new:${t.enrollmentId}`
-
 function RecordPanel({
   source,
   balances,
@@ -825,7 +755,7 @@ function RecordPanel({
   const pickerRef = useRef<HTMLButtonElement>(null)
   const [studentId, setStudentId] = useState(initialStudent ?? '')
   const [confirmed, setConfirmed] = useState(false)
-  const [picked, setTarget] = useState<Target | null>(null)
+  const [picked, setTarget] = useState<PayTarget | null>(null)
   const [amount, setAmount] = useState('')
   const [pickedDiscount, setDiscount] = useState<DiscountPct | null>(null)
   /** «Уроков» of a new package (И89); null — the default size (К11). */
@@ -846,8 +776,13 @@ function RecordPanel({
     [source],
   )
   const student = students.find((s) => s.id === studentId)
-  const choices = useMemo(() => choicesOf(student, source, balances), [student, source, balances])
   const groupsById = useMemo(() => new Map((source?.groups ?? []).map((g) => [g.id, g])), [source])
+  // a picked paid subscription (the refund) stays listed
+  const include = picked?.kind === 'existing' ? picked.subscriptionId : undefined
+  const options = useMemo(
+    () => (student ? payOptions(student, groupsById, balances, include) : []),
+    [student, groupsById, balances, include],
+  )
   const pickerOptions = useMemo(
     () =>
       students.map((s): StudentPickerOption => {
@@ -890,30 +825,29 @@ function RecordPanel({
   )
   const availability = history ? discountAvailability(history) : []
 
-  // the first enrollment until the admin picks another; the discount the student is entitled to
-  const first = choices[0]
-  const target = picked ?? (first ? defaultTarget(first) : null)
-  const discount = pickedDiscount ?? (history ? defaultDiscount(history) : 0)
+  // the oldest subscription owed (or «новый») until the admin picks another (#119); the discount
+  // the student is entitled to
   const choice =
-    target &&
-    choices.find((c) =>
-      target.kind === 'new'
-        ? c.enrollmentId === target.enrollmentId
-        : c.current?.subscriptionId === target.subscriptionId,
-    )
+    (picked && options.find((o) => o.value === payTargetValue(picked))) ?? options[0] ?? null
+  const target = choice?.target ?? null
+  const discount = pickedDiscount ?? (history ? defaultDiscount(history) : 0)
+  /** The subscription paid on; «новый» — null. */
+  const selected = choice?.balance ?? null
   const current = choice?.current ?? null
+  /** «existing» — the selected one, «new» — the enrollment's current one. */
+  const base = target?.kind === 'existing' ? selected : current
 
   const quote =
     choice && tariffs.data
       ? quoteSubscription(
-          choice.groupType,
+          groupsById.get(choice.groupId)?.group_type ?? 'group',
           today,
           tariffs.data,
-          target.kind === 'new' ? discount : 0,
-          target.kind === 'new' ? lessons : null,
+          choice.target.kind === 'new' ? discount : 0,
+          choice.target.kind === 'new' ? lessons : null,
           {
             groupMinutes: groupsById.get(choice.groupId)?.lesson_duration_min,
-            price: target.kind === 'new' ? price : null,
+            price: choice.target.kind === 'new' ? price : null,
           },
         )
       : null
@@ -935,7 +869,7 @@ function RecordPanel({
     student && choice && !refund
       ? duplicateWarning(
           student,
-          { kind: target.kind, groupId: choice.groupId, balance: current },
+          { kind: choice.target.kind, groupId: choice.groupId, balance: base, owed: choice.owed },
           payments,
           today,
         )
@@ -949,8 +883,8 @@ function RecordPanel({
   /** «8 класс А», «абонемент с 01.10» / «счёт за октябрь» — the toast. */
   const paidFor = (): [string | null, string] => {
     const g = choice ? groupsById.get(choice.groupId) : undefined
-    if (target?.kind === 'current' && current && student) {
-      const s = subscriptionsOf(student).get(current.subscriptionId)
+    if (target?.kind === 'existing' && selected && student) {
+      const s = subscriptionsOf(student).get(selected.subscriptionId)
       return [
         g?.name ?? null,
         subscriptionCaption({ started_at: s?.started_at, period_month: s?.period_month }),
@@ -1013,9 +947,9 @@ function RecordPanel({
       return
     }
     if (refund) {
-      if (!current) return
-      const parsed = refundForm(today, current.paidSom).safeParse({
-        subscriptionId: current.subscriptionId,
+      if (!selected) return
+      const parsed = refundForm(today, selected.paidSom).safeParse({
+        subscriptionId: selected.subscriptionId,
         amount,
         method,
         paidOn,
@@ -1038,9 +972,9 @@ function RecordPanel({
       return
     }
     const parsed = paymentForm(today).safeParse(
-      target.kind === 'current'
+      target.kind === 'existing'
         ? {
-            target: 'current',
+            target: 'existing',
             subscriptionId: target.subscriptionId,
             amount,
             method,
@@ -1068,10 +1002,20 @@ function RecordPanel({
   }
 
   const value = parseAmount(amount)
-  const line = current ? balanceLine(current) : null
+  const line =
+    selected && student
+      ? balanceLine(
+          selected,
+          selected.isCurrent
+            ? undefined
+            : subscriptionCaption({
+                started_at: subscriptionsOf(student).get(selected.subscriptionId)?.started_at,
+              }),
+        )
+      : null
   const presets =
     target && !refund
-      ? amountPresets(target.kind, quote?.priceFinal ?? current?.priceFinal ?? 0, current)
+      ? amountPresets(target.kind, quote?.priceFinal ?? base?.priceFinal ?? 0, base)
       : []
   const hint =
     target && choice && !refund
@@ -1085,15 +1029,16 @@ function RecordPanel({
                 priceFull: quote?.priceFull ?? 0,
               }
             : {
-                lessonsTotal: current?.lessonsTotal ?? 0,
-                priceFinal: current?.priceFinal ?? 0,
-                priceFull: current?.priceFinal ?? 0,
+                lessonsTotal: base?.lessonsTotal ?? 0,
+                priceFinal: base?.priceFinal ?? 0,
+                priceFull: base?.priceFinal ?? 0,
               },
-          current,
+          base,
         )
       : ''
   const pending = pay.isPending || back.isPending
-  const canRefund = !!current && target?.kind === 'current' && current.paidSom > 0
+  // «новый» picked: the refund is of the current one
+  const canRefund = !!base && !base.refunded && base.paidSom > 0
 
   return (
     <form
@@ -1111,7 +1056,8 @@ function RecordPanel({
             type="button"
             onClick={() => {
               setRefund((r) => !r)
-              setAmount(refund ? '' : String(current.refundSuggested))
+              setTarget(refund ? null : { kind: 'existing', subscriptionId: base.subscriptionId })
+              setAmount(refund ? '' : String(base.refundSuggested))
               setComment('')
               setError(null)
             }}
@@ -1182,15 +1128,10 @@ function RecordPanel({
         <Field id={`${id}-target`} label={refund ? 'Группа · абонемент' : 'Что оплачивает'}>
           <NativeSelect
             id={`${id}-target`}
-            value={target ? targetValue(target) : ''}
+            value={choice?.value ?? ''}
             disabled={refund}
             onChange={(e) => {
-              const [kind, ref = ''] = e.target.value.split(':')
-              setTarget(
-                kind === 'cur'
-                  ? { kind: 'current', subscriptionId: ref }
-                  : { kind: 'new', enrollmentId: ref },
-              )
+              setTarget(options.find((o) => o.value === e.target.value)?.target ?? null)
               setDiscount(null)
               setLessons(null)
               setPrice(null)
@@ -1199,24 +1140,11 @@ function RecordPanel({
               setConfirmed(false)
             }}
           >
-            {choices.flatMap((c) => [
-              c.current ? (
-                <option
-                  key={`cur:${c.current.subscriptionId}`}
-                  value={`cur:${c.current.subscriptionId}`}
-                >
-                  {c.label} ·{' '}
-                  {c.current.debtLessons > 0 || c.current.paidLessons >= c.current.lessonsTotal
-                    ? 'закрыть долг / доплата'
-                    : 'доплата по текущему'}
-                </option>
-              ) : null,
-              c.current?.unit === 'hour' ? null : (
-                <option key={`new:${c.enrollmentId}`} value={`new:${c.enrollmentId}`}>
-                  {c.label} · новый абонемент
-                </option>
-              ),
-            ])}
+            {options.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </NativeSelect>
         </Field>
       )}
@@ -1227,7 +1155,7 @@ function RecordPanel({
           <span
             className={cn(
               line.state === 'debt'
-                ? current && debtOverLimit(current.debtLessons)
+                ? selected && debtOverLimit(selected.debtLessons)
                   ? 'text-burned-strong'
                   : 'text-warn-strong'
                 : line.state === 'soon'
@@ -1263,7 +1191,9 @@ function RecordPanel({
               }}
               className="size-5 shrink-0 accent-ink"
             />
-            Да, это новая оплата — записать ещё одну
+            {choice?.owed && target?.kind === 'new'
+              ? 'Да, это новый абонемент'
+              : 'Да, это новая оплата — записать ещё одну'}
           </label>
         </div>
       )}
@@ -1314,7 +1244,7 @@ function RecordPanel({
           </div>
           {target.kind === 'new' && !refund && quote && (
             <LessonsField
-              key={targetValue(target)}
+              key={choice?.value}
               id={`${id}-lessons`}
               tariff={quote.tariff}
               byDefault={quote.defaultLessons}
@@ -1328,7 +1258,7 @@ function RecordPanel({
           )}
           {target.kind === 'new' && !refund && quote && (
             <PriceField
-              key={`${targetValue(target)}-price`}
+              key={`${choice?.value}-price`}
               id={`${id}-price`}
               defaultPrice={quote.defaultPrice}
               value={price}
@@ -1340,8 +1270,8 @@ function RecordPanel({
               caption={hoursCaption(quote)}
             />
           )}
-          {refund && current && (
-            <p className="text-xs font-bold text-ink-muted">{refundHint(current)}</p>
+          {refund && selected && (
+            <p className="text-xs font-bold text-ink-muted">{refundHint(selected)}</p>
           )}
           {presets.length > 0 && (
             <div className="flex flex-wrap gap-2">

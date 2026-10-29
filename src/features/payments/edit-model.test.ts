@@ -1,4 +1,10 @@
-import { deleteImpact, deleteImpactText, packageLabel, type ImpactSubscription } from './edit-model'
+import {
+  deleteImpact,
+  deleteImpactText,
+  moveTargets,
+  packageLabel,
+  type ImpactSubscription,
+} from './edit-model'
 
 const sub = (over: Partial<ImpactSubscription>): ImpactSubscription => ({
   id: 's1',
@@ -132,5 +138,23 @@ describe('packageLabel', () => {
     expect(plain(packageLabel(p({ hours_total: 60, period_month: '2026-10-01' })))).toMatch(
       /^60 ч за .+ · 3 200$/,
     )
+  })
+})
+
+describe('«Изменить оплату» → «Абонемент» (#119)', () => {
+  it('the enrollment’s subscriptions but refunded, oldest first', () => {
+    expect(
+      moveTargets(
+        [
+          sub({ id: 'b', started_at: '2026-10-14' }),
+          sub({ id: 'r', started_at: '2026-08-01', status: 'refunded' }),
+          sub({ id: 'a', started_at: '2026-09-07' }),
+        ],
+        'b',
+      ),
+    ).toEqual([
+      { id: 'a', label: 'абонемент с 07.09 · 12 ур · 3\u00a0200' },
+      { id: 'b', label: 'абонемент с 14.10 · 12 ур · 3\u00a0200' },
+    ])
   })
 })
