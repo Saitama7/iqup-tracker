@@ -2183,6 +2183,7 @@ export type Database = {
           p_paid_on: string
           p_payment_id: string
           p_reason: string
+          p_subscription_id?: string
         }
         Returns: undefined
       }

@@ -16,6 +16,7 @@ import {
   monthLabel,
   parseAmount,
   paymentHint,
+  payOptions,
   recentMonths,
   recordedToast,
   refundHint,
@@ -240,13 +241,13 @@ describe('record panel', () => {
     })
   })
   it('presets: the rest and the debt on the current one, half / full on a new one', () => {
-    expect(amountPresets('current', 3200, balance({ paidSom: 1600, paidLessons: 6 }))).toEqual([
+    expect(amountPresets('existing', 3200, balance({ paidSom: 1600, paidLessons: 6 }))).toEqual([
       { label: '1\u00a0600 · остаток', amount: 1600 },
     ])
     expect(amountPresets('new', 7400, null).map((p) => p.amount)).toEqual([3700, 7400])
     expect(
       amountPresets(
-        'current',
+        'existing',
         7400,
         balance({
           lessonsTotal: 20,
@@ -301,7 +302,12 @@ describe('record panel', () => {
   it('a payment on the current one: what is opened', () => {
     const current = balance({ paidSom: 1600, paidLessons: 6, lessonsUsed: 2 })
     expect(
-      paymentHint('current', 800, { lessonsTotal: 12, priceFinal: 3200, priceFull: 3200 }, current),
+      paymentHint(
+        'existing',
+        800,
+        { lessonsTotal: 12, priceFinal: 3200, priceFull: 3200 },
+        current,
+      ),
     ).toBe('После записи: оплачено 9 из 12, доступно 7 уроков')
   })
   it('refund hint (В8)', () => {
@@ -367,7 +373,7 @@ describe('продлёнка: счёт за месяц в часах (#82)', () 
   it('paymentHint after a part payment — in hours', () => {
     expect(
       paymentHint(
-        'current',
+        'existing',
         1230,
         { lessonsTotal: 21, priceFinal: 2583, priceFull: 2583 },
         hours({ paidSom: 0, paidLessons: 0 }),
@@ -429,7 +435,7 @@ describe('«Похоже на повтор» (#93)', () => {
     expect(
       duplicateWarning(
         student,
-        { kind: 'current', groupId: G8A, balance: current },
+        { kind: 'existing', groupId: G8A, balance: current },
         [paidOct5],
         '2026-10-18',
       ),
@@ -438,7 +444,7 @@ describe('«Похоже на повтор» (#93)', () => {
     expect(
       duplicateWarning(
         student,
-        { kind: 'current', groupId: G8A, balance: current },
+        { kind: 'existing', groupId: G8A, balance: current },
         [
           pay({ group: G6, paid_at: '2026-10-15T04:00:00Z' }),
           pay({ kind: 'refund', amount: -800 }),
@@ -518,7 +524,7 @@ describe('«Похоже на повтор» (#93)', () => {
     expect(
       duplicateWarning(
         student,
-        { kind: 'current', groupId: G8A, balance: invoice },
+        { kind: 'existing', groupId: G8A, balance: invoice },
         [p],
         '2026-10-18',
       ),
@@ -530,7 +536,7 @@ describe('«Похоже на повтор» (#93)', () => {
     expect(
       duplicateWarning(
         student,
-        { kind: 'current', groupId: G8A, balance: current },
+        { kind: 'existing', groupId: G8A, balance: current },
         [old],
         '2026-10-18',
       ),
@@ -545,7 +551,7 @@ describe('«Похоже на повтор» (#93)', () => {
     expect(
       duplicateWarning(
         student,
-        { kind: 'current', groupId: G8A, balance: partial },
+        { kind: 'existing', groupId: G8A, balance: partial },
         [pay({ amount: 1600, paid_at: '2026-09-25T04:00:00Z' })],
         '2026-10-18',
       ),
@@ -684,5 +690,115 @@ describe('статус оплаты в выборе ученика (#93)', () =>
       'Оплата записана: Айжан Б. · 3\u00a0200 сом · 8 класс А · абонемент с 01.10',
     )
     expect(subscriptionCaption({ period_month: '2026-10-01' })).toBe('счёт за октябрь')
+  })
+})
+
+describe('«Что оплачивает»: любой абонемент, которому должны (#119)', () => {
+  const groups = new Map([[G8A, { subject: 'Математика', name: '5.кл.инд.Ясмин' }]])
+  const sub = (id: string, started_at: string) => ({
+    id,
+    lessons_total: 12,
+    price_full: 7200,
+    price_final: 7200,
+    discount_percent: 0,
+    discount_reason: 'none' as const,
+    started_at,
+    status: 'active' as const,
+    created_at: `${started_at}T00:00:00Z`,
+  })
+  const student = {
+    id: 's1',
+    enrollments: [
+      {
+        id: 'e1',
+        group_id: G8A,
+        start_date: '2026-09-07',
+        end_date: null,
+        status: 'active' as const,
+        subscriptions: [sub('old', '2026-09-07'), sub('new', '2026-10-14')],
+      },
+    ],
+  }
+  // Ясмин: 12 lessons of 07.09 taken, nothing paid; the 14.10 one paid in full
+  const old = balance({
+    subscriptionId: 'old',
+    isCurrent: false,
+    priceFinal: 7200,
+    paidSom: 0,
+    paidLessons: 0,
+    lessonsUsed: 12,
+    lessonsLeft: 0,
+    debtLessons: 12,
+    debtSom: 7200,
+  })
+  const paid = balance({ subscriptionId: 'new', priceFinal: 7200, paidSom: 7200 })
+
+  it('the old debt first and by default, then «новый»; the paid one not listed', () => {
+    const options = payOptions(student, groups, [paid, old])
+    expect(options.map((o) => o.label)).toEqual([
+      'Математика · 5.кл.инд.Ясмин · закрыть долг · абонемент с 07.09 · 12 ур. · 7 200',
+      'Математика · 5.кл.инд.Ясмин · новый абонемент',
+    ])
+    expect(options[0]?.target).toEqual({ kind: 'existing', subscriptionId: 'old' })
+    expect(options[0]?.current?.subscriptionId).toBe('new')
+    expect(options[1]?.owed?.subscriptionId).toBe('old')
+  })
+
+  it('right after «Зачислить»: the new unpaid package by default, not «новый»', () => {
+    const fresh = balance({ subscriptionId: 'new', priceFinal: 3800, paidSom: 0, paidLessons: 0 })
+    const options = payOptions(student, groups, [fresh])
+    expect(options[0]?.label).toBe(
+      'Математика · 5.кл.инд.Ясмин · оплатить абонемент с 14.10 · 12 ур. · 3 800',
+    )
+    expect(options[0]?.target.kind).toBe('existing')
+  })
+
+  it('a partly paid one: «доплата · осталось»; all paid — only «новый»; refunded — never', () => {
+    const part = balance({ subscriptionId: 'new', priceFinal: 7200, paidSom: 4800, paidLessons: 8 })
+    expect(payOptions(student, groups, [part])[0]?.label).toBe(
+      'Математика · 5.кл.инд.Ясмин · доплата · абонемент с 14.10 · осталось 2 400',
+    )
+    expect(payOptions(student, groups, [paid]).map((o) => o.value)).toEqual(['new:e1'])
+    expect(
+      payOptions(student, groups, [paid, { ...old, refunded: true }]).map((o) => o.value),
+    ).toEqual(['new:e1'])
+    // the refund of a paid one keeps it listed
+    expect(payOptions(student, groups, [paid], 'new')[0]?.label).toBe(
+      'Математика · 5.кл.инд.Ясмин · абонемент с 14.10 · оплачен',
+    )
+  })
+
+  it('«новый абонемент» while one is not paid: a warning until «Да, это новый абонемент»', () => {
+    const options = payOptions(student, groups, [paid, old])
+    const n = options[1]
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'new', groupId: G8A, balance: n?.current ?? null, owed: n?.owed },
+        [],
+        '2026-10-29',
+      ),
+    ).toEqual([
+      'Абонемент с 07.09 не оплачен (долг 12 ур. · 7\u00a0200) — оплатите его, новый не нужен',
+      'Текущий абонемент оплачен, осталось 12 уроков — новый ещё не нужен',
+    ])
+    // nothing owed — no such reason
+    expect(
+      duplicateWarning(
+        student,
+        {
+          kind: 'new',
+          groupId: G8A,
+          balance: { ...paid, lessonsUsed: 11, lessonsLeft: 1 },
+          owed: null,
+        },
+        [],
+        '2026-10-29',
+      ),
+    ).toEqual([])
+  })
+
+  it('the panel names an older picked subscription', () => {
+    expect(balanceLine(old, 'абонемент с 07.09').text).toBe('Абонемент с 07.09: осталось 0 из 12')
   })
 })

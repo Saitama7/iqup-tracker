@@ -44,7 +44,10 @@ export interface AuditLookups {
   lessons: Record<string, { groupId: string; date: string; start: string }>
   enrollments: Record<string, { studentId: string; groupId: string }>
   /** Subscriptions behind payments: enrollment and package. */
-  subscriptions: Record<string, { enrollmentId: string; lessons: number; price: number }>
+  subscriptions: Record<
+    string,
+    { enrollmentId: string; lessons: number; price: number; startedAt?: string }
+  >
   tariffs: { id: string; groupType: GroupType; validFrom: string; price: number; lessons: number }[]
 }
 
@@ -852,7 +855,12 @@ function describePayment(row: AuditRow, l: AuditLookups): Described {
   if (row.action === 'update') {
     // #92: «Оплата изменена: Айжан Б. · сумма 3 200 → 1 600 сом · способ наличные → Mbank»
     const was = Math.abs(num(row.before, 'amount') ?? 0)
+    const to = changed(row, 'subscription_id') ? sub?.startedAt : undefined
     const changes = [
+      // #119: moved to another subscription of the enrollment
+      changed(row, 'subscription_id')
+        ? `оплата перенесена на абонемент${to ? ` с ${to.slice(8, 10)}.${to.slice(5, 7)}` : ''}`
+        : null,
       changed(row, 'amount')
         ? `сумма ${formatSom(was)} → ${formatSom(Math.abs(amount))} сом`
         : null,

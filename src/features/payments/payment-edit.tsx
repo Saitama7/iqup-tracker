@@ -12,7 +12,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { AUDIT_KEY } from '@/features/audit/api'
 import { TEACHER_GROUPS_KEY } from '@/features/groups/teacher-api'
 import { STUDENTS_KEY } from '@/features/students/api'
-import { FormDialog } from '@/features/students/parts'
+import { FormDialog, NativeSelect } from '@/features/students/parts'
 import { ErrorText, Field, inputClass, SubmitButton } from '@/features/tariffs/parts'
 import { useNow } from '@/lib/now'
 import { bishkekDate, formatDateRu } from '@/lib/time'
@@ -25,7 +25,7 @@ import {
   paymentImpactQuery,
   updatePayment,
 } from './edit-api'
-import { deleteImpact, deleteImpactText } from './edit-model'
+import { deleteImpact, deleteImpactText, moveTargets } from './edit-model'
 import { formatPaidAt, METHOD_BUTTON, METHOD_LABEL, som } from './model'
 
 export type PaymentAction = 'edit' | 'delete'
@@ -322,7 +322,11 @@ function EditForm({ target, onDone }: { target: PaymentTarget; onDone: () => voi
   const [paidOn, setPaidOn] = useState(formatDateRu(bishkekDate(Date.parse(p.paid_at))))
   const [comment, setComment] = useState(p.reason ?? '')
   const [reason, setReason] = useState('')
+  const [subscriptionId, setSubscriptionId] = useState(p.subscription.id)
   const [error, setError] = useState<string | null>(null)
+  // #119: a payment moves to another subscription of the enrollment; a refund stays on its own
+  const impact = useQuery({ ...paymentImpactQuery(p.subscription.id), enabled: !refund })
+  const subs = impact.data ? moveTargets(impact.data, p.subscription.id) : []
 
   const mutation = useMutation({
     mutationFn: updatePayment,
@@ -346,6 +350,7 @@ function EditForm({ target, onDone }: { target: PaymentTarget; onDone: () => voi
       paidOn,
       comment,
       reason,
+      subscriptionId: subscriptionId === p.subscription.id ? null : subscriptionId,
     })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Проверьте поля формы')
@@ -428,6 +433,24 @@ function EditForm({ target, onDone }: { target: PaymentTarget; onDone: () => voi
           className={inputClass}
         />
       </Field>
+      {subs.length > 1 && (
+        <Field id={`${id}-subscription`} label="Абонемент">
+          <NativeSelect
+            id={`${id}-subscription`}
+            value={subscriptionId}
+            onChange={(e) => {
+              setSubscriptionId(e.target.value)
+              clear()
+            }}
+          >
+            {subs.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+      )}
       <Field id={`${id}-reason`} label="Причина исправления">
         <input
           id={`${id}-reason`}

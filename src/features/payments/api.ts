@@ -279,7 +279,7 @@ const paidOn = (today: string) =>
 export const paymentForm = (today: string) =>
   z.discriminatedUnion('target', [
     z.object({
-      target: z.literal('current'),
+      target: z.literal('existing'),
       subscriptionId: z.uuid({ error: 'Выберите абонемент' }),
       amount,
       method: z.enum(['cash', 'mbank']),
@@ -356,7 +356,7 @@ export function paymentErrorMessage(error: { code?: string; message?: string }):
 const nullable = (s: string) => (s === '' ? null : s)
 
 export async function recordPayment(input: PaymentInput): Promise<void> {
-  if (input.target === 'current') {
+  if (input.target === 'existing') {
     const { error } = await supabase.rpc('record_payment', {
       p_subscription_id: input.subscriptionId,
       p_amount: input.amount,

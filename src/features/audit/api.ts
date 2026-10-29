@@ -97,6 +97,7 @@ const subscriptionSchema = z.object({
   id: z.uuid(),
   lessons_total: z.number().int(),
   price_final: z.number().int(),
+  started_at: z.string(),
   enrollment: enrollmentSchema,
 })
 const deletedSubscriptionSchema = z.object({
@@ -105,6 +106,7 @@ const deletedSubscriptionSchema = z.object({
     enrollment_id: z.uuid(),
     lessons_total: z.number().int(),
     price_final: z.number().int(),
+    started_at: z.string(),
   }),
 })
 const named = z.object({ id: z.uuid(), full_name: z.string() })
@@ -188,6 +190,7 @@ async function deletedSubscriptions(ids: readonly string[]) {
             id: r.entity_id,
             lessons_total: r.before.lessons_total,
             price_final: r.before.price_final,
+            started_at: r.before.started_at,
             enrollment,
           },
         ]
@@ -269,7 +272,7 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
         supabase
           .from('subscriptions')
           .select(
-            'id, lessons_total, price_final, enrollment:enrollments!inner(id, student_id, group_id)',
+            'id, lessons_total, price_final, started_at, enrollment:enrollments!inner(id, student_id, group_id)',
           )
           .in('id', subscriptionIds),
       subscriptionSchema,
@@ -375,7 +378,12 @@ async function fetchLookups(rows: readonly AuditRow[]): Promise<AuditPage['looku
     subscriptions: Object.fromEntries(
       subscriptions.map((s) => [
         s.id,
-        { enrollmentId: s.enrollment.id, lessons: s.lessons_total, price: s.price_final },
+        {
+          enrollmentId: s.enrollment.id,
+          lessons: s.lessons_total,
+          price: s.price_final,
+          startedAt: s.started_at,
+        },
       ]),
     ),
     tariffs: tariffs.map((t) => ({

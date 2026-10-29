@@ -71,6 +71,20 @@ export function deleteImpactText(impact: DeleteImpact): string {
   return `Абонемент останется: по нему ${marksLabel(impact.marks)}${debt}`
 }
 
+/** «Абонемент» of «Изменить оплату» (#119): the enrollment's subscriptions but refunded, oldest first. */
+export function moveTargets(
+  subs: readonly ImpactSubscription[],
+  own: string,
+): { id: string; label: string }[] {
+  return subs
+    .filter((s) => s.id === own || s.status !== 'refunded')
+    .sort((a, b) => a.started_at.localeCompare(b.started_at))
+    .map((s) => ({
+      id: s.id,
+      label: `абонемент с ${formatDateRu(s.started_at).slice(0, 5)} · ${s.hours ? `${formatHours(s.lessons_total)} ч` : `${s.lessons_total} ур`} · ${formatSom(s.price_final)}`,
+    }))
+}
+
 /** «12 ур · 3 200», «60 ч за октябрь · 7 400» — the subscription of a payment, for the dialogs. */
 export function packageLabel(p: Pick<PaymentRow, 'subscription'>): string {
   const s = p.subscription
