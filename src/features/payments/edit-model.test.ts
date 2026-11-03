@@ -1,6 +1,8 @@
 import {
   deleteImpact,
   deleteImpactText,
+  moveHint,
+  moveImpactText,
   moveTargets,
   packageLabel,
   type ImpactSubscription,
@@ -153,8 +155,100 @@ describe('«Изменить оплату» → «Абонемент» (#119)', 
         'b',
       ),
     ).toEqual([
-      { id: 'a', label: 'абонемент с 07.09 · 12 ур · 3\u00a0200' },
-      { id: 'b', label: 'абонемент с 14.10 · 12 ур · 3\u00a0200' },
+      { id: 'a', label: 'абонемент с 07.09 · 12 ур · 3\u00a0200 · долг 3\u00a0200' },
+      { id: 'b', label: 'абонемент с 14.10 · 12 ур · 3\u00a0200 · долг 3\u00a0200 (сейчас)' },
     ])
+  })
+})
+
+// Гусев Артём (#122): 22.09 — 20 ур · 7 400, все 20 отмечены, оплат нет; 29.10 — 16 ур · 5 920, обе оплаты
+const gusev = () => [
+  sub({
+    id: 'old',
+    started_at: '2026-09-22',
+    lessons_total: 20,
+    price_final: 7400,
+    used: 20,
+    marks: 20,
+  }),
+  sub({
+    id: 'new',
+    started_at: '2026-10-29',
+    lessons_total: 16,
+    price_final: 5920,
+    payments: [
+      { id: 'p14', amount: 5920 },
+      { id: 'p29', amount: 5920 },
+    ],
+  }),
+]
+
+describe('«Изменить оплату»: абонементы по состоянию и подсказка (#122)', () => {
+  it('labels: долг / не хватает / оплачен, own «(сейчас)»', () => {
+    expect(moveTargets(gusev(), 'new').map((t) => plain(t.label))).toEqual([
+      'абонемент с 22.09 · 20 ур · 7 400 · долг 7 400',
+      'абонемент с 29.10 · 16 ур · 5 920 · оплачен (сейчас)',
+    ])
+    const partial = [
+      sub({ id: 'a', payments: [{ id: 'p1', amount: 800 }] }),
+      sub({ id: 'b', started_at: '2026-10-01', payments: [{ id: 'p2', amount: 3200 }] }),
+    ]
+    expect(moveTargets(partial, 'b').map((t) => plain(t.label))).toEqual([
+      'абонемент с 01.09 · 12 ур · 3 200 · не хватает 2 400',
+      'абонемент с 01.10 · 12 ур · 3 200 · оплачен (сейчас)',
+    ])
+  })
+  it('hint: a debt on another subscription → the oldest one', () => {
+    const subs = [
+      ...gusev(),
+      sub({ id: 'older', started_at: '2026-09-01', lessons_total: 12, price_final: 3200 }),
+    ]
+    expect(moveHint(subs, 'new', 'new')?.id).toBe('older')
+    const hint = moveHint(gusev(), 'new', 'new')
+    expect(hint && { ...hint, text: plain(hint.text) }).toEqual({
+      id: 'old',
+      text: 'Абонемент с 22.09 не оплачен (долг 20 ур. · 7 400). Перенести эту оплату на него?',
+      button: 'Перенести на абонемент с 22.09',
+    })
+  })
+  it('hint: partly paid wording', () => {
+    const subs = [
+      sub({ id: 'a', payments: [{ id: 'p1', amount: 800 }] }),
+      sub({ id: 'b', started_at: '2026-10-01', payments: [{ id: 'p2', amount: 3200 }] }),
+    ]
+    expect(plain(moveHint(subs, 'b', 'b')?.text ?? '')).toBe(
+      'Абонемент с 01.09 оплачен не полностью (не хватает 2 400). Перенести эту оплату на него?',
+    )
+  })
+  it('hint: none when nothing else owes, or an owing one is chosen', () => {
+    const paid = [
+      sub({ id: 'a', payments: [{ id: 'p1', amount: 3200 }] }),
+      sub({ id: 'b', started_at: '2026-10-01', payments: [{ id: 'p2', amount: 3200 }] }),
+    ]
+    expect(moveHint(paid, 'b', 'b')).toBeNull()
+    expect(moveHint(gusev(), 'new', 'old')).toBeNull()
+    // refunded and exhausted-without-debt packages are not suggested
+    const closed = [
+      sub({ id: 'r', status: 'refunded' }),
+      sub({ id: 'x', status: 'exhausted', started_at: '2026-09-05' }),
+      sub({ id: 'b', started_at: '2026-10-01', payments: [{ id: 'p2', amount: 3200 }] }),
+    ]
+    expect(moveHint(closed, 'b', 'b')).toBeNull()
+  })
+  it('impact of a move names the target and the source', () => {
+    expect(moveImpactText(gusev(), 'new', 'new', 'p14', 5920)).toBeNull()
+    expect(plain(moveImpactText(gusev(), 'new', 'old', 'p14', 5920) ?? '')).toBe(
+      'Оплата перейдёт на абонемент с 22.09 — долг по нему 1 480; абонемент с 29.10 останется оплачен',
+    )
+    expect(plain(moveImpactText(gusev(), 'new', 'old', 'p14', 7400) ?? '')).toBe(
+      'Оплата перейдёт на абонемент с 22.09 — он будет оплачен; абонемент с 29.10 останется оплачен',
+    )
+    const single = [
+      sub({ id: 'a', lessons_total: 12, price_final: 3200 }),
+      sub({ id: 'b', started_at: '2026-10-01', payments: [{ id: 'p2', amount: 3200 }] }),
+    ]
+    expect(plain(moveImpactText(single, 'b', 'a', 'p2', 3200) ?? '')).toBe(
+      'Оплата перейдёт на абонемент с 01.09 — он будет оплачен; по абонементу с 01.10 будет долг 3 200',
+    )
   })
 })
