@@ -1,9 +1,12 @@
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useId, useState, type SubmitEvent } from 'react'
 import { ErrorText, Field, inputClass, SubmitButton } from '@/features/tariffs/parts'
+import { paymentImpactQuery } from '@/features/payments/edit-api'
+import { moveTargets } from '@/features/payments/edit-model'
+import { NativeSelect } from '@/features/students/parts'
 import { cn } from '@/lib/utils'
 import {
-  editableSubscriptionQuery,
+  editableSubscriptionsQuery,
   subscriptionEditForm,
   subscriptionEditPreviewQuery,
   updateSubscription,
@@ -12,7 +15,7 @@ import {
 import { balanceLine, payrollLine, termsCaption } from './edit-model'
 
 // #109 · «Изменить абонемент» (К12, И91) — the «⋯» of an enrollment on А6 and on the group page:
-// size and price of its newest live package with a reason; under the form the database's preview —
+// size and price of a live package (the newest by default, any of them by «Абонемент», #124) with a reason; under the form the database's preview —
 // the teacher's payroll and the student's balance «было → станет». Payroll follows by К6.
 
 const toNumber = (v: string) => (/^\d+$/.test(v) ? Number(v) : Number.NaN)
@@ -38,25 +41,55 @@ export function SubscriptionEditBody({
   enrollmentId: string
   onDone: (message: string) => void
 }) {
-  const sub = useQuery(editableSubscriptionQuery(enrollmentId))
-  if (sub.isPending) {
+  const id = useId()
+  const subs = useQuery(editableSubscriptionsQuery(enrollmentId))
+  const [chosenId, setChosenId] = useState<string | null>(null)
+  const list = subs.data ?? []
+  // labels «абонемент с 22.09 · 20 ур · 7 400 · долг 7 400» as in «Изменить оплату» (#122)
+  const impact = useQuery({ ...paymentImpactQuery(list[0]?.id ?? ''), enabled: list.length > 1 })
+  if (subs.isPending) {
     return <div className="h-24 animate-pulse rounded-xl bg-muted" aria-label="Загрузка" />
   }
-  if (sub.isError) return <ErrorText>{sub.error.message}</ErrorText>
-  if (!sub.data) {
+  if (subs.isError) return <ErrorText>{subs.error.message}</ErrorText>
+  const sub = list.find((s) => s.id === chosenId) ?? list[0]
+  if (!sub) {
     return <p className="text-sm font-bold text-ink-muted">У зачисления нет абонемента.</p>
   }
-  if (sub.data.hours_total !== null) {
-    return (
-      <p
-        role="status"
-        className="rounded-xl bg-accent px-3 py-2.5 text-sm font-bold text-warn-strong"
-      >
-        Счёт продлёнки по часам так не меняется — он считается по графику и цене часа.
-      </p>
-    )
-  }
-  return <EditForm sub={sub.data} onDone={onDone} />
+  const labels = new Map(
+    impact.data ? moveTargets(impact.data, '').map((t) => [t.id, t.label]) : [],
+  )
+  return (
+    <div className="flex flex-col gap-3.5">
+      {list.length > 1 && (
+        <Field id={`${id}-subscription`} label="Абонемент">
+          <NativeSelect
+            id={`${id}-subscription`}
+            value={sub.id}
+            onChange={(e) => {
+              setChosenId(e.target.value)
+            }}
+          >
+            {list.map((s) => (
+              <option key={s.id} value={s.id}>
+                {labels.get(s.id) ?? `${termsCaption(s.lessons_total, s.price_full)} сом`}
+              </option>
+            ))}
+          </NativeSelect>
+        </Field>
+      )}
+      {sub.hours_total !== null ? (
+        <p
+          role="status"
+          className="rounded-xl bg-accent px-3 py-2.5 text-sm font-bold text-warn-strong"
+        >
+          Счёт продлёнки по часам так не меняется — он считается по графику и цене часа.
+        </p>
+      ) : (
+        // keyed: another package refills «Уроков» / «Цена» and asks its own preview
+        <EditForm key={sub.id} sub={sub} onDone={onDone} />
+      )}
+    </div>
+  )
 }
 
 function EditForm({
