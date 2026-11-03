@@ -28,7 +28,7 @@ export function subscriptionEditErrorMessage(error: DbError): string {
   return 'Не удалось сохранить. Проверьте интернет и попробуйте ещё раз.'
 }
 
-/** The package the «⋯» edits: the newest live one of the enrollment (as currentSubscription). */
+/** A package the «⋯» may edit: any live one of the enrollment (#124, newest first). */
 const editableRow = z.object({
   id: z.uuid(),
   lessons_total: z.number().int(),
@@ -42,11 +42,11 @@ const editableRow = z.object({
 
 export type EditableSubscription = z.infer<typeof editableRow>
 
-export const editableSubscriptionQuery = (enrollmentId: string) =>
+export const editableSubscriptionsQuery = (enrollmentId: string) =>
   queryOptions({
-    queryKey: ['editable-subscription', enrollmentId],
+    queryKey: ['editable-subscriptions', enrollmentId],
     gcTime: 0,
-    queryFn: async (): Promise<EditableSubscription | null> => {
+    queryFn: async (): Promise<EditableSubscription[]> => {
       const { data, error } = await supabase
         .from('subscriptions')
         .select(
@@ -56,10 +56,8 @@ export const editableSubscriptionQuery = (enrollmentId: string) =>
         .neq('status', 'refunded')
         .order('started_at', { ascending: false })
         .order('created_at', { ascending: false })
-        .limit(1)
       if (error) throw new EnrollError(subscriptionEditErrorMessage(error))
-      const row = data[0]
-      return row ? editableRow.parse(row) : null
+      return z.array(editableRow).parse(data)
     },
   })
 
