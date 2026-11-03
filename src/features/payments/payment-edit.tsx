@@ -25,7 +25,7 @@ import {
   paymentImpactQuery,
   updatePayment,
 } from './edit-api'
-import { deleteImpact, deleteImpactText, moveTargets } from './edit-model'
+import { deleteImpact, deleteImpactText, moveHint, moveImpactText, moveTargets } from './edit-model'
 import { formatPaidAt, METHOD_BUTTON, METHOD_LABEL, som } from './model'
 
 export type PaymentAction = 'edit' | 'delete'
@@ -327,6 +327,17 @@ function EditForm({ target, onDone }: { target: PaymentTarget; onDone: () => voi
   // #119: a payment moves to another subscription of the enrollment; a refund stays on its own
   const impact = useQuery({ ...paymentImpactQuery(p.subscription.id), enabled: !refund })
   const subs = impact.data ? moveTargets(impact.data, p.subscription.id) : []
+  const hint = impact.data ? moveHint(impact.data, p.subscription.id, subscriptionId) : null
+  const typed = Number(amount)
+  const moveText = impact.data
+    ? moveImpactText(
+        impact.data,
+        p.subscription.id,
+        subscriptionId,
+        p.id,
+        Number.isFinite(typed) && typed > 0 ? typed : p.amount,
+      )
+    : null
 
   const mutation = useMutation({
     mutationFn: updatePayment,
@@ -450,6 +461,34 @@ function EditForm({ target, onDone }: { target: PaymentTarget; onDone: () => voi
             ))}
           </NativeSelect>
         </Field>
+      )}
+      {subs.length > 1 && hint && (
+        <div
+          role="status"
+          data-testid="move-hint"
+          className="flex flex-col gap-2 rounded-xl bg-warn-soft px-3 py-2.5 text-[13px] font-bold text-warn-strong"
+        >
+          <p className="font-extrabold">Похоже, оплата не на тот абонемент</p>
+          <p>{hint.text}</p>
+          <SubmitButton
+            variant="outline"
+            onClick={() => {
+              setSubscriptionId(hint.id)
+              clear()
+            }}
+          >
+            {hint.button}
+          </SubmitButton>
+        </div>
+      )}
+      {subs.length > 1 && moveText && (
+        <p
+          role="status"
+          data-testid="move-impact"
+          className="rounded-xl bg-accent px-3 py-2.5 text-sm font-bold text-warn-strong"
+        >
+          {moveText}
+        </p>
       )}
       <Field id={`${id}-reason`} label="Причина исправления">
         <input
