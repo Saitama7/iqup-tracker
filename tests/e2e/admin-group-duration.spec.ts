@@ -57,7 +57,7 @@ test('группа Сб+Вс 15:00 по 90 мин; длительность с �
   const service = serviceClient()
   const today = bishkekToday()
   // the first Saturday after today, its Sunday; the length changes from the Saturday a week later —
-  // all three must have lessons, so weekends that hit a holiday are skipped (07.11 in the seed, #116)
+  // all three must have lessons, so weekends that hit a holiday are skipped (the seed has one ≥ 7 days ahead, #116, #133)
   const holidays = await holidayDays(service)
   let sat = addDays(today, 1)
   while (

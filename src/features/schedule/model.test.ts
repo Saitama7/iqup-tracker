@@ -12,6 +12,7 @@ import {
   hourRows,
   mobileCaption,
   otherWeeks,
+  payrollCard,
   payrollMonth,
   unconfirmedLine,
   unconfirmedMore,
@@ -147,6 +148,30 @@ describe('payrollMonth', () => {
     expect(payrollMonth('2026-10-08')).toEqual({ month: '2026-09', closeBy: '15 октября' })
     expect(payrollMonth('2026-10-16')).toEqual({ month: '2026-10', closeBy: '15 ноября' })
     expect(payrollMonth('2027-01-03')).toEqual({ month: '2026-12', closeBy: '15 января' })
+  })
+})
+
+describe('payrollCard', () => {
+  const closed = { closedAt: '2026-10-04T19:30:00Z' } // 05.10 01:30 in Bishkek
+  it('shows the previous month while open, the running one once it is closed (И15, #136)', () => {
+    expect(payrollCard('2026-10-08', null)).toEqual({
+      month: '2026-09',
+      closeBy: '15 октября',
+      status: 'Период открыт. Бухгалтер закроет до 15 октября.',
+    })
+    expect(payrollCard('2026-10-08', closed)).toEqual({
+      month: '2026-10',
+      closeBy: '15 ноября',
+      status: 'Период открыт. Бухгалтер закроет до 15 ноября.',
+    })
+    expect(payrollCard('2027-01-15', closed).month).toBe('2027-01')
+  })
+  it('a closed month the card still shows reads «Период закрыт · ДД.ММ»', () => {
+    // From the 16th the card is on the running month; a period row for it is shown as is.
+    expect(payrollCard('2026-10-20', closed)).toMatchObject({
+      month: '2026-10',
+      status: 'Период закрыт · 05.10',
+    })
   })
 })
 

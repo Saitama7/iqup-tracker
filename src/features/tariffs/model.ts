@@ -1,4 +1,5 @@
 // А9 / А9а view model: pure functions of (rows, today) — no fetching, no clock.
+import { DEBT_LIMIT } from '@/features/payments/balance'
 import { plural } from '@/features/users/model'
 import { bishkekDate, formatDayMonth } from '@/lib/time'
 import { GROUP_TYPES, tariffFor, type GroupType } from './current'
@@ -54,16 +55,46 @@ const GROUP_TYPE_SHORT: Record<GroupType, string> = {
   afterschool: 'Продлёнка',
 }
 
+export interface Rule {
+  title: string
+  caption: string
+  value: string
+}
+
+const freezeValue = (limit: number | null) => (limit === null ? 'без лимита' : `${limit} / абон.`)
+
 /**
- * «Скидки и правила» — read-only constants (issue #7 «Не делать»), 05-decisions В2, В5, В7, А9.
+ * «Скидки и правила» (А9): discounts — В5; debt — DEBT_LIMIT (balance.ts); freezes — freeze_limit of the
+ * current tariffs (К9: null — без лимита); payday — 15-е.
  */
-export const RULES = [
-  { title: 'Бывшим ученикам', caption: 'только первый абонемент', value: '15 %' },
-  { title: '«Приведи друга»', caption: 'тому, кто привёл · один абонемент', value: '5 %' },
-  { title: 'Допустимый долг', caption: 'уроков сверх оплаченных', value: '3' },
-  { title: 'Заморозка', caption: 'предупредил за день или минимум за 2 часа', value: '2 / абон.' },
-  { title: 'День выплаты ЗП', caption: 'за календарный месяц', value: '15-е' },
-] as const
+export function rules(current: readonly Tariff[]): Rule[] {
+  const limits = [...new Set(current.map((t) => t.freeze_limit))]
+  const freeze: Rule =
+    limits.length > 1
+      ? {
+          title: 'Заморозки',
+          caption: current
+            .map((t) => `${GROUP_TYPE_SHORT[t.group_type]} ${freezeValue(t.freeze_limit)}`)
+            .join(' · '),
+          value: 'по типу',
+        }
+      : {
+          title: 'Заморозки',
+          caption: 'предупредил за день или минимум за 2 часа',
+          value: freezeValue(limits[0] ?? null),
+        }
+  return [
+    { title: 'Бывшим ученикам', caption: 'только первый абонемент', value: '15 %' },
+    { title: '«Приведи друга»', caption: 'тому, кто привёл · один абонемент', value: '5 %' },
+    {
+      title: 'В долг',
+      caption: 'уроков сверх оплаченных',
+      value: `до ${DEBT_LIMIT} ${plural(DEBT_LIMIT, ['занятия', 'занятий', 'занятий'])}`,
+    },
+    freeze,
+    { title: 'День выплаты ЗП', caption: 'за календарный месяц', value: '15-е' },
+  ]
+}
 
 /** 1st of the month after `today` (`YYYY-MM-DD`). */
 export function nextMonthStart(today: string): string {

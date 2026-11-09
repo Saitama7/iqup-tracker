@@ -8,7 +8,7 @@ export async function groupTeacher(db: SupabaseClient<Database>, groupId: string
   return data.teacher_id
 }
 
-/** Holiday days (ISO dates) — lessons are not generated on them (seed: 07.11, 31.12…, А9). */
+/** Holiday days (ISO dates) — lessons are not generated on them (seed: «День Октябрьской революции» ≥ 7 days ahead, 31.12…, А9). */
 export async function holidayDays(db: SupabaseClient<Database>): Promise<Set<string>> {
   const { data, error } = await db.from('holidays').select('day')
   if (error) throw error

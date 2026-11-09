@@ -59,7 +59,7 @@ pnpm gen:types           # supabase gen types typescript --local > src/lib/supab
 pnpm test                # vitest
 pnpm e2e                 # playwright webkit 390 + 1280; нужен supabase start + pnpm seed:users; E2E_PORT=… если 4173 занят
                          # payroll.spec сверяет сид (сентябрь проведён, 38 160 у Гульзат); спеки, временно меняющие сид (группы/ученики/занятия, тарифы, праздники), берут lockSeed('write'), пинящие его числа — lockSeed('read') (tests/e2e/support/seed-lock.ts)
-                         # даты сида и тестов — относительные: всё «будущее» / «текущий месяц» считается от bishkek_today() (SQL) / bishkekToday() (tests/e2e/support/db.ts), литералами — только прошлое (сентябрь–октябрь 2026); праздник сида в окне теста убирать с session_replication_role = replica (#130)
+                         # даты сида и тестов — относительные: всё «будущее» / «текущий месяц» считается от bishkek_today() (SQL) / bishkekToday() (tests/e2e/support/db.ts), литералами — только прошлое (сентябрь–октябрь 2026); праздник сида в окне теста убирать с session_replication_role = replica (#130); ожидаемые даты считать от `pinClock`/сида, не литералами (#133)
                          # фикстуры групп/учеников чистит wipeFixtures (support/undo-fixtures.ts, одна транзакция, ошибки наружу), смена пользователя — switchUser (support/auth.ts); CI идёт в 2 воркера
 pnpm build               # деплой — push в main (Cloudflare Pages)
 ```

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { localSupabase } from '../../scripts/local-supabase'
+import type { Database } from '../../src/lib/supabase/types.gen'
 import { KANYKEI, login } from './support/auth'
 import { lockSeed } from './support/seed-lock'
 
@@ -46,14 +47,18 @@ const fixtures = (testInfo: TestInfo) =>
     ? { holiday: '2030-06-04', holidayRu: '04.06.2030', plan: '2041-09-01', planRu: '01.09.2041' }
     : { holiday: '2030-06-03', holidayRu: '03.06.2030', plan: '2040-09-01', planRu: '01.09.2040' }
 
-test.afterAll(async () => {
+function service() {
   const env = localSupabase()
-  const service = createClient(env.apiUrl, env.serviceRoleKey, {
+  return createClient<Database>(env.apiUrl, env.serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
+}
+
+test.afterAll(async () => {
+  const db = service()
   const f = fixtures(test.info())
-  await service.from('holidays').delete().eq('day', f.holiday)
-  await service.from('tariffs').delete().eq('valid_from', f.plan)
+  await db.from('holidays').delete().eq('day', f.holiday)
+  await db.from('tariffs').delete().eq('valid_from', f.plan)
 })
 
 test('А9: current tariffs, rules, holidays; А9а history panel', async ({ page }, testInfo) => {
@@ -97,6 +102,16 @@ test('А9: current tariffs, rules, holidays; А9а history panel', async ({ page
   const rules = page.getByRole('region', { name: 'Скидки и правила' })
   await expect(rules).toContainText('Бывшим ученикам')
   await expect(rules).toContainText('15-е')
+  // #137: from data — freeze_limit null (К9), DEBT_LIMIT
+  await expect(rules.getByRole('listitem').filter({ hasText: 'Заморозки' })).toContainText(
+    'без лимита',
+  )
+  await expect(rules.getByRole('listitem').filter({ hasText: 'В долг' })).toContainText(
+    'до 3 занятий',
+  )
+  await rules.screenshot({
+    path: `docs/screenshots/137-rules-${testInfo.project.name === 'webkit' ? 390 : 1280}.png`,
+  })
   await expect(rules.getByRole('button')).toHaveCount(0)
 
   const holidays = page.getByRole('list', { name: 'Праздники' })
@@ -107,8 +122,18 @@ test('А9: current tariffs, rules, holidays; А9а history panel', async ({ page
     items.first().getByRole('button', { name: /^Удалить: 9 мая · .., День Победы/ }),
   ).toBeVisible()
   await expect(holidays.getByText('31 дек – 2 янв')).toBeVisible()
+  // the seed puts it ≥ 7 days after the run day (#133): the date comes from the DB
+  const { data: revolution, error } = await service()
+    .from('holidays')
+    .select('day')
+    .eq('name', 'День Октябрьской революции')
+    .single()
+  if (error) throw error
+  const [, m = 1, d = 1] = revolution.day.split('-').map(Number)
   await expect(
-    holidays.getByRole('button', { name: /^Удалить: 7 ноября · .., День Октябрьской/ }),
+    holidays.getByRole('button', {
+      name: new RegExp(`^Удалить: ${d} ${MONTHS_GEN[m - 1]} · .., День Октябрьской`),
+    }),
   ).toBeVisible()
 
   await page.screenshot({ path: testInfo.outputPath('settings.png'), fullPage: true })

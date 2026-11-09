@@ -8,6 +8,7 @@ import {
   nextMonthStart,
   planMinDate,
   planMinDateHint,
+  rules,
   seatsLabel,
   subscriptionsCaption,
   versionSummary,
@@ -186,5 +187,31 @@ describe('holidayItems', () => {
 
   it('today is not past', () => {
     expect(must(holidayItems([{ day: TODAY, name: 'X' }], TODAY)[0]).past).toBe(false)
+  })
+})
+
+describe('rules (#137)', () => {
+  const current = currentTariffs(tariffs, TODAY)
+  const value = (rs: ReturnType<typeof rules>, title: string) =>
+    rs.find((r) => r.title === title)?.value
+
+  it('no freeze limit (К9) → «без лимита»; debt from DEBT_LIMIT', () => {
+    const rs = rules(current.map((t) => ({ ...t, freeze_limit: null })))
+    expect(value(rs, 'Заморозки')).toBe('без лимита')
+    expect(value(rs, 'В долг')).toBe('до 3 занятий')
+  })
+
+  it('one limit for all types → «2 / абон.»; different → per type', () => {
+    expect(value(rules(current.map((t) => ({ ...t, freeze_limit: 2 }))), 'Заморозки')).toBe(
+      '2 / абон.',
+    )
+    const mixed = rules(
+      current.map((t) => ({ ...t, freeze_limit: t.group_type === 'group' ? 2 : null })),
+    )
+    const freeze = must(mixed.find((r) => r.title === 'Заморозки'))
+    expect(freeze.value).toBe('по типу')
+    expect(freeze.caption).toBe(
+      'Групповая 2 / абон. · Мини без лимита · Парная без лимита · Инд. без лимита · Продлёнка без лимита',
+    )
   })
 })

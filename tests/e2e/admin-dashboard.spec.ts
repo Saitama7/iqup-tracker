@@ -5,7 +5,7 @@ import { localSupabase } from '../../scripts/local-supabase'
 import type { Database } from '../../src/lib/supabase/types.gen'
 import { KANYKEI, login } from './support/auth'
 import { lockSeed } from './support/seed-lock'
-import { groupTeacher } from './support/db'
+import { bishkekToday, groupTeacher, holidayDays, isoPlus } from './support/db'
 
 // А1 / АМ1 / А2. Needs the local stack + `pnpm seed:users`. The browser clock is pinned to the
 // artboards' moment — Thursday 8 October, 14:24 — and server_now() answers the same instant
@@ -193,12 +193,17 @@ test('schedule: week grid / day list, teacher filter, week navigation (А2)', as
 test('realtime: a lesson gets confirmed → «Не подтверждено» drops without reload', async ({
   page,
 }, testInfo) => {
-  // Own month per project (the counter is per month), so the two viewports never meet.
-  const [today, yesterday] =
-    testInfo.project.name === 'webkit-desktop'
-      ? ['2026-11-05', '2026-11-04']
-      : ['2026-12-03', '2026-12-02']
+  // Own month per project (the counter is per month), so the two viewports never meet: the next
+  // month / the one after, ahead of the run day (#133), so never the October the other specs pin;
+  // «today» and «yesterday» are the first pair from the 2nd on with no holiday (no lessons on them).
   const db = service()
+  const ahead = testInfo.project.name === 'webkit-desktop' ? 1 : 2
+  const holidays = await holidayDays(db)
+  const [y = 0, m = 1] = bishkekToday().split('-').map(Number)
+  let yesterday = new Date(Date.UTC(y, m - 1 + ahead, 1)).toISOString().slice(0, 10)
+  while (holidays.has(yesterday) || holidays.has(isoPlus(yesterday, 1)))
+    yesterday = isoPlus(yesterday, 1)
+  const today = isoPlus(yesterday, 1)
   const cleanup = () =>
     db
       .from('lessons')
