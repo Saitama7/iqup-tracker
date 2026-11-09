@@ -104,7 +104,9 @@ test('А9: current tariffs, rules, holidays; А9а history panel', async ({ page
   await expect(rules.getByRole('listitem').filter({ hasText: 'В долг' })).toContainText(
     'до 3 занятий',
   )
-  await rules.screenshot({ path: `docs/screenshots/137-rules-${testInfo.project.name === 'webkit' ? 390 : 1280}.png` })
+  await rules.screenshot({
+    path: `docs/screenshots/137-rules-${testInfo.project.name === 'webkit' ? 390 : 1280}.png`,
+  })
   await expect(rules.getByRole('button')).toHaveCount(0)
 
   const holidays = page.getByRole('list', { name: 'Праздники' })
