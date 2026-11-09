@@ -25,6 +25,7 @@ import {
   dayShort,
   groupDuration,
   lessonViews,
+  memberLeftCell,
   scheduleLong,
   type LessonTone,
 } from './model'
@@ -644,7 +645,7 @@ function MemberCard({ m }: { m: MemberRow }) {
               m.debt > 0 && (memberDebtTone(m) === 'debt' ? 'text-burned-strong' : 'text-warn'),
             )}
           >
-            {m.debt > 0 ? `−${m.debt}` : `${b.left} / ${b.total}`}
+            {memberLeftCell(m.left).text}
           </span>
           <span className="text-[11px] font-bold text-ink-muted">
             {m.debt > 0 ? 'в долг' : 'осталось'}
@@ -842,7 +843,7 @@ function MemberTableRow({ m }: { m: MemberRow }) {
             cn('font-extrabold', memberDebtTone(m) === 'debt' ? 'text-burned-strong' : 'text-warn'),
         )}
       >
-        {b ? (m.debt > 0 ? `−${m.debt}` : `${b.left} / ${b.total}`) : '—'}
+        {memberLeftCell(m.left).text}
       </td>
       <td className={cn(tdClass, numClass)}>{b ? b.freezes : '—'}</td>
       <td className={tdClass}>

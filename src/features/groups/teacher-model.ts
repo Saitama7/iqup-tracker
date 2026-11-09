@@ -11,7 +11,7 @@ import { lessonState, lessonsWord, pluralRu, type LessonTiming } from '@/feature
 import { calcMonth, type PayAttendance } from '@/features/payroll/calc'
 import { initials } from '@/features/students/model'
 import { tariffFor, type GroupType, type TariffTerms } from '@/features/tariffs/current'
-import { currentRules, weekdaysCaption, type ScheduleRule } from './model'
+import { currentRules, weekdaysCaption, type MemberLeft, type ScheduleRule } from './model'
 import { formatSom } from '@/features/tariffs/model'
 
 export interface MonthLesson extends LessonTiming {
@@ -61,6 +61,8 @@ export interface MemberRow {
   debtSom: number
   /** Paid lessons of the current subscription (В7.1). */
   paidLessons: number
+  /** «−debt» / «available / total» of the current subscription (memberLeftCell, #126); null — none. */
+  left: MemberLeft | null
   pay: PayState
 }
 
@@ -90,6 +92,15 @@ export function memberRows(group: Pick<TeacherGroup, 'enrollments'>, today: stri
       debt: money?.debtLessons ?? 0,
       debtSom: money?.debtSom ?? 0,
       paidLessons: money?.paidLessons ?? 0,
+      left:
+        balance && money
+          ? {
+              debt: money.debtLessons,
+              available: money.available,
+              total: money.total,
+              unit: balance.unit,
+            }
+          : null,
       pay: !balance || !money ? 'debt' : PAY_OF[money.state],
     })
   }
