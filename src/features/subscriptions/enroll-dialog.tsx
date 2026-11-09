@@ -16,6 +16,7 @@ import { LessonsField, lessonsValid } from './lessons-field'
 import { PriceField } from './price-field'
 import { enrollForm, enrollStudent, tariffsQuery, type EnrollInput } from './api'
 import {
+  customPriceWarning,
   defaultDiscount,
   discountAvailability,
   discountByPct,
@@ -110,6 +111,15 @@ export function EnrollDialog({
       ? quoteSubscription(group.group_type, startIso, tariffs.data, discount, lessons, {
           groupMinutes: group.lesson_duration_min,
           price,
+        })
+      : null
+  const warning =
+    quote && priceValid(price)
+      ? customPriceWarning(quote.tariff.group_type, {
+          lessons: quote.lessonsTotal,
+          defaultLessons: quote.defaultLessons,
+          price: quote.priceFull,
+          defaultPrice: quote.defaultPrice,
         })
       : null
 
@@ -373,6 +383,11 @@ export function EnrollDialog({
             </p>
           )}
         </div>
+        {warning && (
+          <p role="note" className="text-xs font-bold text-warn-strong">
+            {warning}
+          </p>
+        )}
         <p className="text-xs font-bold text-ink-muted">
           Скидка — только на цену для ученика; ЗП учителя считается от полной цены.
         </p>

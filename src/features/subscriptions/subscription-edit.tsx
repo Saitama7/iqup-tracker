@@ -13,6 +13,13 @@ import {
   type EditableSubscription,
 } from './edit-api'
 import { balanceLine, payrollLine, termsCaption } from './edit-model'
+import {
+  customPriceWarning,
+  defaultLessons,
+  defaultPackagePrice,
+  lessonMinutes,
+  packageUnitLabel,
+} from './model'
 
 // #109 · «Изменить абонемент» (К12, И91) — the «⋯» of an enrollment on А6 and on the group page:
 // size and price of a live package (the newest by default, any of them by «Абонемент», #124) with a reason; under the form the database's preview —
@@ -71,7 +78,8 @@ export function SubscriptionEditBody({
           >
             {list.map((s) => (
               <option key={s.id} value={s.id}>
-                {labels.get(s.id) ?? `${termsCaption(s.lessons_total, s.price_full)} сом`}
+                {labels.get(s.id) ??
+                  `${termsCaption(s.lessons_total, s.price_full, s.tariff.group_type)} сом`}
               </option>
             ))}
           </NativeSelect>
@@ -110,6 +118,18 @@ function EditForm({
   const lessonsOk = Number.isInteger(lessons) && lessons >= 1 && lessons <= max
   const priceOk = Number.isInteger(price) && price >= 1 && price <= 1_000_000
   const changed = lessons !== sub.lessons_total || price !== sub.price_full
+  const type = sub.tariff.group_type
+  const unit = packageUnitLabel(type)
+  const minutes = lessonMinutes(sub.tariff, sub.enrollment.group.lesson_duration_min)
+  const warning =
+    lessonsOk && priceOk
+      ? customPriceWarning(type, {
+          lessons,
+          defaultLessons: defaultLessons(sub.tariff, minutes),
+          price,
+          defaultPrice: defaultPackagePrice(sub.tariff, minutes, lessons),
+        })
+      : null
   const asked = useSettled({ lessons, price })
   const preview = useQuery({
     ...subscriptionEditPreviewQuery(sub.id, asked.lessons, asked.price),
@@ -120,7 +140,7 @@ function EditForm({
   const mutation = useMutation({
     mutationFn: updateSubscription,
     onSuccess: (_, input) => {
-      onDone(`Абонемент изменён: ${termsCaption(input.lessons, input.price)} сом`)
+      onDone(`Абонемент изменён: ${termsCaption(input.lessons, input.price, type)} сом`)
     },
     onError: (e) => {
       setError(e.message)
@@ -130,7 +150,7 @@ function EditForm({
   function onSubmit(e: SubmitEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!lessonsOk) {
-      setError(`Уроков в абонементе — от 1 до ${max}`)
+      setError(`${unit} в абонементе — от 1 до ${max}`)
       return
     }
     if (!changed) {
@@ -155,11 +175,11 @@ function EditForm({
       className="flex flex-col gap-3.5"
     >
       <p className="text-sm font-bold text-ink-muted">
-        Сейчас: {termsCaption(sub.lessons_total, sub.price_full)} сом
+        Сейчас: {termsCaption(sub.lessons_total, sub.price_full, type)} сом
         {sub.discount_percent > 0 ? ` · скидка ${sub.discount_percent} % от новой цены` : ''}
       </p>
       <div className="grid grid-cols-2 gap-2.5">
-        <Field id={`${id}-lessons`} label="Уроков">
+        <Field id={`${id}-lessons`} label={unit}>
           <input
             id={`${id}-lessons`}
             inputMode="numeric"
@@ -188,6 +208,11 @@ function EditForm({
           />
         </Field>
       </div>
+      {warning && (
+        <p role="note" className="text-xs font-bold text-warn-strong">
+          {warning}
+        </p>
+      )}
 
       <section
         aria-label="Что изменится"
@@ -197,7 +222,9 @@ function EditForm({
         {!changed ? (
           <p className="text-ink-muted">Измените размер или цену — здесь будет, что изменится.</p>
         ) : !lessonsOk || !priceOk ? (
-          <p className="text-ink-muted">Уроков — от 1 до {max}, цена — от 1 сом.</p>
+          <p className="text-ink-muted">
+            {unit} — от 1 до {max}, цена — от 1 сом.
+          </p>
         ) : preview.isError ? (
           <ErrorText>{preview.error.message}</ErrorText>
         ) : !p ? (
@@ -216,9 +243,9 @@ function EditForm({
             {p.balance && (
               <div className="flex flex-col gap-0.5 border-t border-line-strong pt-1.5">
                 <span className="text-xs text-ink-muted">
-                  Было: {balanceLine(p.balance.before)}
+                  Было: {balanceLine(p.balance.before, type)}
                 </span>
-                <span>Станет: {balanceLine(p.balance.after)}</span>
+                <span>Станет: {balanceLine(p.balance.after, type)}</span>
               </div>
             )}
           </>

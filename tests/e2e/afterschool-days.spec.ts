@@ -36,6 +36,13 @@ const shot = async (page: Page, name: string, fullPage = false) => {
   await page.screenshot({ path: `docs/screenshots/r111-${name}-${size(page)}.png`, fullPage })
 }
 
+const shot141 = async (page: Page, name: string) => {
+  await page.waitForTimeout(600)
+  await page.screenshot({ path: `docs/screenshots/r141-${name}-${size(page)}.png` })
+}
+/** formatSom groups thousands with a no-break space. */
+const nb = (s: string) => s.replace(/(\d) (\d{3})/g, '$1\u00a0$2')
+
 function service() {
   const env = localSupabase()
   return createClient<Database>(env.apiUrl, env.serviceRoleKey, {
@@ -154,8 +161,16 @@ test('продлёнка: 12 дней за 5 400, ВТ/СР/ЧТ → ПН без
     for (const [d, h] of Object.entries(plan)) {
       await form.getByLabel(`${d}, часов`).selectOption(h)
     }
-    await form.getByRole('radiogroup', { name: 'Дней' }).getByRole('radio', { name: '12' }).click()
+    // #141: own price with the tariff's 20 days — a hint until «Дней» is changed
     await form.getByLabel('Цена, сом').fill('5400')
+    const hint = form.getByRole('note')
+    await expect(hint).toHaveText(
+      'Цена своя, а размер по тарифу — 20 дней. Если ученик ходит реже, поменяйте «Дней»',
+    )
+    await hint.scrollIntoViewIfNeeded()
+    await shot141(page, 'enroll')
+    await form.getByRole('radiogroup', { name: 'Дней' }).getByRole('radio', { name: '12' }).click()
+    await expect(hint).toHaveCount(0)
     const bill = form.getByRole('status', { name: 'Абонемент' })
     await expect(bill).toContainText(`12 дней · с ${formatDayMonth(monday)}`)
     await expect(bill).toContainText('Своя цена')
@@ -233,6 +248,28 @@ test('продлёнка: 12 дней за 5 400, ВТ/СР/ЧТ → ПН без
       .eq('lesson_id', lessonOn(tuesday))
     expect(left).toEqual([])
     await slow(card).toContainText('0 из 12')
+
+    // ─── #141 «⋯ → Изменить абонемент» in days; the hint at the tariff's 20 days ───
+    await card.getByRole('button', { name: `Действия: Продлёнка · ${groupName}` }).click()
+    await page.getByRole('button', { name: 'Изменить абонемент' }).click()
+    const edit = page.getByRole('form', { name: 'Изменить абонемент' })
+    await slow(edit).toContainText(nb('Сейчас: 12 дней · 5 400 сом'))
+    await expect(edit.getByLabel('Дней')).toHaveValue('12')
+    await expect(edit.getByRole('note')).toHaveCount(0)
+    await edit.getByLabel('Дней').fill('20')
+    await expect(edit.getByRole('note')).toHaveText(
+      'Цена своя, а размер по тарифу — 20 дней. Если ученик ходит реже, поменяйте «Дней»',
+    )
+    await edit.getByRole('note').scrollIntoViewIfNeeded()
+    await expect(edit.getByRole('status', { name: 'Что изменится' })).toContainText(
+      nb('Станет: Оплачено 0 из 5 400 · остаток 20 дней'),
+    )
+    await shot141(page, 'edit')
+    await edit.getByLabel('Дней').fill('10')
+    await expect(edit.getByRole('note')).toHaveCount(0)
+    await edit.getByLabel('Причина').fill('e2e: 10 дней')
+    await edit.getByRole('button', { name: 'Сохранить' }).click()
+    await slow(page.getByText(nb('Абонемент изменён: 10 дней · 5 400 сом'))).toBeVisible()
   } finally {
     wipeFixtures([groupName], [pupil])
   }

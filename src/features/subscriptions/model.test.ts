@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TariffTerms } from '@/features/tariffs/current'
 import {
+  customPriceWarning,
   defaultDiscount,
   defaultLessons,
   defaultPackagePrice,
@@ -198,5 +199,42 @@ describe('discounts (В5)', () => {
 
   it('returning wins when both apply — discounts never combine', () => {
     expect(defaultDiscount({ isReturning: true, subscriptions: [], friendsBrought: 1 })).toBe(15)
+  })
+})
+
+describe('customPriceWarning (#141)', () => {
+  const quote = (lessons: number | null, price: number | null) => {
+    const q = quoteSubscription('afterschool', '2026-10-01', tariffs, 0, lessons, { price })
+    if (!q) throw new Error('no tariff')
+    return {
+      lessons: q.lessonsTotal,
+      defaultLessons: q.defaultLessons,
+      price: q.priceFull,
+      defaultPrice: q.defaultPrice,
+    }
+  }
+
+  it('own price with the tariff size — «5 400 за 20 дней»', () => {
+    expect(customPriceWarning('afterschool', quote(null, 5400))).toBe(
+      'Цена своя, а размер по тарифу — 20 дней. Если ученик ходит реже, поменяйте «Дней»',
+    )
+    expect(customPriceWarning('afterschool', quote(20, 5400))).not.toBeNull()
+  })
+
+  it('silent when the size was changed or the price is the tariff one', () => {
+    expect(customPriceWarning('afterschool', quote(12, 5400))).toBeNull()
+    expect(customPriceWarning('afterschool', quote(null, null))).toBeNull()
+    expect(customPriceWarning('afterschool', quote(null, 7400))).toBeNull()
+  })
+
+  it('other types speak of lessons', () => {
+    expect(
+      customPriceWarning('group', {
+        lessons: 12,
+        defaultLessons: 12,
+        price: 2500,
+        defaultPrice: 3200,
+      }),
+    ).toBe('Цена своя, а размер по тарифу — 12 уроков. Если ученик ходит реже, поменяйте «Уроков»')
   })
 })

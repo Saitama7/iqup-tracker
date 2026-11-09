@@ -48,6 +48,8 @@ describe('«Изменить абонемент» preview (#109)', () => {
       'Оплачено 5 400 из 5 400 · долг 2 урока · 900 сом',
     )
     expect(termsCaption(8, 7200)).toBe('8 уроков · 7 200')
+    expect(termsCaption(20, 7400, 'afterschool')).toBe('20 дней · 7 400')
+    expect(balanceLine({ ...b, lessonsLeft: 12 }, 'afterschool')).toMatch(/остаток 12 дней$/)
   })
 
   it('transfer with the admin price: to pay and surplus from it', () => {

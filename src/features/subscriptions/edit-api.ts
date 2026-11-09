@@ -37,7 +37,14 @@ const editableRow = z.object({
   discount_percent: z.number().int(),
   hours_total: z.number().nullable(),
   status: z.enum(['active', 'exhausted', 'refunded']),
-  tariff: z.object({ lessons_in_package: z.number().int() }),
+  tariff: z.object({
+    group_type: z.enum(['group', 'individual', 'afterschool']),
+    valid_from: z.string(),
+    lessons_in_package: z.number().int(),
+    package_price: z.number().int(),
+    lesson_duration_min: z.number().int(),
+  }),
+  enrollment: z.object({ group: z.object({ lesson_duration_min: z.number().int().nullable() }) }),
 })
 
 export type EditableSubscription = z.infer<typeof editableRow>
@@ -50,7 +57,7 @@ export const editableSubscriptionsQuery = (enrollmentId: string) =>
       const { data, error } = await supabase
         .from('subscriptions')
         .select(
-          'id, lessons_total, price_full, price_final, discount_percent, hours_total, status, tariff:tariffs!inner(lessons_in_package)',
+          'id, lessons_total, price_full, price_final, discount_percent, hours_total, status, tariff:tariffs!inner(group_type, valid_from, lessons_in_package, package_price, lesson_duration_min), enrollment:enrollments!inner(group:groups!inner(lesson_duration_min))',
         )
         .eq('enrollment_id', enrollmentId)
         .neq('status', 'refunded')

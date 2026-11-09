@@ -1,8 +1,9 @@
 // #109 · «Изменить абонемент» (К12, И91): the words of the preview. Pure — the numbers come from
 // subscription_update_preview / subscription_balance_preview (0033).
-import { pluralRu } from '@/features/lessons/select'
 import { formatSom } from '@/features/tariffs/model'
 import { MONTHS_NOM } from '@/lib/time'
+import type { GroupType } from '@/features/tariffs/current'
+import { packageSizeCaption } from './model'
 
 /** One teacher × month of the held lessons charged to the package. */
 export interface PayrollPreview {
@@ -30,7 +31,6 @@ export interface BalancePreview {
 }
 
 const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${formatSom(Math.abs(n))}`
-const LESSONS = ['урок', 'урока', 'уроков'] as const
 const first = (name: string) => name.split(/\s+/)[0] ?? name
 
 /** «Айпери: сентябрь 300 → 450 за занятие, +150 × 8 = +1 200 сом». */
@@ -41,14 +41,14 @@ export function payrollLine(r: PayrollPreview): string {
 }
 
 /** «Оплачено 5 400 из 5 400 · остаток 2 урока» / «… · долг 2 урока · 1 200 сом». */
-export function balanceLine(b: BalancePreview): string {
+export function balanceLine(b: BalancePreview, groupType: GroupType = 'group'): string {
   const paid = `Оплачено ${formatSom(b.paidSom)} из ${formatSom(b.priceFinal)}`
   if (b.debtLessons > 0)
-    return `${paid} · долг ${b.debtLessons} ${pluralRu(b.debtLessons, LESSONS)}${b.debtSom > 0 ? ` · ${formatSom(b.debtSom)} сом` : ''}`
+    return `${paid} · долг ${packageSizeCaption(groupType, b.debtLessons)}${b.debtSom > 0 ? ` · ${formatSom(b.debtSom)} сом` : ''}`
   const left = Math.max(0, b.lessonsLeft)
-  return `${paid} · остаток ${left} ${pluralRu(left, LESSONS)}`
+  return `${paid} · остаток ${packageSizeCaption(groupType, left)}`
 }
 
-/** «12 уроков · 7 200» — the package in short. */
-export const termsCaption = (lessons: number, price: number) =>
-  `${lessons} ${pluralRu(lessons, LESSONS)} · ${formatSom(price)}`
+/** «12 уроков · 7 200», after-school «20 дней · 7 400» (#141) — the package in short. */
+export const termsCaption = (lessons: number, price: number, groupType: GroupType = 'group') =>
+  `${packageSizeCaption(groupType, lessons)} · ${formatSom(price)}`
