@@ -14,3 +14,14 @@ export async function holidayDays(db: SupabaseClient<Database>): Promise<Set<str
   if (error) throw error
   return new Set(data.map((h) => h.day))
 }
+
+/** Today in Asia/Bishkek (UTC+6, no DST), ISO — for fixtures that must be «now», not a seed date (#130). */
+export const bishkekToday = () => new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10)
+
+/** ISO date `days` after `iso`. */
+export const isoPlus = (iso: string, days: number) =>
+  new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10)
+
+/** The last day of the month of `iso`. */
+export const monthEnd = (iso: string) =>
+  new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)), 0)).toISOString().slice(0, 10)

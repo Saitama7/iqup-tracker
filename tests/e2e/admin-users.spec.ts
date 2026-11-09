@@ -29,6 +29,12 @@ const spaced = (n: string) => `${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`
 
 // Users created here are removed afterwards, so screenshots of the seed stay clean.
 const created: string[] = []
+
+// the 1st of next month in Bishkek: a rate that is not yet current on any run date (#130)
+const nextMonth = (() => {
+  const [y, m] = new Date(Date.now() + 6 * 3600e3).toISOString().slice(0, 7).split('-').map(Number)
+  return `01.${String((m % 12) + 1).padStart(2, '0')}.${m === 12 ? y + 1 : y}`
+})()
 test.afterAll(async () => {
   if (created.length === 0) return
   const env = localSupabase()
@@ -136,7 +142,7 @@ test('admin creates a teacher, changes the percent; the teacher can sign in', as
   // Radix hides the page from the a11y tree until the dialog is gone
   await expect(dialog).toBeHidden()
 
-  // New rate from a date: a new teacher_rates row from 01.11.2026, the old one stays.
+  // New rate from a date: a new teacher_rates row from the 1st of next month, the old one stays.
   const teachers = page.getByRole('region', { name: 'Учителя' })
   const more = teachers.getByRole('button', { name: /^ещё \d+/ })
   if (await more.isVisible()) await more.click()
@@ -146,11 +152,11 @@ test('admin creates a teacher, changes the percent; the teacher can sign in', as
     edit.getByRole('list', { name: 'История процента' }).getByRole('listitem'),
   ).toHaveCount(1)
   await edit.getByLabel('Новый процент').fill('50')
-  await edit.getByLabel('Действует с').fill('01.11.2026')
+  await edit.getByLabel('Действует с').fill(nextMonth)
   await edit.getByRole('button', { name: 'Новая ставка с даты' }).click()
   const history = edit.getByRole('list', { name: 'История процента' })
   await expect(history.getByRole('listitem')).toHaveCount(2)
-  await expect(history.getByRole('listitem').first()).toContainText('с 01.11.2026')
+  await expect(history.getByRole('listitem').first()).toContainText(`с ${nextMonth}`)
   await expect(history.getByRole('listitem').first()).toContainText('50 %')
   await expect(history.getByRole('listitem').last()).toContainText('45 %')
 

@@ -1,5 +1,6 @@
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { GULZAT, KANYKEI, login, switchUser } from './support/auth'
+import { bishkekToday, isoPlus } from './support/db'
 import { lockSeed } from './support/seed-lock'
 import { cleanup, makeEnrollment, makeGroup, service, teacherId } from './support/undo-fixtures'
 
@@ -22,9 +23,6 @@ const names = (testInfo: TestInfo) => {
     missed: `Е2е Пропустил ${w}`,
   }
 }
-
-/** Today in Asia/Bishkek (UTC+6, no DST). */
-const bishkekToday = () => new Date(Date.now() + 6 * 3600_000).toISOString().slice(0, 10)
 
 async function markOf(lessonId: string, studentId: string) {
   const { data } = await service()
@@ -62,6 +60,7 @@ test('админ: «предупредил» заранее → учитель �
     '2026-10-01',
     'mini',
     weekdays,
+    isoPlus(today, 14),
   )
   const warned = await makeEnrollment(n.warned, groupId, '2026-10-01')
   const missed = await makeEnrollment(n.missed, groupId, '2026-10-01')

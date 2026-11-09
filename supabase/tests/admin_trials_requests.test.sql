@@ -20,7 +20,10 @@ insert into public.profiles (id, phone, full_name, roles) values
 
 create temp table d as select public.bishkek_today() as today;
 grant select on d to authenticated, anon;
+-- a seed holiday may already be past (holidays_guard): removed with triggers off, no journal rows (#130)
+set local session_replication_role = replica;
 delete from public.holidays h where h.day between (select today - 20 from d) and (select today + 20 from d);
+set local session_replication_role = origin;
 
 insert into public.groups (id, name, subject_id, grade, group_type, teacher_id, start_date, status)
 select 'd9440000-0000-4000-8000-000000000001', 'Group 944', (select id from public.subjects where name = 'Математика'),

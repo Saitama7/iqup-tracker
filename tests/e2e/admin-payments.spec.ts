@@ -115,7 +115,8 @@ test('А7: частичная оплата открывает 6 уроков, в
     if (isDesktop(page)) {
       await page.getByRole('link', { name: 'Оплаты' }).click()
       await expect(page.getByRole('heading', { name: 'Оплаты' })).toBeVisible()
-      await expect(page.getByRole('table', { name: 'Журнал оплат' })).toBeVisible()
+      // the journal of the current month may be empty on a fresh seed (#130) — it is checked below
+      await expect(page.getByRole('form', { name: 'Записать оплату' })).toBeVisible()
     } else {
       await page.getByRole('link', { name: 'Оплата' }).click()
       await expect(page.getByRole('heading', { name: 'Оплаты' })).toBeVisible()

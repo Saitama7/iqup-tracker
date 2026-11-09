@@ -1,5 +1,6 @@
 import { expect, test, type TestInfo } from '@playwright/test'
 import { KANYKEI, login } from './support/auth'
+import { bishkekToday, monthEnd } from './support/db'
 import { lockSeed } from './support/seed-lock'
 import {
   cleanup,
@@ -39,7 +40,15 @@ test('А11: админ правит закрытое пробное и возв�
 }, testInfo) => {
   const n = names(testInfo)
   const db = service()
-  const groupId = await makeGroup(n.group, await teacherId('Гульзат%'), '2026-10-01')
+  // «Пробные месяца» lists the current month: the trial's lesson is the month's last one (#130)
+  const groupId = await makeGroup(
+    n.group,
+    await teacherId('Гульзат%'),
+    '2026-10-01',
+    'mini',
+    [2, 4],
+    monthEnd(bishkekToday()),
+  )
   const { data: lesson } = await db
     .from('lessons')
     .select('id')
