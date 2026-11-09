@@ -79,15 +79,22 @@ test('dashboard: KPI, today of all teachers, «Не подтверждено» 3
     // Money waits for R2; trials (#46) are relative to the real date — admin-trials.spec.ts.
     await expect(page.getByRole('region', { name: 'Пробные' })).toBeVisible()
     await expect(page.getByText('Сентябрь · ЗП')).toBeVisible()
+    await expect(page.getByRole('region', { name: 'Долги' })).toContainText(
+      'Азамат У. · Продлёнка · утро · долг 2 ур. · 740 сом',
+    )
     await page.screenshot({ path: shot(testInfo, 'dashboard'), fullPage: true })
     await widget.getByText('ещё 25 занятий').click()
   } else {
     await expect(page.getByRole('heading', { name: 'Центр сегодня' })).toBeVisible()
     await expect(page.getByText('5 учителей')).toBeVisible()
     const attention = page.getByRole('list', { name: 'Требует внимания' })
-    await expect(attention.getByRole('listitem')).toHaveCount(3)
+    // three unconfirmed, then the seed's debtor (#132)
+    await expect(attention.getByRole('listitem')).toHaveCount(4)
     await expect(attention.getByRole('listitem').nth(1)).toContainText(
       'Сегодня 09:00 · Математика · 8 класс А · Гульзат — не подтверждено',
+    )
+    await expect(attention.getByRole('listitem').nth(3)).toContainText(
+      'Азамат У. · Продлёнка · утро · долг 2 ур. · 740 сом',
     )
     await page.screenshot({ path: shot(testInfo, 'dashboard'), fullPage: true, style: noTabBar })
     await page.getByRole('link', { name: 'ещё 25 занятий · самое старое 1 окт →' }).click()
@@ -238,4 +245,33 @@ test('realtime: a lesson gets confirmed → «Не подтверждено» dr
   } finally {
     await cleanup()
   }
+})
+
+test('dashboard money (#132): «Долги» = А5 «Не оплатили», «Оплат сегодня», «Записать оплату» → А7', async ({
+  page,
+}, testInfo) => {
+  await login(page, KANYKEI)
+  const unpaid = page.getByTestId('kpi-unpaid')
+  await expect(unpaid).toHaveText(/^\d+$/)
+  const n = (await unpaid.textContent()) ?? ''
+  await expect(page.getByTestId('kpi-paid-today')).toHaveText(/^\d[\d\s]*( сом)?$/)
+  await page.screenshot({
+    path: shot(testInfo, 'dashboard-money'),
+    fullPage: true,
+    style: isDesktop(page) ? undefined : noTabBar,
+  })
+
+  await unpaid.click()
+  await expect(page).toHaveURL(/\/admin\/students\?pay=unpaid$/)
+  await expect(page.getByRole('button', { name: `Не оплатили · ${n}` })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+
+  await page.goto('/')
+  await page
+    .getByRole('link', { name: isDesktop(page) ? 'Записать оплату' : '+ Записать →' })
+    .click()
+  await expect(page).toHaveURL(/\/admin\/payments/)
+  await expect(page.getByRole('form', { name: 'Записать оплату' })).toBeVisible()
 })
