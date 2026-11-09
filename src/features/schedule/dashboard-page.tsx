@@ -8,7 +8,7 @@ import { PageHeader } from '@/components/page'
 import { firstName, useDisplayName } from '@/components/shell/shell-parts'
 import { monthName } from '@/features/groups/model'
 import { useEnsureLessons } from '@/features/groups/use-ensure-lessons'
-import { monthTotalQuery } from '@/features/payroll/api'
+import { monthTotalQuery, periodQuery } from '@/features/payroll/api'
 import { usePendingRequests, type PendingRequest } from '@/features/lessons/corrections-api'
 import { lessonState, lessonsWord } from '@/features/lessons/select'
 import { formatSom } from '@/features/tariffs/model'
@@ -30,6 +30,7 @@ import {
   dayKpiCaption,
   lessonLabel,
   mobileCaption,
+  payrollCard,
   payrollMonth,
   sortByStart,
   unconfirmedLine,
@@ -356,18 +357,18 @@ function UnconfirmedWidget({ unconfirmed, today }: { unconfirmed: AdminLesson[];
   )
 }
 
-/** А1 «Сентябрь · ЗП»: the month being paid (И15) and everyone's accrual from v_payroll_preview. */
+/** А1 «Сентябрь · ЗП»: the month being paid and its period (payrollCard, И15) and everyone's accrual from v_payroll_preview. */
 function PayrollCard({ today }: { today: string }) {
-  const { month, closeBy } = payrollMonth(today)
-  // TODO(R3): «пока период не закрыт» — with payroll_periods the card follows the open period.
+  const period = useQuery(periodQuery(payrollMonth(today).month))
+  const { month, status } = payrollCard(today, period.data ?? null)
   const total = useQuery(monthTotalQuery(month))
   return (
     <section className="flex flex-col gap-2 rounded-[20px] bg-ink px-5 py-4 text-paper">
       <h2 className="text-xs font-extrabold tracking-[0.06em] text-brand uppercase">
         {monthName(`${month}-01`)} · ЗП
       </h2>
-      <p className="text-[13px] font-bold opacity-80">
-        Период открыт. Бухгалтер закроет до {closeBy}.
+      <p className="text-[13px] font-bold opacity-80" data-testid="payroll-card-status">
+        {status}
       </p>
       <Link
         to="/payroll"
