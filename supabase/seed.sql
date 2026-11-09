@@ -24,7 +24,6 @@ insert into public.tariffs (group_type, lessons_in_package, package_price, max_s
 insert into public.holidays (day, name) values
   ('2026-05-09', 'День Победы'),
   ('2026-08-31', 'День независимости'),
-  ('2026-11-07', 'День Октябрьской революции'),
   ('2026-12-31', 'Новый год · каникулы центра'),
   ('2027-01-01', 'Новый год · каникулы центра'),
   ('2027-01-02', 'Новый год · каникулы центра'),
@@ -34,6 +33,18 @@ insert into public.holidays (day, name) values
   ('2027-03-21', 'Нооруз'),
   ('2027-05-01', 'День труда'),
   ('2027-05-09', 'День Победы');
+
+-- One holiday relative to the run day (#133): the first day ≥ 7 days ahead with no holiday next to it,
+-- so it stays a single row on А9 and never lands on the past (Sept–Oct) days the specs pin.
+insert into public.holidays (day, name)
+select public.bishkek_today() + i, 'День Октябрьской революции'
+from generate_series(7, 60) i
+where not exists (
+  select 1 from public.holidays h
+  where h.day between public.bishkek_today() + i - 1 and public.bishkek_today() + i + 1
+)
+order by i
+limit 1;
 
 -- Teachers — А8 (phones are login candidates for seed-users)
 insert into public.teachers (id, full_name, phone) values
