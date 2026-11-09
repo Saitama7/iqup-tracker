@@ -130,6 +130,8 @@ export interface StudentPay {
   paidLessons: number
   /** Paid and not used yet on the current subscription. */
   available: number
+  /** Capacity of the current subscription (lessonsTotal). */
+  total: number
   /** Lessons «в долг» over all subscriptions of the student in the group. */
   debtLessons: number
   debtSom: number
@@ -169,6 +171,7 @@ export function studentPay(
     state: debt.lessons > 0 ? 'debt' : payState(current),
     paidLessons: current.paidLessons,
     available: availableLessons(current),
+    total: current.lessonsTotal,
     debtLessons: debt.lessons,
     debtSom: debt.som,
   }

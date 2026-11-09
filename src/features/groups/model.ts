@@ -1,5 +1,6 @@
 // А3 / А4 view model: pure functions of (rows, today) — no fetching, no clock.
 // Lesson dates mirror generate_lessons (0008): the database is the authority, this is the preview.
+import { formatHours } from '@/features/afterschool/model'
 import { firstName, formatDayMonth, formatLessonWhen, groupLabel } from '@/features/students/model'
 import { pluralRu } from '@/features/lessons/select'
 import { rateOn } from '@/features/payroll/calc'
@@ -610,4 +611,35 @@ export const monthName = (iso: string) => MONTHS_NOM[Number(iso.slice(5, 7)) - 1
 export function extraLessonDateError(date: string | null, minDate: string | undefined) {
   if (!date || !minDate || date >= minDate) return null
   return 'Доп. урок можно добавить только на сегодня или позже'
+}
+
+// ─── Members: debt / available (А4, «Мои группы», #126) ─────────────────────
+
+export interface MemberLeft {
+  /** Lessons «в долг» over all subscriptions of the group — totalDebt (old ones too, И37). */
+  debt: number
+  /** Paid and not used on the current subscription — availableLessons. */
+  available: number
+  total: number
+  unit: 'lesson' | 'hour'
+}
+
+export interface MemberLeftCell {
+  text: string
+  /** aria-label / title; null — no subscription. */
+  label: string | null
+  tone: 'debt' | 'low' | null
+}
+
+/** «−debt» or «available / total», never lessons_total − used: the payment is what opens lessons (В7.1). */
+export function memberLeftCell(m: MemberLeft | null): MemberLeftCell {
+  if (!m) return { text: '—', label: null, tone: null }
+  const n = (x: number) => (m.unit === 'hour' ? formatHours(x) : String(x))
+  const unit = m.unit === 'hour' ? 'ч' : 'ур.'
+  if (m.debt > 0) return { text: `−${n(m.debt)}`, label: `долг ${n(m.debt)} ${unit}`, tone: 'debt' }
+  return {
+    text: `${n(m.available)} / ${n(m.total)}`,
+    label: `доступно ${n(m.available)} из ${n(m.total)}${m.unit === 'hour' ? ' ч' : ''}`,
+    tone: m.available <= 2 ? 'low' : null,
+  }
 }

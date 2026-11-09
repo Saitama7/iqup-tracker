@@ -6,6 +6,7 @@ import { BackButton } from '@/components/shell/back-button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { fromAdminGroup, type GroupTab } from '@/features/lessons/return-to'
 import { balancesQuery } from '@/features/payments/api'
+import { availableLessons, totalDebt } from '@/features/payments/balance'
 import { studentsQuery } from '@/features/students/api'
 import {
   currentSubscription,
@@ -53,6 +54,8 @@ import {
   type LessonRow,
   type LessonTone,
   type LessonView,
+  memberLeftCell,
+  type MemberLeft,
 } from './model'
 import { TrialCards, TrialTableRows, useGroupTrials, useTrialActions } from './group-trials'
 import { GroupStatusChip } from './parts'
@@ -63,8 +66,7 @@ interface MemberRow {
   fullName: string
   caption: string | null
   startDate: string
-  left: number | null
-  total: number | null
+  left: MemberLeft | null
   freezes: string
 }
 
@@ -75,6 +77,7 @@ function members(
   groupId: string,
 ): MemberRow[] {
   const balances = new Map(balanceRows.map((b) => [b.subscriptionId, b]))
+  const groupRows = balanceRows.filter((b) => b.groupId === groupId)
   const byId = new Map(data.students.map((s) => [s.id, s]))
   return data.students
     .flatMap((s) => {
@@ -94,8 +97,14 @@ function members(
           fullName: s.full_name,
           caption,
           startDate: e.start_date,
-          left: sub ? (balance?.lessonsLeft ?? sub.lessons_total) : null,
-          total: sub?.lessons_total ?? null,
+          left: sub
+            ? {
+                debt: totalDebt(groupRows.filter((b) => b.studentId === s.id)).lessons,
+                available: balance ? availableLessons(balance) : 0,
+                total: balance?.lessonsTotal ?? sub.lessons_total,
+                unit: balance?.unit ?? 'lesson',
+              }
+            : null,
           freezes: balance ? String(balance.freezesUsed) : '—',
         },
       ]
@@ -504,17 +513,23 @@ function StatCard({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-const leftClass = (r: MemberRow) =>
-  r.left === null
-    ? 'text-ink-muted'
-    : r.left < 0
-      ? 'font-extrabold text-burned-strong'
-      : r.left <= 2
-        ? 'font-extrabold text-warn'
-        : ''
+const LEFT_CLASS = { debt: 'font-extrabold text-burned-strong', low: 'font-extrabold text-warn' }
 
-const leftText = (r: MemberRow) =>
-  r.left === null ? '—' : r.left < 0 ? `−${-r.left}` : `${r.left} / ${r.total ?? ''}`
+/** The «Осталось» cell of А4 (table and list): debt / available, #126. */
+function LeftCell({ row, className }: { row: MemberRow; className?: string }) {
+  const c = memberLeftCell(row.left)
+  return (
+    <span
+      className={cn(className, c.tone ? LEFT_CLASS[c.tone] : !row.left && 'text-ink-muted')}
+      aria-label={c.label ?? undefined}
+      title={c.label ?? undefined}
+    >
+      {c.text}
+    </span>
+  )
+}
+
+const isLow = (r: MemberRow) => memberLeftCell(r.left).tone === 'low'
 
 function MembersTable({
   rows,
@@ -542,10 +557,7 @@ function MembersTable({
         {rows.map((r) => (
           <tr
             key={r.studentId}
-            className={cn(
-              '[&:last-child>td]:border-0',
-              r.left !== null && r.left <= 2 && 'bg-accent',
-            )}
+            className={cn('[&:last-child>td]:border-0', isLow(r) && 'bg-accent')}
           >
             <td className={tdClass}>
               <Link
@@ -558,7 +570,9 @@ function MembersTable({
               {r.caption && <div className="text-xs font-bold text-ink-muted">{r.caption}</div>}
             </td>
             <td className={cn(tdClass, 'whitespace-nowrap')}>{shortDate(r.startDate)}</td>
-            <td className={cn(tdClass, numClass, leftClass(r))}>{leftText(r)}</td>
+            <td className={cn(tdClass, numClass)}>
+              <LeftCell row={r} />
+            </td>
             <td className={cn(tdClass, numClass)}>{r.freezes}</td>
             <td className={tdClass}>
               <div className="flex items-center justify-end gap-2">
@@ -600,7 +614,7 @@ function MembersList({
           key={r.studentId}
           className={cn(
             'flex items-center border-b border-line pr-1 last:border-0',
-            r.left !== null && r.left <= 2 && 'bg-accent',
+            isLow(r) && 'bg-accent',
           )}
         >
           <Link
@@ -616,9 +630,7 @@ function MembersList({
                   .join(' · ')}
               </span>
             </span>
-            <span className={cn('text-sm whitespace-nowrap tabular-nums', leftClass(r))}>
-              {leftText(r)}
-            </span>
+            <LeftCell row={r} className="text-sm whitespace-nowrap tabular-nums" />
           </Link>
           <EnrollmentMenu
             label={r.fullName}
