@@ -5,6 +5,7 @@ import {
   amountPresets,
   balanceLine,
   carryToNext,
+  defaultPayTarget,
   duplicateWarning,
   filterPayments,
   formatPaidAt,
@@ -14,6 +15,7 @@ import {
   journalRow,
   monthBounds,
   monthLabel,
+  overpayment,
   parseAmount,
   paymentHint,
   payOptions,
@@ -800,5 +802,123 @@ describe('«Что оплачивает»: любой абонемент, кот
 
   it('the panel names an older picked subscription', () => {
     expect(balanceLine(old, 'абонемент с 07.09').text).toBe('Абонемент с 07.09: осталось 0 из 12')
+  })
+})
+
+describe('израсходованный абонемент → по умолчанию «новый» (И97, #127)', () => {
+  const groups = new Map([[G8A, { subject: 'Математика', name: '7 класс' }]])
+  const SUB = 'old'
+  const student = {
+    id: 's1',
+    enrollments: [
+      {
+        id: 'e1',
+        group_id: G8A,
+        start_date: '2026-09-21',
+        end_date: null,
+        status: 'active' as const,
+        subscriptions: [
+          {
+            id: SUB,
+            lessons_total: 12,
+            price_full: 3200,
+            price_final: 3200,
+            discount_percent: 0,
+            discount_reason: 'none' as const,
+            started_at: '2026-09-21',
+            status: 'active' as const,
+            created_at: '2026-09-21T00:00:00Z',
+          },
+        ],
+      },
+    ],
+  }
+  // Каныкей: 12 of 3 200 paid, 20 taken
+  const spent = balance({
+    subscriptionId: SUB,
+    lessonsUsed: 20,
+    lessonsLeft: -8,
+    debtLessons: 8,
+    debtSom: 2134,
+  })
+
+  it('defaults to «новый абонемент · долг 8 ур. перейдёт в него», no «Похоже на повтор»', () => {
+    const options = payOptions(student, groups, [spent])
+    expect(options.map((o) => o.label)).toEqual([
+      'Математика · 7 класс · закрыть долг · абонемент с 21.09 · 8 ур. · 2\u00a0134',
+      'Математика · 7 класс · новый абонемент · долг 8 ур. перейдёт в него',
+    ])
+    const d = defaultPayTarget(options)
+    expect(d?.value).toBe('new:e1')
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'new', groupId: G8A, balance: d?.current ?? null, owed: d?.owed },
+        [],
+        '2026-11-09',
+      ),
+    ).toEqual([])
+  })
+
+  it('a used-up, partly paid one: «новый» by default, its own debt is not «оплатите его»', () => {
+    const part = { ...spent, paidSom: 1600, paidLessons: 6, debtLessons: 14, debtSom: 3734 }
+    const options = payOptions(student, groups, [part])
+    expect(defaultPayTarget(options)?.value).toBe('new:e1')
+    expect(options[1]?.owed).toBeNull()
+  })
+
+  it('a repeat within REPEAT_DAYS still warns on «новый»', () => {
+    const d = defaultPayTarget(payOptions(student, groups, [spent]))
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'new', groupId: G8A, balance: d?.current ?? null, owed: d?.owed },
+        [
+          pay({
+            subscription: { ...pay({}).subscription, id: SUB },
+            paid_at: '2026-11-05T04:00:00Z',
+          }),
+        ],
+        '2026-11-09',
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('partly used (5 of 12, 6 paid): the old one by default, «новый» warns (И94)', () => {
+    const part = balance({
+      subscriptionId: SUB,
+      paidSom: 1600,
+      paidLessons: 6,
+      lessonsUsed: 5,
+      lessonsLeft: 7,
+    })
+    const options = payOptions(student, groups, [part])
+    const d = defaultPayTarget(options)
+    expect(d?.label).toBe(
+      'Математика · 7 класс · доплата · абонемент с 21.09 · осталось 1\u00a0600',
+    )
+    expect(options[1]?.label).toBe('Математика · 7 класс · новый абонемент')
+    expect(
+      duplicateWarning(
+        student,
+        { kind: 'new', groupId: G8A, balance: part, owed: options[1]?.owed },
+        [],
+        '2026-11-09',
+      ),
+    ).toEqual([
+      'Абонемент с 21.09 не оплачен (осталось внести 1\u00a0600) — оплатите его, новый не нужен',
+    ])
+  })
+
+  it('no options — no default', () => {
+    expect(defaultPayTarget([])).toBeNull()
+  })
+
+  it('overpayment: som beyond the package on an existing lesson subscription', () => {
+    expect(overpayment(spent, 3200)).toBe(3200)
+    expect(overpayment({ ...spent, paidSom: 1600 }, 3200)).toBe(1600)
+    expect(overpayment({ ...spent, paidSom: 1600 }, 1600)).toBe(0)
+    expect(overpayment(spent, null)).toBe(0)
+    expect(overpayment({ ...spent, unit: 'hour' }, 3200)).toBe(0)
   })
 })
