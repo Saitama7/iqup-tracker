@@ -20,7 +20,7 @@ import {
   formatSom,
   GROUP_TYPE_LABEL,
   holidayItems,
-  RULES,
+  rules,
   seatsLabel,
   type Tariff,
 } from './model'
@@ -106,7 +106,7 @@ export function SettingsPage() {
               isDesktop ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)]' : 'grid-cols-1 gap-4',
             )}
           >
-            <Rules />
+            <Rules tariffs={tariffs} />
             <HolidaysSection items={holidays} today={today} />
           </div>
 
@@ -235,9 +235,9 @@ function TariffCards({ tariffs }: { tariffs: Tariff[] }) {
   )
 }
 
-// ─── Rules (read-only until R2) ─────────────────────────────────────────────
+// ─── Rules ─────────────────────────────────────────────────────────────
 
-function Rules() {
+function Rules({ tariffs }: { tariffs: Tariff[] }) {
   return (
     <section
       aria-label="Скидки и правила"
@@ -245,7 +245,7 @@ function Rules() {
     >
       <h2 className={sectionTitle}>Скидки и правила</h2>
       <ul className="flex flex-col">
-        {RULES.map((r) => (
+        {rules(tariffs).map((r) => (
           <li
             key={r.title}
             className="flex items-center justify-between gap-3 border-b border-line py-2.5 last:border-0"
