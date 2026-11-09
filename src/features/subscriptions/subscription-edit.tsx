@@ -243,9 +243,9 @@ function EditForm({
             {p.balance && (
               <div className="flex flex-col gap-0.5 border-t border-line-strong pt-1.5">
                 <span className="text-xs text-ink-muted">
-                  Было: {balanceLine(p.balance.before)}
+                  Было: {balanceLine(p.balance.before, type)}
                 </span>
-                <span>Станет: {balanceLine(p.balance.after)}</span>
+                <span>Станет: {balanceLine(p.balance.after, type)}</span>
               </div>
             )}
           </>
