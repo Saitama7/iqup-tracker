@@ -183,6 +183,26 @@ export function payrollMonth(today: string): { month: string; closeBy: string } 
   }
 }
 
+/**
+ * А1 card (И15, #136): payrollMonth(today) while its period is open; closed on the 1st–15th —
+ * the running month (never closed: close_payroll_period refuses it). `period` — of payrollMonth(today).
+ */
+export function payrollCard(
+  today: string,
+  period: { closedAt: string } | null,
+): { month: string; closeBy: string; status: string } {
+  const base = payrollMonth(today)
+  const shown =
+    period && base.month < today.slice(0, 7) ? payrollMonth(`${today.slice(0, 8)}16`) : base
+  const day = shown === base && period ? bishkekDate(Date.parse(period.closedAt)) : null
+  return {
+    ...shown,
+    status: day
+      ? `Период закрыт · ${day.slice(8, 10)}.${day.slice(5, 7)}`
+      : `Период открыт. Бухгалтер закроет до ${shown.closeBy}.`,
+  }
+}
+
 // ─── А2 week grid ───────────────────────────────────────────────────────────
 
 /** Monday of the ISO week of `date`. */

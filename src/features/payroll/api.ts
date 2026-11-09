@@ -268,6 +268,14 @@ async function fetchPeriod(month: string): Promise<PayrollPeriod | null> {
   return { closedAt: row.closed_at, closedBy: row.closer?.full_name ?? null, comment: row.comment }
 }
 
+/** The month's payroll_periods row alone (А1 card, #136). */
+export const periodQuery = (month: string) =>
+  queryOptions({
+    queryKey: [PAYROLL_KEY, 'period', month],
+    queryFn: () => fetchPeriod(month),
+    refetchInterval: POLL_MS,
+  })
+
 /**
  * Б1: v_payroll_preview of `month`, every teacher (with nothing held — zeros) and the month's
  * planned lessons up to `today` — which of them are over decides lessonState(now) on the client.
