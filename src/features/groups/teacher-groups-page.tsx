@@ -554,7 +554,6 @@ function MobileDetail({
       ) : (
         <MonthLessons group={group} today={today} />
       )}
-      {/* «Пробные» under the roster — R2. */}
 
       <footer className="sticky bottom-0 -mx-5 mt-auto -mb-[max(1.5rem,env(safe-area-inset-bottom))] flex gap-2.5 border-t border-line bg-card px-5 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         <button

@@ -123,6 +123,3 @@ export function Notice({ children }: { children: ReactNode }) {
     </p>
   )
 }
-
-/** Debts, payments and trials come with R2 (issue #11 «Не делать») — same place, no numbers. */
-export const R2_STUB = 'появится в R2'
