@@ -22,6 +22,10 @@ select public.bishkek_today() - 30 as past,
        public.bishkek_today() as today,
        public.bishkek_today() + 30 as future;
 grant select on d to authenticated;
+-- seed holidays on the fixture days — out of the way; one may be past (holidays_guard): triggers off (#130)
+set local session_replication_role = replica;
+delete from public.holidays h using d where h.day in (d.past - 1, d.past, d.today, d.future, d.future + 1);
+set local session_replication_role = origin;
 
 -- service role (no auth.uid()) may import a past tariff and a past holiday
 select lives_ok(

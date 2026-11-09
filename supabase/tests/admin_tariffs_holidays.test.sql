@@ -29,8 +29,11 @@ select public.bishkek_today() as today,
 grant select on d to authenticated, anon;
 
 -- holidays of the fixture days the seed may have — out of the way
+-- a seed holiday may already be past (holidays_guard): removed with triggers off, no journal rows (#130)
+set local session_replication_role = replica;
 delete from public.holidays h where h.day in (select past_day from d union select held_day from d
   union select future_day from d union select gone_day from d);
+set local session_replication_role = origin;
 -- a holiday before the lessons are generated: no lesson on gone_day
 insert into public.holidays (day, name) select gone_day, 'Был заранее' from d;
 
@@ -200,7 +203,8 @@ select lives_ok(
 );
 select is(pg_temp.status((select held_day from d)), 'held', 'the held lesson stays held');
 select results_eq(
-  $$ select action, reason, kind from public.audit_log where entity = 'holidays' and after ->> 'day' = (select past_day from d)::text $$,
+  $$ select action, reason, kind from public.audit_log where entity = 'holidays' and after ->> 'day' = (select past_day from d)::text
+     and at = now() $$,
   $$ values ('insert'::text, 'забыли внести'::text, 'retro'::text) $$,
   'the journal: a past holiday with its reason — «Правки задним числом»'
 );
