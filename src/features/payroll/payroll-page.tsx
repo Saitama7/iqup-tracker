@@ -1,6 +1,7 @@
 // Б1 «Расчёт ЗП» (docs/design/Payroll.dc.html) and БМ1 on the phone (AccMobilePayroll.dc.html):
 // accountant and admin (И2). Totals from v_payroll_preview (0011), advances (#83), «Закрыть период»
-// / «Открыть период» (#94, И77). The comparison with the old scheme is R3 — disabled with a hint.
+// / «Открыть период» (#94, И77). The comparison with the old scheme stays
+// disabled with a hint (R3_HINT) until the owner decides.
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { MonthPickerButton } from '@/components/ui/date-picker'

@@ -235,7 +235,7 @@ function TariffCards({ tariffs }: { tariffs: Tariff[] }) {
   )
 }
 
-// ─── Rules (read-only until R2) ─────────────────────────────────────────────
+// ─── Rules (read-only) ──────────────────────────────────────────────────────
 
 function Rules() {
   return (

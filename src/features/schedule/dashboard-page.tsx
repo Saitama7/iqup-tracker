@@ -3,12 +3,16 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Plus } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { PageHeader } from '@/components/page'
 import { firstName, useDisplayName } from '@/components/shell/shell-parts'
 import { monthName } from '@/features/groups/model'
 import { useEnsureLessons } from '@/features/groups/use-ensure-lessons'
 import { monthTotalQuery } from '@/features/payroll/api'
+import { balancesQuery, paymentsQuery, unbilledQuery } from '@/features/payments/api'
+import { monthBounds, monthOf, som } from '@/features/payments/model'
+import { studentsQuery } from '@/features/students/api'
+import { studentListRows } from '@/features/students/model'
 import { usePendingRequests, type PendingRequest } from '@/features/lessons/corrections-api'
 import { lessonState, lessonsWord } from '@/features/lessons/select'
 import { formatSom } from '@/features/tariffs/model'
@@ -44,7 +48,18 @@ import {
   useDashboardTrials,
   type DashboardTrials,
 } from './dashboard-trials'
-import { CHIP, DOT, Notice, R2_STUB } from './parts'
+import { CHIP, DOT, Notice } from './parts'
+import {
+  debtorLine,
+  debtorsMore,
+  debtSummary,
+  debtTileCaption,
+  DEBTORS_SHOWN,
+  todayPayments,
+  todayPaymentsCaption,
+  type DebtSummary,
+  type TodayPayments,
+} from './dashboard-money'
 import { PresetsWidget } from '@/features/presets/dashboard-presets'
 import { CorrectionItems, CorrectionsWidget } from './dashboard-corrections'
 import { UnbilledItems, UnbilledWidget, useUnbilled, type UnbilledItem } from './dashboard-unbilled'
@@ -53,6 +68,27 @@ import { UnbilledItems, UnbilledWidget, useUnbilled, type UnbilledItem } from '.
 const TODAY_SHOWN = 7
 
 const UNCONFIRMED_SEARCH = { filter: 'unconfirmed' } as const
+const UNPAID_SEARCH = { pay: 'unpaid' } as const
+
+/** А5 rows (same as «Не оплатили») and this month's payments → the money tiles; undefined while loading. */
+function useDashboardMoney(today: string) {
+  const month = monthOf(today)
+  const { from, to } = monthBounds(month)
+  const students = useQuery(studentsQuery()).data
+  const balances = useQuery(balancesQuery()).data
+  const unbilled = useQuery(unbilledQuery()).data
+  const payments = useQuery(paymentsQuery(from, to)).data
+  const debts = useMemo(
+    () =>
+      students && balances ? debtSummary(studentListRows(students, balances, unbilled)) : undefined,
+    [students, balances, unbilled],
+  )
+  const paid = useMemo(
+    () => (payments ? todayPayments(payments, today) : undefined),
+    [payments, today],
+  )
+  return { month, debts, paid }
+}
 
 function greeting(now: number): string {
   const hour = new Date(now + 6 * 3_600_000).getUTCHours()
@@ -74,6 +110,7 @@ export function DashboardPage() {
   const trials = useDashboardTrials(today)
   const requests = usePendingRequests(true)
   const unbilled = useUnbilled()
+  const money = useDashboardMoney(today)
 
   let body: ReactNode
   if (day.isError || pending.isError) {
@@ -90,6 +127,7 @@ export function DashboardPage() {
       trials,
       requests: requests.data ?? [],
       unbilled: unbilled.data ?? [],
+      ...money,
     }
     body = isDesktop ? <DesktopDashboard {...data} /> : <MobileDashboard {...data} />
   }
@@ -111,15 +149,13 @@ export function DashboardPage() {
           title={name ? `${greeting(now)}, ${name}` : greeting(now)}
         />
         <div className="flex flex-wrap gap-2.5">
-          <button
-            type="button"
-            disabled
-            title={`Оплаты — ${R2_STUB}`}
-            className="flex min-h-12 items-center gap-2 rounded-[14px] bg-ink px-[18px] text-sm font-extrabold text-brand disabled:opacity-60"
+          <Link
+            to="/admin/payments"
+            className="flex min-h-12 items-center gap-2 rounded-[14px] bg-ink px-[18px] text-sm font-extrabold text-brand"
           >
             <Plus className="size-[18px]" strokeWidth={2.5} aria-hidden />
             Записать оплату
-          </button>
+          </Link>
           <Link
             to="/admin/groups"
             className="flex min-h-12 items-center rounded-[14px] border-[1.5px] border-line-strong bg-card px-[18px] text-sm font-extrabold"
@@ -145,6 +181,9 @@ interface DashboardData {
   requests: PendingRequest[]
   /** After-school months with marks and no invoice (#82, И69). */
   unbilled: UnbilledItem[]
+  month: string
+  debts: DebtSummary | undefined
+  paid: TodayPayments | undefined
 }
 
 // ─── А1 · desktop ───────────────────────────────────────────────────────────
@@ -163,6 +202,9 @@ function DesktopDashboard({
   trials,
   requests,
   unbilled,
+  month,
+  debts,
+  paid,
 }: DashboardData) {
   const [expanded, setExpanded] = useState(false)
   const spread = unconfirmedSpread(unconfirmed)
@@ -191,16 +233,30 @@ function DesktopDashboard({
             {unconfirmed.length > 0 ? `${spread.days} · ${spread.teachers}` : 'всё отмечено'}
           </span>
         </Link>
-        <div className={cn(tileClass, 'bg-warn-soft text-warn-strong')}>
+        <Link
+          to="/admin/students"
+          search={UNPAID_SEARCH}
+          className={cn(tileClass, 'bg-warn-soft text-warn-strong')}
+        >
           <span className={tileLabel}>Долги и «пора оплачивать»</span>
-          <span className={tileValue}>—</span>
-          <span className={tileCaption}>{R2_STUB}</span>
-        </div>
-        <div className={cn(tileClass, 'bg-brand text-ink')}>
+          <span className={tileValue} data-testid="kpi-unpaid">
+            {debts ? debts.unpaid : '…'}
+          </span>
+          <span className={tileCaption}>{debts ? debtTileCaption(debts) : ' '}</span>
+        </Link>
+        <Link
+          to="/admin/payments"
+          search={{ tab: 'journal', month }}
+          className={cn(tileClass, 'bg-brand text-ink')}
+        >
           <span className={cn(tileLabel, 'opacity-70')}>Оплат сегодня</span>
-          <span className={cn(tileValue, 'font-extrabold')}>—</span>
-          <span className={cn(tileCaption, 'opacity-75')}>{R2_STUB}</span>
-        </div>
+          <span className={cn(tileValue, 'font-extrabold')} data-testid="kpi-paid-today">
+            {paid ? som(paid.total) : '…'}
+          </span>
+          <span className={cn(tileCaption, 'opacity-75')}>
+            {paid ? todayPaymentsCaption(paid, today) : ' '}
+          </span>
+        </Link>
       </div>
 
       <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(300px,1fr)] items-start gap-6">
@@ -238,12 +294,7 @@ function DesktopDashboard({
           <UnbilledWidget items={unbilled} />
           <PresetsWidget today={today} />
           <UnconfirmedWidget unconfirmed={unconfirmed} today={today} />
-          <section className="flex flex-col gap-2.5 rounded-[20px] border border-line bg-card px-5 py-4">
-            <h2 className="text-[15px] font-extrabold">Долги</h2>
-            <p className="text-[13px] font-bold text-ink-muted">
-              Долги и «пора оплачивать» — {R2_STUB}
-            </p>
-          </section>
+          {debts && <DebtsWidget debts={debts} />}
           <TrialsWidget trials={trials} today={today} />
           <PayrollCard today={today} />
         </aside>
@@ -359,7 +410,7 @@ function UnconfirmedWidget({ unconfirmed, today }: { unconfirmed: AdminLesson[];
 /** А1 «Сентябрь · ЗП»: the month being paid (И15) and everyone's accrual from v_payroll_preview. */
 function PayrollCard({ today }: { today: string }) {
   const { month, closeBy } = payrollMonth(today)
-  // TODO(R3): «пока период не закрыт» — with payroll_periods the card follows the open period.
+  // shortcut: always «Период открыт», not the payroll_periods state (#94) — follow it if the owner asks.
   const total = useQuery(monthTotalQuery(month))
   return (
     <section className="flex flex-col gap-2 rounded-[20px] bg-ink px-5 py-4 text-paper">
@@ -397,6 +448,9 @@ function MobileDashboard({
   trials,
   requests,
   unbilled,
+  month,
+  debts,
+  paid,
 }: DashboardData) {
   const spread = unconfirmedSpread(unconfirmed)
   const more = unconfirmed.length - WIDGET_SHOWN
@@ -424,15 +478,31 @@ function MobileDashboard({
             {unconfirmed.length > 0 ? spread.teachers : 'всё отмечено'}
           </span>
         </Link>
-        <div className={cn(mTile, 'bg-warn-soft text-warn-strong')}>
+        <Link
+          to="/admin/students"
+          search={UNPAID_SEARCH}
+          className={cn(mTile, 'bg-warn-soft text-warn-strong')}
+        >
           <span className={mLabel}>Долги</span>
-          <span className={mValue}>—</span>
-          <span className={mCaption}>{R2_STUB}</span>
-        </div>
+          <span className={mValue} data-testid="kpi-unpaid">
+            {debts ? debts.unpaid : '…'}
+          </span>
+          <span className={mCaption}>{debts ? debtTileCaption(debts) : ' '}</span>
+        </Link>
         <div className={cn(mTile, 'justify-between bg-brand text-ink')}>
-          <span className={cn(mLabel, 'opacity-70')}>Оплат сегодня</span>
-          <span className={cn(mValue, 'font-extrabold')}>—</span>
-          <span className={mCaption}>{R2_STUB}</span>
+          <Link to="/admin/payments" search={{ tab: 'journal', month }} className="flex flex-col">
+            <span className={cn(mLabel, 'opacity-70')}>Оплат сегодня</span>
+            <span className={cn(mValue, 'font-extrabold')} data-testid="kpi-paid-today">
+              {paid ? formatSom(paid.total) : '…'}
+            </span>
+          </Link>
+          <Link
+            to="/admin/payments"
+            search={{ tab: 'record' }}
+            className="flex min-h-11 items-center text-[11px] font-extrabold"
+          >
+            + Записать →
+          </Link>
         </div>
       </div>
 
@@ -454,7 +524,10 @@ function MobileDashboard({
         <TrialsWidget trials={trials} today={today} compact />
         <PresetsWidget today={today} compact />
 
-        {(unconfirmed.length > 0 || requests.length > 0 || unbilled.length > 0) && (
+        {(unconfirmed.length > 0 ||
+          requests.length > 0 ||
+          unbilled.length > 0 ||
+          (debts?.debtors.length ?? 0) > 0) && (
           <>
             <h2 className="pt-2 text-sm font-extrabold">Требует внимания</h2>
             <ul aria-label="Требует внимания" className="flex flex-col gap-2">
@@ -476,6 +549,7 @@ function MobileDashboard({
                   </Link>
                 </li>
               ))}
+              {debts && <DebtorItems debtors={debts.debtors} />}
             </ul>
             {more > 0 && (
               <Link
@@ -553,5 +627,85 @@ function MobileRow({
         )}
       </Link>
     </li>
+  )
+}
+
+/** А1 «Долги»: the biggest debts first, each opens the student; hidden when nobody owes. */
+function DebtsWidget({ debts }: { debts: DebtSummary }) {
+  if (debts.debtors.length === 0) return null
+  const more = debtorsMore(debts.debtors)
+  return (
+    <section
+      aria-label="Долги"
+      className="flex flex-col gap-2.5 rounded-[20px] border border-line bg-card px-5 py-4"
+    >
+      <div className="flex items-center justify-between">
+        <h2 className="text-[15px] font-extrabold">Долги</h2>
+        <Link
+          to="/admin/students"
+          search={UNPAID_SEARCH}
+          className="text-[13px] font-extrabold text-teal"
+        >
+          Все →
+        </Link>
+      </div>
+      <ul className="flex flex-col gap-2.5">
+        {debts.debtors.slice(0, DEBTORS_SHOWN).map((r) => (
+          <li key={r.id} className="flex justify-between gap-2.5 text-[13px] font-bold">
+            <span>{debtorLine(r)}</span>
+            <Link
+              to="/admin/students/$studentId"
+              params={{ studentId: r.id }}
+              className="font-extrabold whitespace-nowrap text-teal"
+            >
+              Открыть
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {more && (
+        <Link
+          to="/admin/students"
+          search={UNPAID_SEARCH}
+          className="mt-0.5 rounded-[10px] bg-warn-soft px-2.5 py-2 text-center text-xs font-extrabold text-warn-strong"
+        >
+          {more}
+        </Link>
+      )}
+    </section>
+  )
+}
+
+/** АМ1 «Требует внимания»: up to 5 debtors, then «и ещё N →» to А5 «Не оплатили». */
+function DebtorItems({ debtors }: { debtors: DebtSummary['debtors'] }) {
+  const more = debtorsMore(debtors)
+  return (
+    <>
+      {debtors.slice(0, DEBTORS_SHOWN).map((r) => (
+        <li key={r.id}>
+          <Link
+            to="/admin/students/$studentId"
+            params={{ studentId: r.id }}
+            className="flex min-h-11 items-center gap-2.5 rounded-[14px] bg-warn-soft px-3.5 py-2.5 text-warn-strong"
+          >
+            <span className="flex-1 text-[13px] font-bold">{debtorLine(r)}</span>
+            <span className="text-[13px] font-extrabold" aria-hidden>
+              →
+            </span>
+          </Link>
+        </li>
+      ))}
+      {more && (
+        <li>
+          <Link
+            to="/admin/students"
+            search={UNPAID_SEARCH}
+            className="flex min-h-11 items-center justify-center rounded-[14px] bg-warn-soft px-3.5 text-xs font-extrabold text-warn-strong"
+          >
+            {more}
+          </Link>
+        </li>
+      )}
+    </>
   )
 }

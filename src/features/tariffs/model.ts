@@ -55,7 +55,7 @@ const GROUP_TYPE_SHORT: Record<GroupType, string> = {
 }
 
 /**
- * «Скидки и правила» — read-only constants until R2 (issue #7 «Не делать»), 05-decisions В2, В5, В7, А9.
+ * «Скидки и правила» — read-only constants (issue #7 «Не делать»), 05-decisions В2, В5, В7, А9.
  */
 export const RULES = [
   { title: 'Бывшим ученикам', caption: 'только первый абонемент', value: '15 %' },
