@@ -376,3 +376,15 @@ describe('unbilledDebt (И69)', () => {
     ])
   })
 })
+
+describe('новый абонемент после израсходованного (И97, И37, #127)', () => {
+  it('12 paid, 20 taken, a new 12 paid 3 200 → 8 carried in, 4 left, no debt on either', () => {
+    const [old, next] = subscriptionBalances([
+      sub({ id: 'old', used: 20 }),
+      sub({ id: 'new', started_at: '2026-11-09', created_at: '2026-11-09T00:00:00Z' }),
+    ])
+    expect(old).toMatchObject({ lessonsUsed: 12, debtLessons: 0, debtSom: 0, isCurrent: false })
+    expect(next).toMatchObject({ carriedIn: 8, lessonsUsed: 8, lessonsLeft: 4, debtLessons: 0 })
+    expect(next && availableLessons(next)).toBe(4)
+  })
+})

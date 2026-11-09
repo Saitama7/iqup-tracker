@@ -63,6 +63,7 @@ import { debtOverLimit } from './balance'
 import {
   amountPresets,
   balanceLine,
+  defaultPayTarget,
   duplicateWarning,
   filterPayments,
   groupPayStatuses,
@@ -76,6 +77,7 @@ import {
   monthOf,
   parseAmount,
   paymentHint,
+  overpayment,
   payOptions,
   payTargetValue,
   type PayTarget,
@@ -825,10 +827,10 @@ function RecordPanel({
   )
   const availability = history ? discountAvailability(history) : []
 
-  // the oldest subscription owed (or «новый») until the admin picks another (#119); the discount
-  // the student is entitled to
+  // the oldest subscription owed (or «новый»; a used-up package — «новый», И97) until the admin
+  // picks another (#119); the discount the student is entitled to
   const choice =
-    (picked && options.find((o) => o.value === payTargetValue(picked))) ?? options[0] ?? null
+    (picked && options.find((o) => o.value === payTargetValue(picked))) ?? defaultPayTarget(options)
   const target = choice?.target ?? null
   const discount = pickedDiscount ?? (history ? defaultDiscount(history) : 0)
   /** The subscription paid on; «новый» — null. */
@@ -1036,6 +1038,11 @@ function RecordPanel({
           base,
         )
       : ''
+  // И97: money beyond the package on an existing one belongs to a new package
+  const extra =
+    target?.kind === 'existing' && selected && !refund ? overpayment(selected, value) : 0
+  const newOption =
+    extra > 0 ? options.find((o) => o.value === `new:${choice?.enrollmentId}`) : undefined
   const pending = pay.isPending || back.isPending
   // «новый» picked: the refund is of the current one
   const canRefund = !!base && !base.refunded && base.paidSom > 0
@@ -1242,6 +1249,32 @@ function RecordPanel({
               </Field>
             )}
           </div>
+          {extra > 0 && selected && (
+            <div
+              role="status"
+              className="flex flex-col gap-2 rounded-xl bg-warn-soft px-3 py-2.5 text-[13px] font-bold text-warn-strong"
+            >
+              <p>
+                {selected.paidSom >= selected.priceFinal
+                  ? 'Абонемент уже оплачен полностью'
+                  : 'Сумма больше стоимости абонемента'}
+                , лишние {som(extra)} лучше записать в новый абонемент
+              </p>
+              {newOption && (
+                <button
+                  type="button"
+                  className="min-h-11 self-start rounded-xl border-[1.5px] border-line-strong bg-card px-3 text-[13px] font-extrabold text-ink"
+                  onClick={() => {
+                    setTarget(newOption.target)
+                    setConfirmed(false)
+                    setError(null)
+                  }}
+                >
+                  Записать в новый абонемент
+                </button>
+              )}
+            </div>
+          )}
           {target.kind === 'new' && !refund && quote && (
             <LessonsField
               key={choice?.value}

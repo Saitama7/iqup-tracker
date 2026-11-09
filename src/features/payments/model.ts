@@ -449,6 +449,19 @@ function existingLabel(b: StudentBalance, what: string): string {
   return `${what} · оплачен`
 }
 
+/** Every lesson of the package taken (debt or not) — the next payment is for a new one (И97). */
+export const isExhausted = (b: Pick<StudentBalance, 'lessonsUsed' | 'lessonsTotal'>) =>
+  b.lessonsUsed >= b.lessonsTotal
+
+/**
+ * The oldest lesson package still not paid in full — «оплатите его, новый не нужен» of «новый»
+ * (#119); not the used-up current one: a new package takes its debt (И97, И37).
+ */
+function newOwed(owed: readonly StudentBalance[], current: StudentBalance | null) {
+  const b = owed.find((x) => x.unit === 'lesson' && x.paidLessons < x.lessonsTotal) ?? null
+  return b && b.subscriptionId === current?.subscriptionId && isExhausted(b) ? null : b
+}
+
 /**
  * Targets of «Что оплачивает» (#119): per active enrollment every subscription still owed, oldest
  * first, then «новый абонемент». A debt on an older package (a payment recorded as a new one) must
@@ -501,12 +514,37 @@ export function payOptions(
           ...base,
           value: `new:${e.id}`,
           target: { kind: 'new', enrollmentId: e.id },
-          label: `${groupLabel(g)} · новый абонемент`,
+          label: `${groupLabel(g)} · новый абонемент${
+            current && isExhausted(current) && current.debtLessons > 0
+              ? ` · долг ${shortUnits(current, current.debtLessons)} перейдёт в него`
+              : ''
+          }`,
           balance: null,
-          owed: owed.find((b) => b.unit === 'lesson' && b.paidLessons < b.lessonsTotal) ?? null,
+          owed: newOwed(owed, current),
         },
       ]
     })
+}
+
+/**
+ * The target «Что оплачивает» starts on: the first option (the oldest owed, #119), but «новый
+ * абонемент» when the enrollment's current package is used up — its debt carries into it (И97, И37).
+ */
+export function defaultPayTarget(options: readonly PayOption[]): PayOption | null {
+  const first = options[0]
+  if (!first?.current || !isExhausted(first.current)) return first ?? null
+  return (
+    options.find((o) => o.target.kind === 'new' && o.enrollmentId === first.enrollmentId) ?? first
+  )
+}
+
+/**
+ * Som paid beyond the package by this payment on an existing subscription (И97): «лишние N сом
+ * лучше записать в новый абонемент». 0 — no overpayment; lesson packages only.
+ */
+export function overpayment(b: StudentBalance, amount: number | null): number {
+  if (b.refunded || b.unit !== 'lesson' || !amount) return 0
+  return Math.max(0, b.paidSom + amount - b.priceFinal)
 }
 
 // ─── Duplicate guard of «Записать оплату» (#93) ────────────────────────────
