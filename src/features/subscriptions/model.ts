@@ -207,6 +207,18 @@ export const packageUnitLabel = (groupType: GroupType) =>
 export const packageSizeCaption = (groupType: GroupType, n: number) =>
   `${n} ${pluralRu(n, groupType === 'afterschool' ? ['день', 'дня', 'дней'] : ['урок', 'урока', 'уроков'])}`
 
+/**
+ * #141: a typed price kept with the tariff's size — «5 400 за 20 дней» instead of 12. A hint, not
+ * a block; null when the size was changed or the price is the tariff's one.
+ */
+export function customPriceWarning(
+  groupType: GroupType,
+  t: { lessons: number; defaultLessons: number; price: number; defaultPrice: number },
+): string | null {
+  if (t.lessons !== t.defaultLessons || t.price === t.defaultPrice) return null
+  return `Цена своя, а размер по тарифу — ${packageSizeCaption(groupType, t.defaultLessons)}. Если ученик ходит реже, поменяйте «${packageUnitLabel(groupType)}»`
+}
+
 /** «Цена, сом» (К12): null — by the tariff. */
 export const subscriptionPrice = z
   .number({ error: 'Цена — целое число сом' })

@@ -3,6 +3,8 @@
 import { pluralRu } from '@/features/lessons/select'
 import { formatSom } from '@/features/tariffs/model'
 import { MONTHS_NOM } from '@/lib/time'
+import type { GroupType } from '@/features/tariffs/current'
+import { packageSizeCaption } from './model'
 
 /** One teacher × month of the held lessons charged to the package. */
 export interface PayrollPreview {
@@ -49,6 +51,6 @@ export function balanceLine(b: BalancePreview): string {
   return `${paid} · остаток ${left} ${pluralRu(left, LESSONS)}`
 }
 
-/** «12 уроков · 7 200» — the package in short. */
-export const termsCaption = (lessons: number, price: number) =>
-  `${lessons} ${pluralRu(lessons, LESSONS)} · ${formatSom(price)}`
+/** «12 уроков · 7 200», after-school «20 дней · 7 400» (#141) — the package in short. */
+export const termsCaption = (lessons: number, price: number, groupType: GroupType = 'group') =>
+  `${packageSizeCaption(groupType, lessons)} · ${formatSom(price)}`
