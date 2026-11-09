@@ -11,8 +11,6 @@ import { formatSom } from '@/features/tariffs/model'
 export const DEBTORS_SHOWN = 5
 
 export interface DebtSummary {
-  /** «Не оплатили» of А5 — the tile value. */
-  unpaid: number
   debt: number
   soon: number
   debtSom: number
@@ -26,7 +24,6 @@ export function debtSummary(rows: readonly StudentListRow[]): DebtSummary {
     .filter((r) => r.payState === 'debt')
     .sort((a, b) => b.debtSom - a.debtSom || a.fullName.localeCompare(b.fullName, 'ru'))
   return {
-    unpaid: counts.unpaid,
     debt: counts.debt,
     soon: counts.soon,
     debtSom: debtors.reduce((t, r) => t + r.debtSom, 0),
@@ -34,9 +31,12 @@ export function debtSummary(rows: readonly StudentListRow[]): DebtSummary {
   }
 }
 
-/** «долг 5 · пора оплачивать 11». */
-export const debtTileCaption = (s: Pick<DebtSummary, 'debt' | 'soon'>) =>
-  `долг ${s.debt} · пора оплачивать ${s.soon}`
+/** А1 value «5 · 11» — debtors · ending soon (payState soon). */
+export const debtTileValue = (s: Pick<DebtSummary, 'debt' | 'soon'>) => `${s.debt} · ${s.soon}`
+
+/** А1 caption «долг 2 933 сом · 11 заканчивают». */
+export const debtTileCaption = (s: Pick<DebtSummary, 'debtSom' | 'soon'>) =>
+  `долг ${formatSom(s.debtSom)} сом · ${s.soon} заканчивают`
 
 /** «Айжан Б. · Математика · 8 класс А · долг 2 ур. · 534 сом». */
 export const debtorLine = (

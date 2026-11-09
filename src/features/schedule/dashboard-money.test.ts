@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { formatSom } from '@/features/tariffs/model'
 import type { PaymentRow } from '@/features/payments/api'
-import { filterRows, type StudentListRow } from '@/features/students/model'
+import type { StudentListRow } from '@/features/students/model'
 import {
   debtorLine,
   debtorsMore,
   debtSummary,
   debtTileCaption,
+  debtTileValue,
   todayPayments,
   todayPaymentsCaption,
 } from './dashboard-money'
@@ -58,11 +59,11 @@ describe('debtSummary', () => {
     row('f', { status: 'not_enrolled', payState: null, groups: '', groupIds: [] }),
   ]
 
-  it('tile value equals А5 «Не оплатили»', () => {
+  it('tile «должников · заканчивают» (А1)', () => {
     const s = debtSummary(rows)
-    expect(s.unpaid).toBe(filterRows(rows, { pay: 'unpaid' }).length)
-    expect(s).toMatchObject({ unpaid: 4, debt: 2, soon: 1, debtSom: 1334 })
-    expect(debtTileCaption(s)).toBe('долг 2 · пора оплачивать 1')
+    expect(s).toMatchObject({ debt: 2, soon: 1, debtSom: 1334 })
+    expect(debtTileValue(s)).toBe('2 · 1')
+    expect(debtTileCaption(s)).toBe(`долг ${formatSom(1334)} сом · 1 заканчивают`)
   })
 
   it('debtors: biggest first, «и ещё N» over 5', () => {
@@ -72,7 +73,7 @@ describe('debtSummary', () => {
   })
 
   it('empty → zeros', () => {
-    expect(debtSummary([])).toMatchObject({ unpaid: 0, debt: 0, soon: 0, debtSom: 0, debtors: [] })
+    expect(debtSummary([])).toMatchObject({ debt: 0, soon: 0, debtSom: 0, debtors: [] })
   })
 
   it('debtor line', () => {

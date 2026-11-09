@@ -252,8 +252,8 @@ test('dashboard money (#132): «Долги» = А5 «Не оплатили», «
 }, testInfo) => {
   await login(page, KANYKEI)
   const unpaid = page.getByTestId('kpi-unpaid')
-  await expect(unpaid).toHaveText(/^\d+$/)
-  const n = (await unpaid.textContent()) ?? ''
+  // А1 «должников · заканчивают», АМ1 — должников
+  await expect(unpaid).toHaveText(isDesktop(page) ? /^\d+ · \d+$/ : /^\d+$/)
   await expect(page.getByTestId('kpi-paid-today')).toHaveText(/^\d[\d\s]*( сом)?$/)
   await page.screenshot({
     path: shot(testInfo, 'dashboard-money'),
@@ -263,7 +263,7 @@ test('dashboard money (#132): «Долги» = А5 «Не оплатили», «
 
   await unpaid.click()
   await expect(page).toHaveURL(/\/admin\/students\?pay=unpaid$/)
-  await expect(page.getByRole('button', { name: `Не оплатили · ${n}` })).toHaveAttribute(
+  await expect(page.getByRole('button', { name: /^Не оплатили · \d+$/ })).toHaveAttribute(
     'aria-pressed',
     'true',
   )

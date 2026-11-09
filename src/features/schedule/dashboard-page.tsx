@@ -54,6 +54,7 @@ import {
   debtorsMore,
   debtSummary,
   debtTileCaption,
+  debtTileValue,
   DEBTORS_SHOWN,
   todayPayments,
   todayPaymentsCaption,
@@ -240,7 +241,7 @@ function DesktopDashboard({
         >
           <span className={tileLabel}>Долги и «пора оплачивать»</span>
           <span className={tileValue} data-testid="kpi-unpaid">
-            {debts ? debts.unpaid : '…'}
+            {debts ? debtTileValue(debts) : '…'}
           </span>
           <span className={tileCaption}>{debts ? debtTileCaption(debts) : ' '}</span>
         </Link>
@@ -485,9 +486,9 @@ function MobileDashboard({
         >
           <span className={mLabel}>Долги</span>
           <span className={mValue} data-testid="kpi-unpaid">
-            {debts ? debts.unpaid : '…'}
+            {debts ? debts.debt : '…'}
           </span>
-          <span className={mCaption}>{debts ? debtTileCaption(debts) : ' '}</span>
+          <span className={mCaption}>{debts ? `${formatSom(debts.debtSom)} сом` : ' '}</span>
         </Link>
         <div className={cn(mTile, 'justify-between bg-brand text-ink')}>
           <Link to="/admin/payments" search={{ tab: 'journal', month }} className="flex flex-col">
