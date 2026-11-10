@@ -85,14 +85,33 @@ test('#109: цена в форме оплаты, «Изменить абонем
   const price = form.getByLabel('Цена, сом')
   await expect(price).toHaveValue('7200')
   await expect(form).toContainText('8 занятий по 1,5 ч = 12 ч · 900 за занятие')
+  const hint = form.getByRole('note').filter({ hasText: 'Цена своя' })
+  await expect(hint).toHaveCount(0)
   await price.fill('5400')
   await expect(form.getByText('своя цена')).toBeVisible()
+  // #143: own price with the tariff's size — the same hint as in enrollment (#141)
+  await expect(hint).toHaveText(
+    'Цена своя, а размер по тарифу — 8 уроков. Если ученик ходит реже, поменяйте «Уроков»',
+  )
+  await hint.evaluate((el) => {
+    el.scrollIntoView({ block: 'center' })
+  })
+  await page.waitForTimeout(600)
+  await page.screenshot({
+    path: `docs/screenshots/r143-pay-${size(testInfo)}.png`,
+    style: noTabBar,
+  })
+  await form.getByRole('radiogroup', { name: 'Уроков' }).getByRole('radio', { name: '12' }).click()
+  await expect(hint).toHaveCount(0)
+  await form.getByRole('radiogroup', { name: 'Уроков' }).getByRole('radio', { name: '8' }).click()
+  await expect(hint).toBeVisible()
   await expect(form).toContainText('8 занятий по 1,5 ч = 12 ч · 675 за занятие')
   await expect(form.getByRole('button', { name: /5\s400 · полностью/ })).toBeVisible()
   await form.getByRole('radiogroup', { name: 'Уроков' }).scrollIntoViewIfNeeded()
   await shot(page, 'payment-price', testInfo)
   await form.getByRole('button', { name: 'по тарифу' }).click()
   await expect(price).toHaveValue('7200')
+  await expect(hint).toHaveCount(0)
 
   // А6 «⋯ → Изменить абонемент»
   await page.goto(`/admin/students/${studentId}`)

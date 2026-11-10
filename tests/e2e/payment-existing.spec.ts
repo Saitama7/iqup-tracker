@@ -194,8 +194,14 @@ test('А7: оплата на старый неоплаченный абонем�
     await expect(form.getByLabel('Да, это новый абонемент')).toBeVisible()
     await page.screenshot({ path: shot(testInfo, 'r119-pay-new'), fullPage: true })
 
+    // #143: an own price of «новый» hints the tariff's size; «оплатить абонемент …» — no hint
+    const priceHint = form.getByRole('note').filter({ hasText: 'Цена своя' })
+    await form.getByLabel('Цена, сом').fill('1234')
+    await expect(priceHint).toBeVisible()
+
     // pay the older one: it is paid, the list is the partial one and «новый»
     await what.selectOption({ index: 0 })
+    await expect(priceHint).toHaveCount(0)
     await form.getByLabel('Сумма, сом').fill(String(pupil.price))
     // today's payment of the new one is a repeat by И75 — confirmed
     await form.getByLabel('Да, это новая оплата — записать ещё одну').check()
