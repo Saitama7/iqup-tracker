@@ -18,6 +18,7 @@ import { tariffsQuery } from '@/features/subscriptions/api'
 import { LessonsField, lessonsValid } from '@/features/subscriptions/lessons-field'
 import { PriceField } from '@/features/subscriptions/price-field'
 import {
+  customPriceWarning,
   DISCOUNTS,
   defaultDiscount,
   discountAvailability,
@@ -853,6 +854,16 @@ function RecordPanel({
           },
         )
       : null
+  // #143: same hint as in enrollment / «Изменить абонемент» (#141).
+  const priceWarning =
+    target?.kind === 'new' && !refund && quote && priceValid(price)
+      ? customPriceWarning(quote.tariff.group_type, {
+          lessons: quote.lessonsTotal,
+          defaultLessons: quote.defaultLessons,
+          price: quote.priceFull,
+          defaultPrice: quote.defaultPrice,
+        })
+      : null
 
   const reset = () => {
     setAmount('')
@@ -1302,6 +1313,11 @@ function RecordPanel({
               }}
               caption={hoursCaption(quote)}
             />
+          )}
+          {priceWarning && (
+            <p role="note" className="text-xs font-bold text-warn-strong">
+              {priceWarning}
+            </p>
           )}
           {refund && selected && (
             <p className="text-xs font-bold text-ink-muted">{refundHint(selected)}</p>
