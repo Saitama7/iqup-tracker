@@ -3,6 +3,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { z } from 'zod'
 import { supabase } from '@/lib/supabase/client'
+import { GROUP_TYPES, type GroupType } from '@/features/tariffs/current'
 import { EnrollError } from './api'
 import { lessonsErrorMessage, priceErrorMessage } from './model'
 import type { BalancePreview, PayrollPreview } from './edit-model'
@@ -29,7 +30,7 @@ export function subscriptionEditErrorMessage(error: DbError): string {
 }
 
 /** A package the «⋯» may edit: any live one of the enrollment (#124, newest first). */
-const editableRow = z.object({
+export const editableRow = z.object({
   id: z.uuid(),
   lessons_total: z.number().int(),
   price_full: z.number().int(),
@@ -38,7 +39,7 @@ const editableRow = z.object({
   hours_total: z.number().nullable(),
   status: z.enum(['active', 'exhausted', 'refunded']),
   tariff: z.object({
-    group_type: z.enum(['group', 'individual', 'afterschool']),
+    group_type: z.enum(GROUP_TYPES as [GroupType, ...GroupType[]]),
     valid_from: z.string(),
     lessons_in_package: z.number().int(),
     package_price: z.number().int(),
